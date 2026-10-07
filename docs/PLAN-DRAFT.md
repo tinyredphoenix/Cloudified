@@ -2,6 +2,10 @@
 
 Status: discussion draft, not authorization to implement. Updated 2026-10-07.
 
+Latest user testing direction: build/integrate the full app before its first app
+test; no demo/mock/seeded records. Earlier per-phase testing proposals are superseded
+by handbook 2's implementation handoffs, P7 first complete test and P8 debugging.
+
 Target confirmed by user: iOS 26. Every eligible asset should be queued for both
 destinations; preserve Live Photos wherever the destination integration permits.
 Original quality is mandatory. The user accepts gunshot and PhotosBackup as
@@ -47,22 +51,22 @@ Google integration must be based on g8row/PhotosBackup's implementation.
   Google's background URLSession transport and persist both providers' state.
   Automatic scheduling, if added, uses a different background mechanism.
 
-## Integration checks before the full build
+## Integration checks in the first complete app test
 
 These checks validate our new app's integration and preservation of the existing
 implementations' behavior; they do not reopen the chosen storage architecture.
 
-1. Build and sideload the Google baseline. Prove sign-in, stored credentials
+1. Build and sideload the complete integrated app. Prove Google sign-in, stored credentials
    after restart, upload, and remote hash lookup with the user's account.
 2. Confirm Google's requested no-quota/original profile on a fresh test batch.
    Independently check storage accounting and download original bytes to
    compare checksums. Upload acceptance or a quality label alone is insufficient.
    If this gate fails, report the evidence; do not silently use ordinary quota.
-3. Build/package TDLib for simulator and physical iPhone. Prove Telegram login,
+3. Include packaged TDLib in the full app. Prove Telegram login,
    document upload, confirmed message receipt, and history-based reconciliation.
 4. Download Telegram test documents outside the production UI and compare hashes.
    Exercise a large video and restart recovery. Verify split-file reconstruction
-   for a fixture beyond Telegram's free per-file limit.
+   for a real video beyond Telegram's free per-file limit when available.
 
 ## Data flow and completion rules
 
@@ -177,13 +181,13 @@ results, screenshots/recordings, and unresolved issues. Architect reviews summar
 first; directly reads protocol/auth, persistence, resource extraction, retry/recovery,
 background lifecycle, and packaging changes. Do not simultaneously edit shared files.
 
-Required checks: rerun without new media transfers; identical bytes under different
+Required scenarios at the first complete app test/debugging stage: rerun without new media transfers; identical bytes under different
 local IDs; one destination complete and the other failing; lost response after
 remote acceptance; restart/force-quit; offline and rate limiting; revoked auth;
 low disk; iCloud-only resources; Live Photo partial failure; account change; reinstall
 and manifest reconciliation; persisted three-attempt exhaustion; independent
-disable/unlink and correct account/channel remapping. Preserve upstream meaningful tests, add state-machine
-failure tests, and verify on the signed physical iPhone.
+disable/unlink and correct account/channel remapping. Use the signed physical
+iPhone and real resources/accounts; no intermediate app-test sessions.
 
 Background scheduling is opportunistic. TDLib transfers do not automatically gain
 URLSession background-transfer behavior. On iOS 26, explicitly initiated finite

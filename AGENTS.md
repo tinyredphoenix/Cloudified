@@ -9,6 +9,14 @@ docs/03-BUILD-LOG.md for active ownership/evidence and docs/04-DECISIONS.md for 
 Builder is authorized for P1 app shell. Architect directly authors P2 critical
 core and critical protocol corrections. Coordinate ownership before overlapping work.
 
+Latest user direction: no demo/mock/seeded data, fake progress, sample logs or fake
+accounts in the app. Build and integrate every feature before the first app test.
+No per-phase unit/simulator/device test suites or cloud IPA build cycles. Necessary
+static review/syntax/compiler checks are allowed; full integrated build/testing
+starts at P7, followed by debugging iterations. Earlier test-gate proposals are
+superseded by this schedule. Production logging must be implemented with the core,
+not postponed until failures occur.
+
 - Swift/SwiftUI native iOS 26. Original quality only. Both photos and videos.
 - Reuse the pinned PhotosBackup implementation for Google; TDLib for Telegram.
   Reference projects supply implementation, not UI inspiration.

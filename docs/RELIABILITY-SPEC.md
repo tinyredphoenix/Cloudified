@@ -2,6 +2,9 @@
 
 User requirements recorded 2026-10-07. This is a build contract, not a report that
 these behaviors already exist. Companion documents: PLAN-DRAFT.md and STATUS-SPEC.md.
+Testing schedule: implement every feature first; no demo/mock data or intermediate
+app test suites. The scenarios below are for the first complete app test and
+subsequent debugging, as required by the latest user direction.
 
 ## Non-negotiable original quality
 
@@ -18,7 +21,7 @@ these behaviors already exist. Companion documents: PLAN-DRAFT.md and STATUS-SPE
 - Live Photo component fallback is a coverage choice, not permission to lower
   the quality of the chosen image/video. A remux experiment is labeled derivative
   and does not satisfy a claim that the whole original file is unchanged.
-- Validate our integration with downloaded-original checksums and metadata fixtures.
+- Validate the full app with downloaded-original checksums and metadata from real resources.
   Compare original video bytes, including HEVC/HDR examples, not just a still image.
 
 ## Failure isolation and scheduling
@@ -132,7 +135,7 @@ guarantee. Remote deletions and genuinely changed content need new uploads.
 Ambiguous acceptance must stay Reconciling until evidence is available; avoid an
 unconditional exactly-once guarantee that the private protocols cannot establish.
 
-## Required focused tests and review
+## First complete app test and subsequent debugging
 
 1. Google fails repeatedly for asset A while Telegram succeeds; Google processes
    asset B; A ends at three total attempts and Telegram success remains untouched.

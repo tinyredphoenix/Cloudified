@@ -3,6 +3,8 @@
 Decision/specification, 2026-10-07. Defaults below are initial engineering budgets,
 not measured performance claims. Tune only from physical-device evidence.
 Companion: [reliability contract](RELIABILITY-SPEC.md).
+All runtime measurements/scenarios are deferred to the first complete app test
+and debugging stage. No demo data or intermediate app-test gates are introduced.
 
 ## Language and ownership
 
@@ -193,7 +195,7 @@ Refresh visible byte progress at most about twice per second. Durable transition
 are immediate; coalescing byte progress cannot delay receipt persistence. Query
 indexed aggregate counts, paginate lists, and keep view models small.
 
-## Measurements and acceptance gates
+## Measurements during the first complete app test/debugging
 
 Physical-device evidence must include:
 

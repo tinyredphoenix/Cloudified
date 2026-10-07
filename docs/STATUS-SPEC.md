@@ -1,31 +1,33 @@
 # Cloudified status and completion contract
 
-Discussion specification, 2026-10-07. Numbers below are illustrative, not actual uploads.
+Specification, 2026-10-07. No seeded/demo app records or fabricated counts.
+First app testing follows complete integration; these are behavior requirements,
+not intermediate test gates.
 
-## Screen example
+## Dashboard fields
 
 Dashboard is the main/first screen and includes an overall activity label. Explicit
 states: Uploading, Preparing, Checking, Finalizing, Waiting, Paused, Complete and
 Needs attention. Show the provider-specific reason alongside its state; a waiting
 Google lane and uploading Telegram lane can coexist.
 
-Accessible library: 3,000 assets · 2,600 photos (including Live Photos) · 400 videos.
-Scope: All accessible photos. Permission: Full access. Last scan: timestamp.
+Display the actual accessible-library total, photo/video breakdown, permission
+scope and last completed scan time. Before scanning, show Not scanned and unknown
+counts. Missing data is not evidence of an empty library.
 
 | Status | Google Photos | Telegram |
 | --- | ---: | ---: |
-| Saved | 2,300 / 3,000 | 2,700 / 3,000 |
-| Remaining | 700 | 300 |
-| Photos remaining | 600 | 260 |
-| Videos remaining | 100 | 40 |
-| Blocked, included in remaining | 15 | 2 |
-| Current operation | Finalizing IMG_0123.HEIC | Sending IMG_0124.MOV |
-| Current file | Bytes sent; awaiting confirmation | 38 MB / 60 MB |
+| Saved | Confirmed / selected from Google ledger | Confirmed / selected from Telegram ledger |
+| Remaining | Google unconfirmed assets | Telegram unconfirmed assets |
+| Photos remaining | Google unconfirmed photo assets | Telegram unconfirmed photo assets |
+| Videos remaining | Google unconfirmed video assets | Telegram unconfirmed video assets |
+| Blocked, included in remaining | Google blocked count | Telegram blocked count |
+| Current operation | Actual Google event/state | Actual Telegram event/state |
+| Current file | Measured bytes / known size and confirmation state | Measured bytes / known size and confirmation state |
 
-Display literal `700 remaining out of 3,000` for Google and `300 remaining out of
-3,000` for Telegram in this example, alongside confirmed counts. Show active-file
-bytes/percentage, component/part and attempt; overall progress uses confirmed
-assets. This is a specification example, not a claim about current app behavior.
+Format each provider's actual values as `remaining out of selected total`, alongside
+confirmed counts. Show active-file bytes/percentage, component/part and attempt;
+overall progress uses confirmed assets. No sample progress/filenames/logs in UI.
 
 Separate detail: Live Photo coverage, already-present assets, bytes transferred,
 waiting for Wi-Fi/iCloud, retry time, and last confirmed upload. Main controls:
@@ -132,12 +134,12 @@ Changing policy creates only missing obligations; do not re-upload confirmed
 unchanged bytes or erase existing remote items. Never apply a new policy halfway
 through a committed job.
 
-## Acceptance examples
+## First complete app test and debugging scenarios
 
-- Ten assets, one Live Photo: UI total ten. Still confirmed and motion failed:
-  Telegram saved nine, remaining one, blocked one; retry only missing component.
-- Telegram saved ten, Google saved eight with two failures: Google remaining two,
-  Telegram remaining zero. Combined complete eight only if those eight match.
+- Live Photo still confirmed and motion failed: the parent remains unconfirmed;
+  retry only the missing component, preserving every confirmed receipt.
+- Telegram complete and Google partially failed: Telegram remaining stays zero;
+  combined complete includes only the actual shared confirmed assets.
 - PUT completes but Google commit fails: remaining unchanged, stage Finalizing
   or Reconciling. Temporary Telegram message is likewise not Saved.
 - Two local assets contain identical bytes: saved asset count can increase by two

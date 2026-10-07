@@ -35,6 +35,10 @@ Builder may start P1 app shell. Architect directly implements P2 critical core.
 Application phases are assigned in batches; the handbook is not authorization to
 implement every phase at once. Both Google and Telegram execute concurrently once
 the real engine/adapters are connected.
+No demo data or simulated uploads. Unconnected screens show genuine unavailable/
+empty states. The first app test follows complete integration of all features;
+development phases use static review and coordinated handoffs rather than repeated
+app-test/build cycles. Persistent diagnostics are part of the production engine.
 
 ## Detailed contracts — read only for the assigned batch
 

@@ -3,6 +3,9 @@
 Researched 2026-10-07. User target: iOS 26. This is a planning artifact;
 no app has been built, sideloaded, or tested against the user's accounts here.
 Facts supported by documentation/code are distinguished from device-test gates.
+Historical per-phase testing proposals below are superseded by the user's latest
+direction: complete all features first, no demo/mock data, first app test at P7,
+then debugging at P8. Handbooks 1–4 define the current implementation schedule.
 
 Current binding requirements are in [RELIABILITY-SPEC.md](RELIABILITY-SPEC.md):
 original quality only; separate photo/video sections; independent provider switches,
@@ -206,22 +209,19 @@ reconcile before resending. Foreground completion and safe restart are mandatory
 
 ## Implementation order and architect review budget
 
-1. Feasibility spike: pinned Google baseline, quota/original evidence, TDLib
-   framework/auth, Live Photo resource export and provider behavior on signed iPhone.
-2. Queue and ledger: explicit resource obligations, confirmed receipts, policy
-   snapshots, account isolation, deduplication, retry/reconciliation tests.
-3. Dual-provider scheduler: shared stage, independently progressing adapters,
-   metadata/manifests and large-file recovery.
-4. Minimal SwiftUI status screen using STATUS-SPEC.md; setup and small settings.
-5. iOS 26 continued processing, interruption tests, packaging and signed IPA.
-6. Optional verified native-pairing/remux improvements and compatible upload
-   extension, after ordinary uploads and recovery pass.
+Use handbook 2's current P1–P8 order: real-state app structure; architect-owned
+queue/ledger/diagnostics; original export; real provider adapters; presentation
+wiring; complete lifecycle/media support; first fully integrated build/test; then
+debugging/release. No feasibility app-test sessions before full integration, and
+no demo/mock data. Experimental compatibility improvements remain separate from
+the mandatory original-quality feature set.
 
 Each builder batch supplies: intent, changed files, focused diff, checks/results,
 redacted evidence and unresolved issues. Architect reads critical auth/protocol,
 export, database transactions, completion/retry state and background/signing code.
-Routine UI formatting can be reviewed from summaries and device screenshots.
-No simultaneous edits to the same files. No future batch before failed gate fixes.
+Routine UI code can be reviewed from focused summaries; device evidence begins
+with the first complete app test. No simultaneous edits to the same files. Phase
+handoffs are ownership/code-review coordination rather than app-test gates.
 
 For progress events, prefer one scheduler owner with serialized ledger mutations.
 Adapters report capabilities, transfer progress, durable receipts and classified

@@ -11,6 +11,9 @@ to Google Photos using PhotosBackup's implementation and to Telegram using TDLib
 All accessible assets are included by default. Two independent provider switches,
 account/channel mapping, silent bounded retries, remote duplicate checks after
 reinstall, small error-identification thumbnails, and visible actionable failures.
+No demo/mock/seeded records, fake progress or sample logs. Screens use real local/
+provider state or explicitly show Not connected/Not scanned/Unavailable. Unknown
+counts stay unknown; do not manufacture zero totals for an unread library.
 The references supply implementation, not UI inspiration. No full-screen gallery,
 editing or playback. Source stays on the Mac; full Xcode builds use manual cloud CI.
 
@@ -31,13 +34,14 @@ These application/package paths are planned, not present at this milestone.
 | `App/Adapters/Telegram/` | TDLib bridge, documents, manifests/history | Builder; architect reviews bridge ownership |
 | `App/Adapters/System/` | Network policy, Keychain, background task wiring | Builder; architect reviews |
 | `Packages/CloudifiedCore/Sources/` | Durable queue, retries, receipts, recovery gates, counters and file leases | Architect directly implements |
-| `Packages/CloudifiedCore/Tests/` | Failure/concurrency/persistence invariant tests | Architect directly implements |
+| `Packages/CloudifiedCore/Sources/Diagnostics/` | Structured persistent events, redaction and diagnostic snapshots | Architect directly implements |
 | `Vendor/` and dependency lock/provenance files | Pinned upstream sources/artifact references and licenses | Builder after architect review |
 | `scripts/`, `.github/workflows/` | Checks, bounded cloud builds and IPA packaging | Assigned batch owner |
 | `docs/01` through `docs/04` | Shared handoff, phases, evidence and reasoning | Architect; log updates coordinated |
 
-Keep core independent of SwiftUI, PhotoKit and live credentials so logic can be
-tested with controlled adapters. Do not invent a large provider-plugin framework.
+Keep core independent of SwiftUI/PhotoKit presentation for clear ownership and
+direct code review. No controlled/demo adapters in the app. Build all features
+first; the first real app test is P7. Do not invent a large provider-plugin framework.
 
 ## Runtime flow: concurrent destinations
 
@@ -79,10 +83,10 @@ a green/red dot. Back Up, Pause and Resume are prominent controls.
 | Waiting/failure | Count, known cause, next retry time when available and link to Not uploaded |
 | Session detail | Confirmed this session and measured speed/bytes; ETA only when meaningful |
 
-Example, not real data: Google `700 remaining out of 3,000; 2,300 saved`, Telegram
-`300 remaining out of 3,000; 2,700 saved`. Google may finalize one photo while
-Telegram sends a video at `38 MB of 60 MB (63%)`. Their counters cannot be added
-or reduced to the smaller saved count to infer saved-to-both.
+Display `remaining out of selected total`, `confirmed out of selected total`, and
+`bytes sent of current resource size (percentage)` using actual snapshots/events.
+Provider counts cannot be added or reduced to the smaller saved count to infer
+saved-to-both. Formatting descriptions are not seed data or UI preview fixtures.
 
 Asset progress measures confirmed obligations. File percentage measures the current
 attempt; 100% bytes changes to Finalizing, not Saved. Resetting a retry's file
@@ -106,6 +110,11 @@ Original files are staged once where practical; every consumer holds a lease.
 Completion of one lane cannot delete bytes still used by the other. Failed/disabled
 destinations retain small retry records and can re-export later. Remote reconciliation
 is required before sending content whose previous outcome is uncertain.
+
+Diagnostics are a production module built with P2 and instrumented by every adapter,
+not an afterthought. The log schema and coverage are specified in handbook 2.
+Earlier test-gate proposals in detailed contracts now apply to the first complete
+app test/debugging stage, not intermediate development phases.
 
 Detailed contracts: [counters/UI](STATUS-SPEC.md), [reliability](RELIABILITY-SPEC.md),
 [resources/networking](RUNTIME-SPEC.md), [build location](BUILD-SETUP.md).

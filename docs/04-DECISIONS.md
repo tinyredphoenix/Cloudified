@@ -23,6 +23,9 @@ than repeatedly reconsider the user's chosen storage services.
 | D14 | Architect directly implements critical P2 core and critical protocol fixes | Retry, account isolation, receipt correctness and cleanup need direct careful implementation |
 | D15 | Builder starts with P1 shell, then assigned integration/UI batches | Reviewable progress and clear shared-directory ownership; no competing core implementations |
 | D16 | Reference projects inform implementation only | UI is native and purpose-built for Cloudified; no reference-screen inspiration required |
+| D17 | No demo/mock/seeded app data | User explicitly requires genuine state; unknown/unconnected UI stays honest |
+| D18 | First app test after complete P1–P6 integration | User wants the first test to contain every feature; intermediate test gates are superseded |
+| D19 | Persistent production diagnostics implemented with P2 | First complete test can be debugged by provider/job/attempt/stage, without retrofitting logs |
 
 ## Version 1 defaults
 
@@ -53,11 +56,17 @@ evidence. An available network path is not proof of internet/service access.
 
 - Original-byte export test, remotely downloaded-original test and Google's storage
   accounting check establish different facts; none substitutes for the others.
-- Controlled concurrent adapters prove engine scheduling, not live provider login.
+- Real provider events must establish concurrent activity in the first full test;
+  direct code review alone is not proof of runtime behavior.
 - Local restart persistence and full reinstall remote recovery need separate tests.
 - Keychain persistence is not the duplicate-prevention guarantee after reinstall.
 - Hosted compile/simulator evidence does not prove iPhone background/cleanup behavior.
 - No provider's permanent free service is guaranteed by these implementation choices.
+
+P1–P6 record implementation and static review only, without app-test sessions or
+demo data. All functional/quality/resource/recovery scenarios belong to P7 and
+subsequent debugging iterations. Necessary compiler checks are distinct from
+functional app testing; no repeated cloud build cycles during implementation.
 
 ## Revision rule
 

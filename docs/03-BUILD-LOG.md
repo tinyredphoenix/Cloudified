@@ -1,7 +1,7 @@
 # Cloudified shared handbook 3 — build log and handoff state
 
 Updated 2026-10-07. Keep this file factual and append-focused. Proposed work,
-compiled code, mock tests and physical service/device evidence are different states.
+compiled code and physical service/device evidence are different states.
 No credentials, private media, raw secret-bearing responses or personal logs here.
 
 ## Current handoff state
@@ -11,7 +11,9 @@ No credentials, private media, raw secret-bearing responses or personal logs her
   recorded below before commit.
 - P1: ready for Builder; no app project or screens exist yet.
 - P2: assigned to Architect, planned; no core implementation/tests exist yet.
-- P3–P7: planned, dependent on prior evidence and batch assignment.
+- P3–P6: implementation handoffs, no intermediate app-test gates.
+- P7: first full integrated build/test; P8: debugging iterations/release.
+- No demo/mock/seeded data or simulated uploads are permitted.
 - Main project location: existing Mac checkout. USB drive untouched.
 - Full local Xcode: absent; Swift command-line compiler available.
 - GitHub: private `tinyredphoenix/Cloudified`, origin configured, main synced at
@@ -53,6 +55,25 @@ Milestone scope: handoff documentation only, no app/core implementation evidence
 Open limitations: real Xcode project, core, adapters and device verification remain
 unimplemented. Both-lane concurrency is a required test, not yet a demonstrated
 feature. Current phase authorization is P1 only for Builder; P2 author is Architect.
+
+## 2026-10-07 — user testing/logging revision
+
+Owner: Architect. User requires no demo/mock/seeded app data, the first app test
+only after every feature is built/integrated, then debugging iterations. Previous
+per-phase test gates are superseded; static review and necessary compiler checks
+remain implementation activities. No app/test/build was executed by this revision.
+
+Updated handbooks and linked contracts remove the demo-model assignment and
+intermediate testing/build requirements. P2 now includes structured persistent
+diagnostics; P3–P6 must instrument their real paths. P7 is first complete-app
+build/test and P8 debugging/release. Removed sample dashboard numbers to prevent
+accidental app seed data. Failures/receipts remain separate from rotating logs.
+
+Documentation validation: `python3 scripts/check_docs.py` passed for 14 Markdown
+files; `git diff --check` passed. A focused text scan found and removed the old
+demo-model assignment, controlled-adapter gate and feasibility-test phase order.
+No functional app tests or cloud builds were run.
+Implementation status remains unchanged: app/core/provider code is not built yet.
 
 ## Batch log template
 
