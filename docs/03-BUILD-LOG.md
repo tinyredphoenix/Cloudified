@@ -6,7 +6,7 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 
 ## Current handoff state
 
-- Active editing batch: Architect review/build-cache corrections; workflow/cache and review docs reserved until commit/push. Builder released paths. Next Builder batch P4-A-R1 in P4-REVIEW.md; no P4-B start yet. PhotoKit/Core unchanged.
+- Active editing batch: none. Architect completed review/cache edits and releases paths at this handoff. Next Builder batch P4-A-R1 in P4-REVIEW.md; no P4-B start yet. Workflow/build_cache.py and PhotoKit/Core remain Architect-owned/read-only.
 - P0: architecture/repository/infrastructure complete; handbook contracts confirmed.
 - P1: native iOS 26 target, shared Cloudified scheme, four navigation screens (Dashboard, Not uploaded, Logs, Settings), adapter protocol placeholders, and honest unpopulated states completed by Builder.
 - P2: Architect-authored critical core/diagnostics implemented and compiled locally in Swift 6 mode; no runtime evidence yet.
@@ -34,6 +34,7 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 | `89922cf`, `v0.0.6-p3-r1-review-untested` | Architect P3-R1 review, rollback export, generation verification, multipart association, and reserveSourceStorage |
 | `d0c00fe` | P3-R2 demand-driven admission, exact selectors, OSAllocatedUnfairLock progress coalescing, and provider isolation |
 | `accf787`, `v0.0.7-source-review-untested` | Architect source completion; static/compiler evidence, no iOS/runtime/quality/reinstall validation |
+| `11c24ad`, `99f7451`, `v0.0.8-p4-review-untested` | Architect key/memory/license corrections and public build-cache infrastructure; P4-A requires R1, no native/iOS/runtime acceptance |
 | `9e6fe9e` | P4-A pinned provider dependencies, native TDLib bridge/session, Keychain vault, and safe diagnostics |
 
 Earlier checks passed: local Markdown targets, shell syntax, workflow YAML parsing
@@ -607,8 +608,10 @@ Checks performed after source/build changes:
 
 No unit/runtime/app/account/private-media/native-artifact/cloud/USB operation or
 SDK installation. Decision D31. Source/license/provenance corrections committed
-as `11c24ad`. Cache/review publication and tag are recorded after creation.
-Architect releases edited paths after publication; Builder claims only P4-A-R1
+as `11c24ad`. Cache/review commit `99f7451`; annotated
+`v0.0.8-p4-review-untested` points to that commit and explicitly records the
+unaccepted native foundation and missing runtime evidence. Architect releases
+edited paths after publication; Builder claims only P4-A-R1
 scope before editing. Workflow/build_cache.py, PhotoKit/Core remain
 Architect-owned/read-only.
 
