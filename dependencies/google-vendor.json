@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "sourceRepository": "https://github.com/g8row/PhotosBackup.git",
+  "sourceCommit": "3c88269e18b9d4515e97d846c5816bd836285c3e",
+  "files": [
+    {
+      "sourcePath": "GPMC/Core/GPMCClient.swift",
+      "sourceSha256": "3bf0622b30d152e865668984d3a97de802d4b26afd519e0740c6378b08c81d70",
+      "vendoredPath": "App/Adapters/GooglePhotos/GPMCClient.swift",
+      "vendoredSha256": "8b60a3b8a9759fc39e70c111605f8f524a08df1c562d8d629915ce1cf057bec2"
+    },
+    {
+      "sourcePath": "GPMC/Core/Protobuf.swift",
+      "sourceSha256": "b06b6185352d0a3230f1deda4ced52a8eeb377de1239fde214620d0c2be1c9f8",
+      "vendoredPath": "App/Adapters/GooglePhotos/Protobuf.swift",
+      "vendoredSha256": "87da056eb2339e4b654f7d3380746dc92704b906e4a52794d14cef76fb2e40f1"
+    },
+    {
+      "sourcePath": "App/Sources/TokenExchange.swift",
+      "sourceSha256": "d76ffd0fdeeaaa2940efd349b67bb4eb68f7ef0102ebedc88f6de699b4a29f32",
+      "vendoredPath": "App/Adapters/GooglePhotos/GoogleTokenExchange.swift",
+      "vendoredSha256": "1af4beea32ee046041e56b48eecbc66038e304b522de0a2b8a759311236e331d"
+    }
+  ],
+  "patchNotes": "See docs/P4-REVIEW.md. Hashes record vendored source provenance; no functional or protocol acceptance claim."
+}

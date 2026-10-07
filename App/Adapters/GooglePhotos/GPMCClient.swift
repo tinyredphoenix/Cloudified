@@ -151,6 +151,14 @@ struct AuthData: Sendable {
     }
 }
 
+private func drainingAutoreleasePool<T>(_ body: () throws -> T) rethrows -> T {
+    #if canImport(ObjectiveC)
+    try autoreleasepool(invoking: body)
+    #else
+    try body()
+    #endif
+}
+
 private final class ProgressDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     private let report: @Sendable (Int64, Int64) -> Void
     init(_ report: @escaping @Sendable (Int64, Int64) -> Void) { self.report = report }
@@ -393,14 +401,16 @@ actor GPMCClient {
         let handle = try FileHandle(forReadingFrom: file); defer { try? handle.close() }
         var hasher = Insecure.SHA1(); var size: UInt64 = 0; var reachedEnd = false
         while !reachedEnd {
-            guard let chunk = try handle.read(upToCount: 1_048_576), !chunk.isEmpty else {
-                reachedEnd = true
-                break
+            try drainingAutoreleasePool {
+                guard let chunk = try handle.read(upToCount: 1_048_576), !chunk.isEmpty else {
+                    reachedEnd = true
+                    return
+                }
+                try Task.checkCancellation()
+                hasher.update(data: chunk)
+                size += UInt64(chunk.count)
+                phase(.hashing(fraction: min(1, Double(size) / Double(declared))))
             }
-            try Task.checkCancellation()
-            hasher.update(data: chunk)
-            size += UInt64(chunk.count)
-            phase(.hashing(fraction: min(1, Double(size) / Double(declared))))
         }
         return (Data(hasher.finalize()), size)
     }

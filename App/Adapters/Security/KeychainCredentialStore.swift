@@ -62,6 +62,8 @@ public struct StoredTelegramCredential: Codable, Equatable, Sendable {
 public protocol KeychainStoreBackend: Sendable {
     func read(service: String, account: String) throws -> Data?
     func write(service: String, account: String, data: Data) throws
+    /// Atomic creation; false means an existing item must be read, never overwritten.
+    func insertIfAbsent(service: String, account: String, data: Data) throws -> Bool
     func delete(service: String, account: String) throws
 }
 
@@ -93,7 +95,8 @@ public struct SystemKeychainBackend: KeychainStoreBackend {
         guard status == errSecSuccess else {
             throw CredentialError.storageFailure(status)
         }
-        return item as? Data
+        guard let data = item as? Data else { throw CredentialError.corrupt }
+        return data
     }
 
     public func write(service: String, account: String, data: Data) throws {
@@ -103,7 +106,10 @@ public struct SystemKeychainBackend: KeychainStoreBackend {
         let addStatus = SecItemAdd(query.merging([kSecValueData as String: data]) { _, new in new } as CFDictionary, nil)
         if addStatus == errSecDuplicateItem {
             let updateQuery = baseQuery(service: service, account: account)
-            let updateStatus = SecItemUpdate(updateQuery as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+            let updateStatus = SecItemUpdate(updateQuery as CFDictionary, [
+                kSecValueData as String: data,
+                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            ] as CFDictionary)
             if updateStatus == errSecInteractionNotAllowed || updateStatus == errSecAuthFailed {
                 throw CredentialError.accessDenied(updateStatus)
             }
@@ -118,6 +124,19 @@ public struct SystemKeychainBackend: KeychainStoreBackend {
         guard addStatus == errSecSuccess else {
             throw CredentialError.storageFailure(addStatus)
         }
+    }
+
+    public func insertIfAbsent(service: String, account: String, data: Data) throws -> Bool {
+        var query = baseQuery(service: service, account: account)
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        query[kSecValueData as String] = data
+        let status = SecItemAdd(query as CFDictionary, nil)
+        if status == errSecDuplicateItem { return false }
+        if status == errSecInteractionNotAllowed || status == errSecAuthFailed {
+            throw CredentialError.accessDenied(status)
+        }
+        guard status == errSecSuccess else { throw CredentialError.storageFailure(status) }
+        return true
     }
 
     public func delete(service: String, account: String) throws {
@@ -234,18 +253,29 @@ public final class KeychainCredentialStore: Sendable {
     /// Loads the TDLib database key for this session or generates and persists a fresh 256-bit key.
     public func getOrCreateTDLibDatabaseKey(forSession sessionID: String) throws -> String {
         let account = tdlibKeyAccountKey(sessionID: sessionID)
-        if let existingData = try backend.read(service: service, account: account),
-           let keyString = String(data: existingData, encoding: .utf8),
-           !keyString.isEmpty {
-            return keyString
+        if let existingData = try backend.read(service: service, account: account) {
+            return try Self.validatedDatabaseKey(existingData)
         }
 
         let freshKey = try Self.generateDatabaseEncryptionKey()
         guard let freshData = freshKey.data(using: .utf8) else {
             throw CredentialError.corrupt
         }
-        try backend.write(service: service, account: account, data: freshData)
-        return freshKey
+        if try backend.insertIfAbsent(service: service, account: account, data: freshData) {
+            return freshKey
+        }
+        // Another vault/client won creation. Its key belongs to the existing database.
+        guard let winner = try backend.read(service: service, account: account) else {
+            throw CredentialError.corrupt
+        }
+        return try Self.validatedDatabaseKey(winner)
+    }
+
+    private static func validatedDatabaseKey(_ data: Data) throws -> String {
+        guard let key = String(data: data, encoding: .utf8),
+              let decoded = Data(base64Encoded: key), decoded.count == 32,
+              decoded.base64EncodedString() == key else { throw CredentialError.corrupt }
+        return key
     }
 
     public func deleteTDLibDatabaseKey(forSession sessionID: String) throws {
