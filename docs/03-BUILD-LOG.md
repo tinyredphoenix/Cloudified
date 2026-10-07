@@ -6,7 +6,7 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 
 ## Current handoff state
 
-- Active editing batch: none after Architect corrections. Next assigned batch P3-R1 Builder, as specified in P3-REVIEW.md. Core remains Architect-owned. P4 is not assigned; P3 has unresolved static-review blockers.
+- Active editing batch: none; Builder completed P3-R1 corrections and submitted for Architect review. Core paths (`Packages/CloudifiedCore`) preserved untouched for Architect. P4 is not started.
 - P0: architecture/repository/infrastructure complete; handbook contracts confirmed.
 - P1: native iOS 26 target, shared Cloudified scheme, four navigation screens (Dashboard, Not uploaded, Logs, Settings), adapter protocol placeholders, and honest unpopulated states completed by Builder.
 - P2: Architect-authored critical core/diagnostics implemented and compiled locally in Swift 6 mode; no runtime evidence yet.
@@ -293,6 +293,36 @@ Direct correction commits: `7d8b0c4` (core), `37b8750` (media). Staged whitespac
 checks passed for both commits. Handoff documentation is published with annotated
 `v0.0.5-p3-review-untested`: reviewed/partially corrected implementation, P3-R1
 pending, no runtime or provider evidence and no release acceptance.
+
+## 2026-10-08 — P3-R1 original media pipeline corrections
+
+Batch / owner / status: P3-R1 / Builder / Completed corrections submitted for Architect review.
+Purpose: Complete all corrections specified in docs/P3-REVIEW.md: real video part hashes, admitted exports and shared cache reuse, exact original-resource selection, canonical asset paging producer, independent provider failure isolation, durable pre-job source failure recording, synchronous lease/reservation release, and classified storage layout errors.
+Reserved paths / active writer: `App/Adapters/PhotoLibrary/`, `App/Adapters/System/`, `Cloudified.xcodeproj/`, `scripts/generate_xcode_project.py`, `docs/03-BUILD-LOG.md` owned by Builder. Core paths (`Packages/CloudifiedCore`) preserved untouched for Architect.
+Changed files:
+- `App/Adapters/PhotoLibrary/LosslessVideoPartSplitter.swift`
+- `App/Adapters/PhotoLibrary/PhotoKitScanner.swift`
+- `App/Adapters/PhotoLibrary/PhotoLibraryOriginalPreparer.swift`
+- `App/Adapters/PhotoLibrary/PhotoLibraryPipeline.swift`
+- `App/Adapters/PhotoLibrary/SourceRecipe.swift`
+- `App/Adapters/PhotoLibrary/UploadPlanProducer.swift`
+- `App/Adapters/System/StorageLayout.swift`
+- `docs/03-BUILD-LOG.md`
+Dependency revisions / artifact provenance: Unchanged; local `CloudifiedCore` package (`Packages/CloudifiedCore`) via `XCLocalSwiftPackageReference`; Apple native frameworks (Photos, CryptoKit, Foundation, Darwin).
+Diagnostic event coverage: Emits whitelisted production diagnostic events without private metadata: `.export`, `.hashing`, `.preparation` (for parts and manifests), and `.progress` with ~2 Hz coalescing before Task creation. Asset pre-job failures durably recorded with `ledger.recordSourceFailure` for affected destinations.
+Checks (exact command, outcome, evidence location):
+- `swift build --package-path Packages/CloudifiedCore ...`: passed (exit code 0).
+- Portable Swift 6 typecheck (`swiftc -typecheck -swift-version 6 ...` across 8 portable files): passed with 0 errors.
+- `swiftc -parse -I /private/tmp/cloudified-p2-compile/out/Products/Debug $(find App -name "*.swift")`: passed with 0 errors across all 30 App Swift files.
+- `python3 scripts/check_docs.py`: passed (16 Markdown files valid).
+- `plutil -lint Cloudified.xcodeproj/project.pbxproj`: passed (`OK`).
+- `git diff --check`: passed (0 whitespace errors).
+Cloud run URL / artifact checksum, if applicable: None; no cloud builds per schedule.
+Physical-device evidence, if applicable: None; first integrated testing scheduled at P7.
+Failures / known limitations: PhotoKit/iOS SDK typechecking unavailable with local macOS CommandLineTools (requires hosted Xcode at P7); real runtime behavior, device storage peaks, and provider network integration remain untested.
+Decision changes (reference handbook 4 IDs): Adheres strictly to D01, D03, D04, D10, D11, D12, D14, D15, D16, D17, D18, D24, D25.
+Commit / milestone tag, after it exists: Next commit on main; no release tag.
+Next handoff / release of reserved paths: Builder releases reserved paths. Stopping for Architect review. Do not start P4.
 
 ## Batch log template
 

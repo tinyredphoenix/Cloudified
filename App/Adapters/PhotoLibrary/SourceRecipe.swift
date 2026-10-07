@@ -13,7 +13,9 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
     public let isLivePhoto: Bool
     public let resources: [SourceResourceDescriptor]
     public let metadata: SourceAssetMetadata
-    public let videoSplit: VideoSplitRecipe?
+    public let videoSplits: [VideoSplitRecipe]
+
+    public var videoSplit: VideoSplitRecipe? { videoSplits.first }
 
     public init(
         version: String = SourceRecipe.currentVersion,
@@ -23,8 +25,8 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
         isLivePhoto: Bool,
         resources: [SourceResourceDescriptor],
         metadata: SourceAssetMetadata,
-        videoSplit: VideoSplitRecipe? = nil
-    ) {
+        videoSplits: [VideoSplitRecipe] = []
+    ) throws {
         self.version = version
         self.assetLocalIdentifier = assetLocalIdentifier
         self.generation = generation
@@ -32,12 +34,170 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
         self.isLivePhoto = isLivePhoto
         self.resources = resources
         self.metadata = metadata
-        self.videoSplit = videoSplit
+        self.videoSplits = videoSplits
+        try validate()
+    }
+
+    public init(
+        version: String = SourceRecipe.currentVersion,
+        assetLocalIdentifier: String,
+        generation: String,
+        mediaKind: MediaKind,
+        isLivePhoto: Bool,
+        resources: [SourceResourceDescriptor],
+        metadata: SourceAssetMetadata,
+        videoSplit: VideoSplitRecipe?
+    ) throws {
+        try self.init(
+            version: version,
+            assetLocalIdentifier: assetLocalIdentifier,
+            generation: generation,
+            mediaKind: mediaKind,
+            isLivePhoto: isLivePhoto,
+            resources: resources,
+            metadata: metadata,
+            videoSplits: videoSplit.map { [$0] } ?? []
+        )
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case version
+        case assetLocalIdentifier
+        case generation
+        case mediaKind
+        case isLivePhoto
+        case resources
+        case metadata
+        case videoSplits
+        case videoSplit
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.version = try container.decode(String.self, forKey: .version)
+        self.assetLocalIdentifier = try container.decode(String.self, forKey: .assetLocalIdentifier)
+        self.generation = try container.decode(String.self, forKey: .generation)
+        self.mediaKind = try container.decode(MediaKind.self, forKey: .mediaKind)
+        self.isLivePhoto = try container.decode(Bool.self, forKey: .isLivePhoto)
+        self.resources = try container.decode([SourceResourceDescriptor].self, forKey: .resources)
+        self.metadata = try container.decode(SourceAssetMetadata.self, forKey: .metadata)
+
+        if let splits = try container.decodeIfPresent([VideoSplitRecipe].self, forKey: .videoSplits) {
+            self.videoSplits = splits
+        } else if let single = try container.decodeIfPresent(VideoSplitRecipe.self, forKey: .videoSplit) {
+            self.videoSplits = [single]
+        } else {
+            self.videoSplits = []
+        }
+
+        try validate()
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try validate()
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(version, forKey: .version)
+        try container.encode(assetLocalIdentifier, forKey: .assetLocalIdentifier)
+        try container.encode(generation, forKey: .generation)
+        try container.encode(mediaKind, forKey: .mediaKind)
+        try container.encode(isLivePhoto, forKey: .isLivePhoto)
+        try container.encode(resources, forKey: .resources)
+        try container.encode(metadata, forKey: .metadata)
+        try container.encode(videoSplits, forKey: .videoSplits)
+    }
+
+    private func isHex(_ value: String, length: Int) -> Bool {
+        value.utf8.count == length && value.utf8.allSatisfy { (48...57).contains($0) || (97...102).contains($0) }
+    }
+
+    /// Validates version, hash shapes, contiguous parts, and limits.
+    public func validate() throws {
+        guard version == SourceRecipe.currentVersion else {
+            throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
+        }
+        guard isHex(generation, length: 64) else {
+            throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
+        }
+        guard !assetLocalIdentifier.isEmpty,
+              !assetLocalIdentifier.contains("\0"),
+              assetLocalIdentifier.utf8.count <= 512 else {
+            throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
+        }
+        guard !resources.isEmpty, resources.count <= 32 else {
+            throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
+        }
+
+        for res in resources {
+            guard isHex(res.sha256, length: 64),
+                  isHex(res.sha1, length: 40),
+                  res.byteCount > 0,
+                  !res.uti.isEmpty,
+                  !res.originalFilename.isEmpty,
+                  res.role != .manifest else {
+                throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
+            }
+        }
+
+        guard videoSplits.count <= 32 else {
+            throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
+        }
+
+        for split in videoSplits {
+            guard split.targetPartSize > 0, split.totalByteCount > 0,
+                  !split.parts.isEmpty, split.parts.count <= 255 else {
+                throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
+            }
+
+            var expectedOffset: Int64 = 0
+            var accumulatedBytes: Int64 = 0
+
+            for (index, part) in split.parts.enumerated() {
+                guard part.partIndex == index,
+                      part.partCount == split.parts.count,
+                      part.role == split.role,
+                      part.offset == expectedOffset,
+                      part.byteCount > 0,
+                      isHex(part.sha256, length: 64),
+                      isHex(part.sha1, length: 40) else {
+                    throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
+                }
+
+                if index < split.parts.count - 1 {
+                    guard part.byteCount == split.targetPartSize else {
+                        throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
+                    }
+                } else {
+                    guard part.byteCount <= split.targetPartSize else {
+                        throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
+                    }
+                }
+
+                expectedOffset += part.byteCount
+                accumulatedBytes += part.byteCount
+            }
+
+            guard accumulatedBytes == split.totalByteCount else {
+                throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
+            }
+
+            if !split.originalSha256.isEmpty {
+                guard isHex(split.originalSha256, length: 64) else {
+                    throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
+                }
+                guard let original = resources.first(where: { $0.sha256 == split.originalSha256 }) else {
+                    throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
+                }
+                guard original.byteCount == split.totalByteCount, original.role == split.role else {
+                    throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
+                }
+            }
+        }
     }
 
     /// Serializes this recipe to canonical UTF-8 JSON.
     /// Strictly guards against exceeding the Ledger's 256 KiB limit.
     public func encode() throws -> Data {
+        try validate()
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         let data = try encoder.encode(self)
@@ -49,8 +209,13 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
 
     /// Decodes a SourceRecipe from UTF-8 JSON.
     public static func decode(from data: Data) throws -> SourceRecipe {
+        guard data.count <= 262_144 else {
+            throw SafeFailure(.invariant, domain: .photos, cause: .invalidContract)
+        }
         let decoder = JSONDecoder()
-        return try decoder.decode(SourceRecipe.self, from: data)
+        let recipe = try decoder.decode(SourceRecipe.self, from: data)
+        try recipe.validate()
+        return recipe
     }
 }
 
@@ -134,19 +299,56 @@ public struct SourceLocationMetadata: Codable, Equatable, Sendable {
 
 /// Lossless video-part split recipe for Telegram large-file archival.
 public struct VideoSplitRecipe: Codable, Equatable, Sendable {
+    public let role: ResourceRole
+    public let originalSha256: String
     public let targetPartSize: Int64
     public let totalByteCount: Int64
     public let parts: [VideoPartDescriptor]
 
-    public init(targetPartSize: Int64, totalByteCount: Int64, parts: [VideoPartDescriptor]) {
+    public init(
+        role: ResourceRole = .video,
+        originalSha256: String = "",
+        targetPartSize: Int64,
+        totalByteCount: Int64,
+        parts: [VideoPartDescriptor]
+    ) {
+        self.role = role
+        self.originalSha256 = originalSha256
         self.targetPartSize = targetPartSize
         self.totalByteCount = totalByteCount
         self.parts = parts
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case role
+        case originalSha256
+        case targetPartSize
+        case totalByteCount
+        case parts
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.role = try container.decodeIfPresent(ResourceRole.self, forKey: .role) ?? .video
+        self.originalSha256 = try container.decodeIfPresent(String.self, forKey: .originalSha256) ?? ""
+        self.targetPartSize = try container.decode(Int64.self, forKey: .targetPartSize)
+        self.totalByteCount = try container.decode(Int64.self, forKey: .totalByteCount)
+        self.parts = try container.decode([VideoPartDescriptor].self, forKey: .parts)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(role, forKey: .role)
+        try container.encode(originalSha256, forKey: .originalSha256)
+        try container.encode(targetPartSize, forKey: .targetPartSize)
+        try container.encode(totalByteCount, forKey: .totalByteCount)
+        try container.encode(parts, forKey: .parts)
     }
 }
 
 /// Descriptor for a single byte-exact part of a split video.
 public struct VideoPartDescriptor: Codable, Equatable, Sendable {
+    public let role: ResourceRole
     public let partIndex: Int
     public let partCount: Int
     public let offset: Int64
@@ -154,7 +356,16 @@ public struct VideoPartDescriptor: Codable, Equatable, Sendable {
     public let sha256: String
     public let sha1: String
 
-    public init(partIndex: Int, partCount: Int, offset: Int64, byteCount: Int64, sha256: String, sha1: String) {
+    public init(
+        role: ResourceRole = .video,
+        partIndex: Int,
+        partCount: Int,
+        offset: Int64,
+        byteCount: Int64,
+        sha256: String,
+        sha1: String
+    ) {
+        self.role = role
         self.partIndex = partIndex
         self.partCount = partCount
         self.offset = offset
@@ -163,12 +374,44 @@ public struct VideoPartDescriptor: Codable, Equatable, Sendable {
         self.sha1 = sha1
     }
 
+    enum CodingKeys: String, CodingKey {
+        case role
+        case partIndex
+        case partCount
+        case offset
+        case byteCount
+        case sha256
+        case sha1
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.role = try container.decodeIfPresent(ResourceRole.self, forKey: .role) ?? .video
+        self.partIndex = try container.decode(Int.self, forKey: .partIndex)
+        self.partCount = try container.decode(Int.self, forKey: .partCount)
+        self.offset = try container.decode(Int64.self, forKey: .offset)
+        self.byteCount = try container.decode(Int64.self, forKey: .byteCount)
+        self.sha256 = try container.decode(String.self, forKey: .sha256)
+        self.sha1 = try container.decode(String.self, forKey: .sha1)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(role, forKey: .role)
+        try container.encode(partIndex, forKey: .partIndex)
+        try container.encode(partCount, forKey: .partCount)
+        try container.encode(offset, forKey: .offset)
+        try container.encode(byteCount, forKey: .byteCount)
+        try container.encode(sha256, forKey: .sha256)
+        try container.encode(sha1, forKey: .sha1)
+    }
+
     public var originalContent: OriginalContent {
         OriginalContent(
             sha256: sha256,
             sha1: sha1,
             byteCount: byteCount,
-            role: .video,
+            role: role,
             partIndex: partIndex,
             partCount: partCount
         )

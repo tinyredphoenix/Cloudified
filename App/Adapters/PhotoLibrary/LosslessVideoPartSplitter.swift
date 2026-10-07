@@ -7,21 +7,27 @@ public enum LosslessVideoPartSplitter {
     /// Conservative 1.9 billion bytes; P4 still verifies actual TDLib limits.
     public static let defaultTargetPartSize: Int64 = 1_900_000_000
 
-    /// Generates a deterministic split recipe for a master video file.
+    /// Generates a deterministic split recipe for a master video file with exact measured hashes.
     public static func planSplit(
         fileURL: URL,
         totalBytes: Int64,
+        role: ResourceRole = .video,
+        originalSha256: String? = nil,
         targetPartSize: Int64 = defaultTargetPartSize,
         chunkSize: Int = 1_048_576
     ) throws -> VideoSplitRecipe {
-        guard totalBytes > 0, targetPartSize > 0, (1...1_048_576).contains(chunkSize) else { throw CoreError.invalidContract }
+        guard totalBytes > 0, targetPartSize > 0, (1...1_048_576).contains(chunkSize) else {
+            throw CoreError.invalidContract
+        }
         let sizeHandle = try FileHandle(forReadingFrom: fileURL)
         defer { try? sizeHandle.close() }
         guard try sizeHandle.seekToEnd() == UInt64(totalBytes) else { throw CoreError.invalidContract }
+
         guard totalBytes > targetPartSize else {
             // No split required
             let hashes = try StreamingFileHasher.hash(fileURL: fileURL, chunkSize: chunkSize)
             let single = VideoPartDescriptor(
+                role: role,
                 partIndex: 0,
                 partCount: 1,
                 offset: 0,
@@ -29,7 +35,13 @@ public enum LosslessVideoPartSplitter {
                 sha256: hashes.sha256,
                 sha1: hashes.sha1
             )
-            return VideoSplitRecipe(targetPartSize: targetPartSize, totalByteCount: totalBytes, parts: [single])
+            return VideoSplitRecipe(
+                role: role,
+                originalSha256: originalSha256 ?? hashes.sha256,
+                targetPartSize: targetPartSize,
+                totalByteCount: totalBytes,
+                parts: [single]
+            )
         }
 
         let handle = try FileHandle(forReadingFrom: fileURL)
@@ -64,6 +76,7 @@ public enum LosslessVideoPartSplitter {
             let sha1Hex = sha1.finalize().map { String(format: "%02x", $0) }.joined()
 
             parts.append(VideoPartDescriptor(
+                role: role,
                 partIndex: i,
                 partCount: partCount,
                 offset: offset,
@@ -73,7 +86,13 @@ public enum LosslessVideoPartSplitter {
             ))
         }
 
-        return VideoSplitRecipe(targetPartSize: targetPartSize, totalByteCount: totalBytes, parts: parts)
+        return VideoSplitRecipe(
+            role: role,
+            originalSha256: originalSha256 ?? "",
+            targetPartSize: targetPartSize,
+            totalByteCount: totalBytes,
+            parts: parts
+        )
     }
 
     /// Extracts a single part slice from a master video file to a destination partial file.

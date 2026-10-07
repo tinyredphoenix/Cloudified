@@ -51,25 +51,27 @@ public enum UploadPlanProducer {
         var requirements: [ResourceRequirement] = []
         var manifestEntries: [ArchiveManifestBuilder.ManifestResourceEntry] = []
 
-        if recipe.mediaKind == .video, let split = recipe.videoSplit, split.parts.count > 1 {
-            // Multipart video
-            for part in split.parts {
-                let original = part.originalContent
-                let req = try ContentIdentity.resource(role: .video, originals: [original])
-                requirements.append(req)
-                manifestEntries.append(.init(
-                    role: .video,
-                    tag: req.tag,
-                    sha256: part.sha256,
-                    sha1: part.sha1,
-                    byteCount: part.byteCount,
-                    partIndex: part.partIndex,
-                    partCount: part.partCount
-                ))
-            }
-        } else {
-            // Standard media (still photo, Live Photo pair, or single video)
-            for resDesc in recipe.resources {
+        for resDesc in recipe.resources {
+            if let split = recipe.videoSplits.first(where: {
+                ($0.originalSha256 == resDesc.sha256 || ($0.role == resDesc.role && $0.totalByteCount == resDesc.byteCount))
+            }), split.parts.count > 1 {
+                // Multipart oversized original
+                for part in split.parts {
+                    let original = part.originalContent
+                    let req = try ContentIdentity.resource(role: part.role, originals: [original])
+                    requirements.append(req)
+                    manifestEntries.append(.init(
+                        role: part.role,
+                        tag: req.tag,
+                        sha256: part.sha256,
+                        sha1: part.sha1,
+                        byteCount: part.byteCount,
+                        partIndex: part.partIndex,
+                        partCount: part.partCount
+                    ))
+                }
+            } else {
+                // Standard non-split original resource
                 let original = resDesc.originalContent
                 let req = try ContentIdentity.resource(role: resDesc.role, originals: [original])
                 requirements.append(req)
@@ -83,7 +85,7 @@ public enum UploadPlanProducer {
             }
         }
 
-        // Generate manifest association hash
+        // Generate manifest association hash including full-original reconstruction descriptors
         let (_, associationHash) = try ArchiveManifestBuilder.buildManifest(
             kind: recipe.mediaKind,
             isLivePhoto: recipe.isLivePhoto,

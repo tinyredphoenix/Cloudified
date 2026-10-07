@@ -70,7 +70,19 @@ public enum PhotoKitScanner {
         let scanID = try await ledger.beginScan()
 
         let options = fetchOptions ?? PHFetchOptions()
-        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        let mediaPredicate = NSPredicate(
+            format: "mediaType == %d OR mediaType == %d",
+            PHAssetMediaType.image.rawValue,
+            PHAssetMediaType.video.rawValue
+        )
+        if let existing = options.predicate {
+            options.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [existing, mediaPredicate])
+        } else {
+            options.predicate = mediaPredicate
+        }
+        if options.sortDescriptors == nil || options.sortDescriptors?.isEmpty == true {
+            options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        }
 
         let fetchResult = PHAsset.fetchAssets(with: options)
         let totalCount = fetchResult.count
