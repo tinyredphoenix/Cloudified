@@ -145,12 +145,13 @@ public enum TDLibJSON {
             let objCType = String(cString: num.objCType)
             if objCType == "d" || objCType == "f" {
                 let d = num.doubleValue
-                if d.isFinite && d.rounded() == d && d >= Double(Int64.min) && d <= Double(Int64.max) {
-                    return .integer(Int64(d))
-                }
+                guard d.isFinite else { throw TDLibError.malformedResponse }
+                // Never recover identifiers from an already rounded floating value.
+                // Double(Int64.max) rounds to 2^63; converting that boundary traps.
                 return .double(d)
             }
-            return .integer(num.int64Value)
+            guard let integer = Int64(num.stringValue) else { throw TDLibError.malformedResponse }
+            return .integer(integer)
         }
         if let arr = value as? [Any] {
             var items: [TDLibValue] = []
@@ -222,7 +223,7 @@ public enum TDLibJSON {
             if objCType == "d" || objCType == "f" {
                 return nil
             }
-            return num.int64Value
+            return Int64(num.stringValue)
         }
         if let id = value as? Int64 {
             return id

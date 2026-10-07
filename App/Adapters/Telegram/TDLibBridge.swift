@@ -45,6 +45,8 @@ public enum TDLibError: LocalizedError, Sendable, Equatable {
 /// pointers returned by `td_receive` / `td_execute` are copied immediately into Swift
 /// memory before the next call on that thread.
 public final class TDLibBridge: Sendable {
+    // Returned native pointers stay protected through the copy, including execute.
+    private static let pointerLock = NSLock()
     public init() {}
 
     /// Creates an opaque TDLib client identifier.
@@ -67,7 +69,8 @@ public final class TDLibBridge: Sendable {
     /// Receives the next response or update from TDLib with the specified timeout.
     /// Must only be called from a single process-global thread/task.
     /// The returned UTF-8 string is copied immediately from TDLib's memory.
-    public func receive(timeout: Double) -> String? {
+    fileprivate func receive(timeout: Double) -> String? {
+        Self.pointerLock.lock(); defer { Self.pointerLock.unlock() }
         guard let cStr = td_receive(timeout) else {
             return nil
         }
@@ -77,7 +80,8 @@ public final class TDLibBridge: Sendable {
     /// Synchronously executes a service TDLib request.
     /// The returned UTF-8 string is copied immediately from TDLib's memory.
     public func execute(jsonRequest: String) -> String? {
-        jsonRequest.withCString { cStr in
+        Self.pointerLock.lock(); defer { Self.pointerLock.unlock() }
+        return jsonRequest.withCString { cStr in
             guard let cStrRes = td_execute(cStr) else {
                 return nil
             }
@@ -101,7 +105,7 @@ public actor TDLibProcessReceiver {
     private var receiveTask: Task<Void, Never>?
     private var isRunning: Bool = false
 
-    public init(bridge: TDLibBridge = TDLibBridge()) {
+    private init(bridge: TDLibBridge = TDLibBridge()) {
         self.bridge = bridge
     }
 
@@ -140,28 +144,12 @@ public actor TDLibProcessReceiver {
     }
 
     private func routeIncomingJSON(_ jsonString: String) async {
-        guard let data = jsonString.data(using: .utf8),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        guard let response = try? TDLibJSON.parse(jsonString),
+              let targetClientID = response.clientID, targetClientID > 0,
+              let handler = activeSessions[targetClientID] else {
             return
         }
-
-        var targetClientID: Int32?
-        if let cid = dict["@client_id"] as? Int32 {
-            targetClientID = cid
-        } else if let cid = dict["@client_id"] as? Int {
-            targetClientID = Int32(cid)
-        } else if let num = dict["@client_id"] as? NSNumber {
-            targetClientID = num.int32Value
-        }
-
-        if let cid = targetClientID, let handler = activeSessions[cid] {
-            await handler(jsonString)
-            return
-        }
-
-        // Broadcast to all active sessions if unrouted
-        for handler in activeSessions.values {
-            await handler(jsonString)
-        }
+        // An unknown/old client cannot change another account's auth or close state.
+        await handler(jsonString)
     }
 }

@@ -36,6 +36,11 @@ public actor TDLibClient {
         }
     }
 
+    /// A delivery or diagnostic gap requires reconciliation before further commands.
+    public var requiresReconciliation: Bool {
+        get async { await session.requiresReconciliation }
+    }
+
     /// Initializes and starts the native TDLib session with the given filesystem parameters.
     /// Strictly matches pinned td_api.tl `setTdlibParameters` schema with base64 encryption key.
     public func start(
@@ -67,8 +72,9 @@ public actor TDLibClient {
         do {
             _ = try await session.sendRequest(params.toRequestDictionary())
         } catch {
+            if error is CoreError || error is CredentialError || error is CancellationError { throw error }
             let classified = Self.classify(error)
-            try? await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
+            try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
             throw classified
         }
     }
@@ -82,8 +88,9 @@ public actor TDLibClient {
         do {
             _ = try await session.sendRequest(req)
         } catch {
+            if error is CoreError || error is CredentialError || error is CancellationError { throw error }
             let classified = Self.classify(error)
-            try? await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
+            try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
             throw classified
         }
     }
@@ -97,8 +104,9 @@ public actor TDLibClient {
         do {
             _ = try await session.sendRequest(req)
         } catch {
+            if error is CoreError || error is CredentialError || error is CancellationError { throw error }
             let classified = Self.classify(error)
-            try? await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
+            try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
             throw classified
         }
     }
@@ -112,8 +120,9 @@ public actor TDLibClient {
         do {
             _ = try await session.sendRequest(req)
         } catch {
+            if error is CoreError || error is CredentialError || error is CancellationError { throw error }
             let classified = Self.classify(error)
-            try? await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
+            try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
             throw classified
         }
     }
@@ -124,14 +133,15 @@ public actor TDLibClient {
         do {
             return try await session.sendRequest(req)
         } catch {
+            if error is CoreError || error is CredentialError || error is CancellationError { throw error }
             let classified = Self.classify(error)
-            try? await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
+            try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
             throw classified
         }
     }
 
     /// Streams raw updates from the underlying TDLib session with bounded buffering.
-    public func updates() async throws -> AsyncStream<TDLibResponse> {
+    public func updates() async throws -> AsyncThrowingStream<TDLibResponse, any Error> {
         try await session.updateStream()
     }
 
@@ -140,8 +150,9 @@ public actor TDLibClient {
         do {
             try await session.close()
         } catch {
+            if error is CoreError || error is CredentialError || error is CancellationError { throw error }
             let classified = Self.classify(error)
-            try? await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
+            try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
             throw classified
         }
     }

@@ -91,7 +91,7 @@ public struct TDLibParameters: Sendable {
 /// Actor owning a single active TDLib client session.
 /// Routes requests/updates through the process-global TDLibProcessReceiver,
 /// enforces bounded memory and request maps, handles deadlines without hangs,
-/// coalesces file progress while guaranteeing critical terminal delivery,
+/// coalesces file progress and fences critical delivery overflow,
 /// and manages deterministic native close acknowledgement.
 public actor TDLibSession {
     public static let maxPendingRequests = 100
@@ -109,7 +109,8 @@ public actor TDLibSession {
 
     private var clientID: Int32?
     private var pendingRequests: [String: PendingRequest] = [:]
-    private var updateContinuations: [UUID: AsyncStream<TDLibResponse>.Continuation] = [:]
+    private var updateContinuations: [UUID: AsyncThrowingStream<TDLibResponse, any Error>.Continuation] = [:]
+    private var processingFailure: (any Error)?
 
     private var currentAuthState: TDLibAuthorizationState = .uninitialized
     private var isClosing = false
@@ -138,12 +139,14 @@ public actor TDLibSession {
     public var isClosed: Bool {
         isTerminated
     }
+    /// A delivery/log gap fences new commands; it is not remote rejection/absence.
+    public var requiresReconciliation: Bool { processingFailure != nil }
 
     // MARK: - Lifecycle
 
     /// Initializes and starts the owned TDLib client and registers with the process receiver.
     public func start() async throws -> Int32 {
-        guard clientID == nil else {
+        guard clientID == nil, closeTask == nil else {
             throw TDLibError.executionFailed("TDLibSession is already started.")
         }
         let id = try bridge.createClientID()
@@ -151,24 +154,26 @@ public actor TDLibSession {
         self.isTerminated = false
         self.isClosing = false
         self.currentAuthState = .uninitialized
+        self.processingFailure = nil
 
         // Register session handler with the process-global receiver
         await receiver.registerSession(clientID: id) { [weak self] jsonString in
             await self?.handleIncomingJSON(jsonString)
         }
 
-        try? await emitDiagnostic(.appStart, decision: .proceed, severity: .info)
+        try await emitDiagnostic(.appStart, decision: .proceed, severity: .info)
         return id
     }
 
     /// Subscribes to the broadcast stream of TDLib updates with bounded buffer policy.
-    public func updateStream() throws -> AsyncStream<TDLibResponse> {
+    public func updateStream() throws -> AsyncThrowingStream<TDLibResponse, any Error> {
+        if let processingFailure { throw processingFailure }
         guard updateContinuations.count < Self.maxSubscribers else {
             throw TDLibError.capacityExceeded("Maximum subscriber limit reached (\(Self.maxSubscribers)).")
         }
 
         let streamID = UUID()
-        return AsyncStream(bufferingPolicy: .bufferingNewest(100)) { continuation in
+        return AsyncThrowingStream(bufferingPolicy: .bufferingOldest(100)) { continuation in
             self.registerUpdateContinuation(continuation, id: streamID)
             continuation.onTermination = { [weak self] _ in
                 Task { [weak self] in
@@ -178,7 +183,7 @@ public actor TDLibSession {
         }
     }
 
-    private func registerUpdateContinuation(_ continuation: AsyncStream<TDLibResponse>.Continuation, id: UUID) {
+    private func registerUpdateContinuation(_ continuation: AsyncThrowingStream<TDLibResponse, any Error>.Continuation, id: UUID) {
         updateContinuations[id] = continuation
     }
 
@@ -192,6 +197,8 @@ public actor TDLibSession {
     /// Strictly validates finite positive timeouts, registers atomically, and uses
     /// a single terminal resolver to guarantee continuation resolution without hangs.
     public func sendRequest(_ request: [String: Any], timeout: TimeInterval = 60.0) async throws -> TDLibResponse {
+        try Task.checkCancellation()
+        if let processingFailure { throw processingFailure }
         guard timeout.isFinite, timeout > 0, timeout <= 300.0 else {
             throw TDLibError.invalidParameter("Timeout must be finite positive number <= 300 seconds.")
         }
@@ -210,10 +217,15 @@ public actor TDLibSession {
 
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
+                guard !Task.isCancelled else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
                 // Spawn dedicated deadline timer
                 let timeoutTask = Task { [weak self] in
-                    try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                    await self?.resolvePendingRequest(id: extraID, result: .failure(TDLibError.timeout))
+                    do { try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000)) }
+                    catch { return }
+                    await self?.resolveFailure(id: extraID, error: TDLibError.timeout)
                 }
 
                 self.pendingRequests[extraID] = PendingRequest(
@@ -226,7 +238,7 @@ public actor TDLibSession {
             }
         } onCancel: {
             Task { [weak self] in
-                await self?.resolvePendingRequest(id: extraID, result: .failure(CancellationError()))
+                await self?.resolveFailure(id: extraID, error: CancellationError())
             }
         }
     }
@@ -237,35 +249,44 @@ public actor TDLibSession {
         }
         pending.timeoutTask.cancel()
 
-        if case .failure(let error) = result {
-            if let tdErr = error as? TDLibError, case .timeout = tdErr {
-                Task { [weak self] in
-                    try? await self?.emitDiagnostic(
-                        .failure,
-                        decision: .wait,
-                        severity: .error,
-                        failure: SafeFailure(.timeout, domain: .tdlib, cause: .deadlineExceeded)
-                    )
-                }
-            } else if error is CancellationError {
-                Task { [weak self] in
-                    try? await self?.emitDiagnostic(
-                        .failure,
-                        decision: .wait,
-                        severity: .warning,
-                        failure: SafeFailure(.transfer, domain: .tdlib, cause: .interrupted)
-                    )
-                }
-            }
-        }
-
         pending.continuation.resume(with: result)
+    }
+
+    private func resolveFailure(id: String, error: any Error) async {
+        // Reserve the terminal result before awaiting a potentially slow sink.
+        guard let pending = pendingRequests.removeValue(forKey: id) else { return }
+        // The deadline task must not cancel itself before persisting its event.
+        if (error as? TDLibError) != .timeout { pending.timeoutTask.cancel() }
+        do {
+            try await emitDiagnostic(.failure, decision: .wait, severity: .error,
+                                     failure: error is CancellationError
+                                        ? SafeFailure(.transfer, domain: .tdlib, cause: .interrupted)
+                                        : TDLibClient.classify(error))
+            pending.continuation.resume(throwing: error)
+        } catch {
+            pending.continuation.resume(throwing: error)
+            interruptInput(error)
+        }
+    }
+
+    private func interruptInput(_ error: any Error) {
+        if processingFailure == nil { processingFailure = error }
+        let failure = processingFailure!
+        for id in Array(pendingRequests.keys) {
+            resolvePendingRequest(id: id, result: .failure(failure))
+        }
+        for continuation in updateContinuations.values { continuation.finish(throwing: failure) }
+        updateContinuations.removeAll()
+        // Keep the receiver/native client alive for real close acknowledgement.
     }
 
     // MARK: - Incoming Message Handling
 
-    private func handleIncomingJSON(_ jsonString: String) {
-        guard let response = try? TDLibJSON.parse(jsonString) else {
+    private func handleIncomingJSON(_ jsonString: String) async {
+        let response: TDLibResponse
+        do { response = try TDLibJSON.parse(jsonString) }
+        catch {
+            interruptInput(error)
             return
         }
 
@@ -274,7 +295,7 @@ public actor TDLibSession {
             if response.isError {
                 let code = response.errorCode ?? 0
                 let message = response.errorMessage ?? "TDLib error"
-                resolvePendingRequest(id: extra, result: .failure(TDLibError.tdlibError(code: code, message: message)))
+                await resolveFailure(id: extra, error: TDLibError.tdlibError(code: code, message: message))
             } else {
                 resolvePendingRequest(id: extra, result: .success(response))
             }
@@ -286,7 +307,7 @@ public actor TDLibSession {
             if type == "updateAuthorizationState" {
                 if let stateObj = response.object(forKey: "authorization_state"),
                    let stateType = stateObj.type {
-                    handleAuthStateUpdate(stateType)
+                    await handleAuthStateUpdate(stateType)
                 }
             } else if type == "updateFile" {
                 // Separate latest-value progress coalescing from guaranteed terminal states
@@ -316,12 +337,22 @@ public actor TDLibSession {
         }
 
         // Broadcast to all active update listeners
-        for continuation in updateContinuations.values {
-            continuation.yield(response)
+        for (id, continuation) in Array(updateContinuations) {
+            switch continuation.yield(response) {
+            case .enqueued: break
+            case .terminated: updateContinuations.removeValue(forKey: id)
+            case .dropped:
+                let failure = TDLibError.capacityExceeded("Critical update delivery overflow; reconciliation required.")
+                interruptInput(failure)
+                return
+            @unknown default:
+                interruptInput(TDLibError.malformedResponse)
+                return
+            }
         }
     }
 
-    private func handleAuthStateUpdate(_ stateType: String) {
+    private func handleAuthStateUpdate(_ stateType: String) async {
         let oldState = currentAuthState
         switch stateType {
         case "authorizationStateWaitTdlibParameters":
@@ -340,19 +371,14 @@ public actor TDLibSession {
             currentAuthState = .closing
         case "authorizationStateClosed":
             currentAuthState = .closed
-            completeClosure()
+            await completeClosure()
         default:
             break
         }
 
         if oldState != currentAuthState {
-            Task { [weak self] in
-                try? await self?.emitDiagnostic(
-                    .enabledChanged,
-                    decision: .proceed,
-                    severity: .info
-                )
-            }
+            do { try await emitDiagnostic(.enabledChanged, decision: .proceed, severity: .info) }
+            catch { interruptInput(error) }
         }
     }
 
@@ -370,6 +396,7 @@ public actor TDLibSession {
             try await performClose()
         }
         self.closeTask = task
+        defer { self.closeTask = nil }
         return try await task.value
     }
 
@@ -380,21 +407,21 @@ public actor TDLibSession {
 
         // Send close command to TDLib
         let closeReq: [String: Any] = ["@type": "close"]
-        if let closeJSON = try? TDLibJSON.serializeRequest(closeReq) {
-            bridge.send(clientID: clientID, jsonRequest: closeJSON)
-        }
+        let closeJSON = try TDLibJSON.serializeRequest(closeReq)
+        bridge.send(clientID: clientID, jsonRequest: closeJSON)
 
         // Await native confirmation with finite bounded deadline (10 seconds)
         let maxWaitSeconds: TimeInterval = 10.0
         let start = ProcessInfo.processInfo.systemUptime
-        while currentAuthState != .closed && (ProcessInfo.processInfo.systemUptime - start) < maxWaitSeconds {
-            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+        while (!isTerminated || self.clientID != nil) && (ProcessInfo.processInfo.systemUptime - start) < maxWaitSeconds {
+            do { try await Task.sleep(nanoseconds: 100_000_000) }
+            catch { throw TDLibError.unresolvedClose("Close interrupted; native confirmation remains pending.") }
         }
 
-        if currentAuthState != .closed {
+        if !isTerminated || self.clientID != nil {
             // Unresolved close deadline: do NOT fabricate closed state
             currentAuthState = .uncertain
-            try? await emitDiagnostic(
+            try await emitDiagnostic(
                 .failure,
                 decision: .wait,
                 severity: .error,
@@ -402,16 +429,17 @@ public actor TDLibSession {
             )
             throw TDLibError.unresolvedClose("TDLib did not acknowledge authorizationStateClosed within \(maxWaitSeconds)s.")
         }
+        if let processingFailure { throw processingFailure }
     }
 
-    private func completeClosure() {
+    private func completeClosure() async {
         guard !isTerminated else { return }
         isTerminated = true
         isClosing = false
         currentAuthState = .closed
 
         // Cancel and resolve all pending requests
-        for id in pendingRequests.keys {
+        for id in Array(pendingRequests.keys) {
             resolvePendingRequest(id: id, result: .failure(TDLibError.clientClosed))
         }
         pendingRequests.removeAll()
@@ -424,15 +452,12 @@ public actor TDLibSession {
         fileProgressEmittedTimes.removeAll()
 
         if let cid = clientID {
-            Task { [receiver] in
-                await receiver.unregisterSession(clientID: cid)
-            }
+            await receiver.unregisterSession(clientID: cid)
         }
         clientID = nil
 
-        Task { [weak self] in
-            try? await self?.emitDiagnostic(.finalization, decision: .proceed, severity: .info)
-        }
+        do { try await emitDiagnostic(.finalization, decision: .proceed, severity: .info) }
+        catch { interruptInput(error) }
     }
 
     private func emitDiagnostic(
@@ -446,6 +471,7 @@ public actor TDLibSession {
     ) async throws {
         guard let diagnosticSink else { return }
         let context = EventContext(origin: .telegram)
-        try await diagnosticSink(operation, context, decision, severity, failure, duration, bytes, expectedBytes)
+        do { try await diagnosticSink(operation, context, decision, severity, failure, duration, bytes, expectedBytes) }
+        catch { interruptInput(error); throw error }
     }
 }

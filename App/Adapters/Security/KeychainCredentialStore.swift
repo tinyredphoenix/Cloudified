@@ -171,7 +171,8 @@ public final class KeychainCredentialStore: Sendable {
     public static func validateProfileID(_ profileID: String) throws {
         guard !profileID.isEmpty,
               profileID.utf8.count <= 64,
-              profileID.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }) else {
+              profileID.utf8.allSatisfy({ (65...90).contains($0) || (97...122).contains($0) ||
+                  (48...57).contains($0) || $0 == 45 || $0 == 95 }) else {
             throw CredentialError.invalidProfile
         }
     }
