@@ -321,7 +321,7 @@ Cloud run URL / artifact checksum, if applicable: None; no cloud builds per sche
 Physical-device evidence, if applicable: None; first integrated testing scheduled at P7.
 Failures / known limitations: PhotoKit/iOS SDK typechecking unavailable with local macOS CommandLineTools (requires hosted Xcode at P7); real runtime behavior, device storage peaks, and provider network integration remain untested.
 Decision changes (reference handbook 4 IDs): Adheres strictly to D01, D03, D04, D10, D11, D12, D14, D15, D16, D17, D18, D24, D25.
-Commit / milestone tag, after it exists: Next commit on main; no release tag.
+Commit / milestone tag, after it exists: Commit `377b647` on main; milestone tag deferred until acceptance testing per handbook 2.
 Next handoff / release of reserved paths: Builder releases reserved paths. Stopping for Architect review. Do not start P4.
 
 ## Batch log template
