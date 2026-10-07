@@ -13,13 +13,19 @@ public actor SharedExportPermit {
     public init() {}
 
     /// Acquires the single export permit, suspending until available.
-    public func acquire() async {
+    /// A cancelled waiter passes the permit to the next waiter and throws.
+    public func acquire() async throws {
+        try Task.checkCancellation()
         if !held {
             held = true
             return
         }
         await withCheckedContinuation { continuation in
             waiters.append(continuation)
+        }
+        if Task.isCancelled {
+            release()
+            throw CancellationError()
         }
     }
 
@@ -35,7 +41,7 @@ public actor SharedExportPermit {
 
     /// Executes a scoped asynchronous operation under the export permit.
     public func withPermit<T: Sendable>(_ operation: @Sendable () async throws -> T) async throws -> T {
-        await acquire()
+        try await acquire()
         defer { release() }
         try Task.checkCancellation()
         return try await operation()

@@ -1,5 +1,5 @@
 import Foundation
-import Photos
+@preconcurrency import Photos
 import CloudifiedCore
 
 /// Production implementation of OriginalPreparer.
@@ -15,7 +15,7 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
     public init(
         ledger: Ledger,
         fileStore: FileLeaseStore,
-        storageLayout: StorageLayout = .shared,
+        storageLayout: StorageLayout,
         permit: SharedExportPermit = .shared,
         exporter: PhotoResourceExporter = .shared
     ) {
@@ -31,21 +31,19 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
         resource: ResourceRequirement,
         receipts: [RemoteReceipt]
     ) async throws -> [LeasedFile] {
-        // 1. Archive manifests are generated fresh from confirmed receipts; never return a stale cache
-        if resource.role == .manifest {
-            return [try await prepareManifest(job: job, resource: resource, receipts: receipts)]
-        }
-
-        // 2. Acquire process-wide export permit
+        // All preparations (including manifests) are serialized under the shared permit
         return try await permit.withPermit {
+            // 1. Archive manifests are generated fresh from confirmed receipts; never return a stale cache
+            if resource.role == .manifest {
+                return [try await prepareManifest(job: job, resource: resource, receipts: receipts)]
+            }
+
             // Retrieve private durable recipe
-            guard let recipeData = try await ledger.sourceRecipe(assetID: job.asset.id) else {
+            guard let recipeData = try await ledger.sourceRecipe(assetID: job.asset.id),
+                  let recipe = try? SourceRecipe.decode(from: recipeData) else {
                 throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing)
             }
 
-            let recipe = try SourceRecipe.decode(from: recipeData)
-            guard recipe.generation == job.asset.generation,
-                  recipe.assetLocalIdentifier == job.asset.localIdentifier else { throw CoreError.invalidContract }
             var leasedFiles: [LeasedFile] = []
 
             do {
@@ -82,11 +80,10 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
                 return leasedFiles
             } catch {
                 // Multi-input prepare failed: release every accumulated lease to prevent leaks
-                var cleanupError: (any Error)?
                 for leased in leasedFiles {
-                    do { try await fileStore.release(leased) } catch { cleanupError = error }
+                    try? await fileStore.release(leased)
                 }
-                throw cleanupError ?? error
+                throw error
             }
         }
     }
@@ -98,13 +95,11 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
         resource: ResourceRequirement,
         receipts: [RemoteReceipt]
     ) async throws -> LeasedFile {
-        guard let recipeData = try await ledger.sourceRecipe(assetID: job.asset.id) else {
+        guard let recipeData = try await ledger.sourceRecipe(assetID: job.asset.id),
+              let recipe = try? SourceRecipe.decode(from: recipeData) else {
             throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing)
         }
 
-        let recipe = try SourceRecipe.decode(from: recipeData)
-        guard recipe.generation == job.asset.generation,
-              recipe.assetLocalIdentifier == job.asset.localIdentifier else { throw CoreError.invalidContract }
         var entries: [ArchiveManifestBuilder.ManifestResourceEntry] = []
         for req in job.plan.resources where req.role != .manifest {
             for original in req.originals {
@@ -139,18 +134,20 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
         guard expected.tag == resource.tag else { throw CoreError.invalidContract }
 
         let available = try storageLayout.availableCapacity()
+        let manifestOverhead: Int64 = 65_536
         let reservation = try await ledger.reserveStorage(
             bytes: Int64(manifestData.count),
             availableBytes: available,
-            transportOverhead: 0
+            transportOverhead: manifestOverhead
         )
 
-        let manifestFileID = UUID() // each receipt-bearing document gets fresh physical ownership
+        // Manifest uses a fresh physical UUID per document; remote tag remains recipe-derived
+        let documentID = UUID()
         let ownership: ExportFileOwnership
         do {
-            ownership = try await fileStore.beginExport(fileID: manifestFileID)
+            ownership = try await fileStore.beginExport(fileID: documentID)
         } catch {
-            try await ledger.releaseReservation(reservation.id)
+            try? await ledger.releaseReservation(reservation.id)
             throw error
         }
 
@@ -160,7 +157,7 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
             try manifestData.write(to: ownership.partialURL)
             try FileManager.default.moveItem(at: ownership.partialURL, to: ownership.publishedURL)
             let leased = try await fileStore.registerPublished(
-                fileID: manifestFileID,
+                fileID: documentID,
                 byteCount: Int64(manifestData.count),
                 reservationID: reservation.id,
                 reexportable: true
@@ -209,13 +206,10 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
             throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing)
         }
 
-        // Verify generation before measurement
-        let initialGen = PhotoKitScanner.computeGeneration(for: phAsset)
-        guard initialGen == job.asset.generation else {
-            throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .contentChanged)
-        }
+        // Verify generation before measurement against refetched snapshot
+        try PhotoKitScanner.verifyGeneration(job.asset)
 
-        // Match exact source descriptor using role, UTI, and original filename
+        // Match exact source descriptor using role, UTI, original filename, and private selector
         guard let descriptor = recipe.resources.first(where: {
             $0.role == original.role && $0.sha256 == original.sha256 && $0.sha1 == original.sha1 && $0.byteCount == original.byteCount
         }) else {
@@ -229,25 +223,38 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
             res.originalFilename == descriptor.originalFilename
         }
 
-        // Deterministic disambiguation if multiple resources have identical role, UTI, and filename
-        candidates.sort { $0.type.rawValue < $1.type.rawValue }
-        guard let matched = candidates.first else {
+        if let expectedType = descriptor.resourceType {
+            candidates = candidates.filter { $0.type.rawValue == expectedType }
+        }
+
+        let matched: PHAssetResource
+        if candidates.count == 1 {
+            matched = candidates[0]
+        } else if candidates.count > 1 {
+            guard let idx = descriptor.selectorIndex, candidates.indices.contains(idx) else {
+                throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .contentChanged)
+            }
+            matched = candidates[idx]
+        } else {
             throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing)
         }
 
-        let fileID = try ContentIdentity.stagingFileID(for: original)
         let available = try storageLayout.availableCapacity()
+        let copyCount = 1
+        let fixedOverhead: Int64 = 67_108_864
+        let transportOverhead = fixedOverhead + original.byteCount * Int64(copyCount)
         let reservation = try await ledger.reserveStorage(
             bytes: original.byteCount,
             availableBytes: available,
-            transportOverhead: 0
+            transportOverhead: transportOverhead
         )
 
+        let fileID = try ContentIdentity.stagingFileID(for: original)
         let ownership: ExportFileOwnership
         do {
             ownership = try await fileStore.beginExport(fileID: fileID)
         } catch {
-            try await ledger.releaseReservation(reservation.id)
+            try? await ledger.releaseReservation(reservation.id)
             throw error
         }
 
@@ -264,7 +271,7 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
                 }
             )
 
-            // Verify generation after measurement
+            // Verify generation after measurement against refetched snapshot
             try PhotoKitScanner.verifyGeneration(job.asset)
 
             // Validate byte identity before publication
@@ -331,7 +338,7 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
         }
         let partDesc = split.parts[partIndex]
 
-        // Locate master original descriptor
+        // Locate master original descriptor with exact identity
         guard let masterDesc = recipe.resources.first(where: {
             $0.sha256 == split.originalSha256 && $0.role == split.role && $0.byteCount == split.totalByteCount
         }) else {
@@ -352,7 +359,7 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
             )
         }
 
-        // Track every acquired object from this point, including pre-export failures.
+        // Track every acquired object, including pre-export failures
         var reservation: StorageReservation?
         var ownership: ExportFileOwnership?
         var publishedLease: LeasedFile?
@@ -361,10 +368,11 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
         do {
             _ = try await fileStore.sweep()
             let available = try storageLayout.availableCapacity()
+            let copyOverhead = partDesc.byteCount + 67_108_864
             let admitted = try await ledger.reserveStorage(
                 bytes: partDesc.byteCount,
                 availableBytes: available,
-                transportOverhead: 0,
+                transportOverhead: copyOverhead,
                 derivedFromFileID: masterLease.fileID
             )
             reservation = admitted
@@ -386,7 +394,7 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
             publishedLease = leased
             try await fileStore.endExport(exporting)
             exportEnded = true
-            masterReleased = true // release removes its runtime pin before writing diagnostics
+            masterReleased = true
             try await fileStore.release(masterLease)
             try await ledger.appendEvent(
                 .preparation,

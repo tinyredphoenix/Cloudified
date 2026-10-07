@@ -4,14 +4,6 @@ import CloudifiedCore
 /// Safe Foundation storage-layout coordinator for app-owned Application Support directories.
 /// Directs the persistent SQLite database, original media staging, and manifests roots.
 public final class StorageLayout: Sendable {
-    public static let shared: StorageLayout = {
-        do {
-            return try StorageLayout()
-        } catch {
-            fatalError("Failed to initialize StorageLayout: \(error)")
-        }
-    }()
-
     public let rootDirectory: URL
     public let databaseURL: URL
     public let stagingURL: URL
@@ -38,7 +30,9 @@ public final class StorageLayout: Sendable {
         do {
             try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
         } catch {
-            throw SafeFailure(.transfer, domain: .fileSystem, code: (error as NSError).code, cause: .permissionDenied)
+            let code = (error as NSError).code
+            let cause: KnownCause = (code == NSFileWriteNoPermissionError || code == EACCES || code == EPERM) ? .permissionDenied : .unknown
+            throw SafeFailure(.accessDenied, domain: .fileSystem, code: code, cause: cause)
         }
 
         var mutableURL = url
@@ -47,7 +41,8 @@ public final class StorageLayout: Sendable {
         do {
             try mutableURL.setResourceValues(resourceValues)
         } catch {
-            throw SafeFailure(.transfer, domain: .fileSystem, code: (error as NSError).code, cause: .unknown)
+            let code = (error as NSError).code
+            throw SafeFailure(.transfer, domain: .fileSystem, code: code, cause: .unknown)
         }
 
         #if os(iOS)
@@ -57,7 +52,9 @@ public final class StorageLayout: Sendable {
                 ofItemAtPath: url.path
             )
         } catch {
-            throw SafeFailure(.transfer, domain: .fileSystem, code: (error as NSError).code, cause: .permissionDenied)
+            let code = (error as NSError).code
+            let cause: KnownCause = (code == NSFileWriteNoPermissionError || code == EACCES || code == EPERM) ? .permissionDenied : .unknown
+            throw SafeFailure(.accessDenied, domain: .fileSystem, code: code, cause: cause)
         }
         #endif
     }
@@ -69,25 +66,29 @@ public final class StorageLayout: Sendable {
             .volumeAvailableCapacityForImportantUsageKey,
             .volumeAvailableCapacityKey
         ]
-        if let values = try? rootDirectory.resourceValues(forKeys: keys) {
-            if let important = values.volumeAvailableCapacityForImportantUsage {
-                return max(0, important)
+        do {
+            let values = try rootDirectory.resourceValues(forKeys: keys)
+            if let important = values.volumeAvailableCapacityForImportantUsage, important >= 0 {
+                return important
             }
-            if let standard = values.volumeAvailableCapacity {
-                return max(0, Int64(standard))
+            if let standard = values.volumeAvailableCapacity, standard >= 0 {
+                return Int64(standard)
             }
+        } catch {
+            // Fall through to attributesOfFileSystem
         }
 
-        if let attrs = try? FileManager.default.attributesOfFileSystem(forPath: rootDirectory.path),
-           let freeSize = attrs[.systemFreeSize] as? Int64 {
-            return max(0, freeSize)
+        do {
+            let attrs = try FileManager.default.attributesOfFileSystem(forPath: rootDirectory.path)
+            if let freeSize = attrs[.systemFreeSize] as? Int64, freeSize >= 0 {
+                return freeSize
+            }
+        } catch {
+            let code = (error as NSError).code
+            let cause: KnownCause = (code == NSFileReadNoPermissionError || code == EACCES || code == EPERM) ? .permissionDenied : .unknown
+            throw SafeFailure(.accessDenied, domain: .fileSystem, code: code, cause: cause)
         }
 
         throw SafeFailure(.sourceUnavailable, domain: .fileSystem, cause: .unknown)
-    }
-
-    /// Non-throwing convenience query with fallback to 0.
-    public func availableDiskSpace() -> Int64 {
-        (try? availableCapacity()) ?? 0
     }
 }

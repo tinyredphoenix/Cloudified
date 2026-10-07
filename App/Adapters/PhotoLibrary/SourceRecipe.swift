@@ -136,6 +136,12 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
                   res.role != .manifest else {
                 throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
             }
+            if let st = res.resourceType {
+                guard st >= 0 else { throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected) }
+            }
+            if let idx = res.selectorIndex {
+                guard idx >= 0 else { throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected) }
+            }
         }
 
         guard videoSplits.count <= 32 else {
@@ -144,10 +150,12 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
 
         var splitKeys: Set<String> = []
         var mediaRequirementCount = resources.count
+
         for split in videoSplits {
-            guard split.targetPartSize > 0, split.targetPartSize <= 1_900_000_000,
-                  split.totalByteCount > 0, isHex(split.originalSha256, length: 64),
-                  split.parts.count > 1, split.parts.count <= 255,
+            guard split.targetPartSize > 0, split.totalByteCount > 0,
+                  !split.parts.isEmpty, split.parts.count <= 255,
+                  split.targetPartSize <= 1_900_000_000,
+                  isHex(split.originalSha256, length: 64),
                   splitKeys.insert("\(split.role.rawValue):\(split.originalSha256)").inserted,
                   resources.contains(where: { $0.sha256 == split.originalSha256 &&
                       $0.role == split.role && $0.byteCount == split.totalByteCount }) else {
@@ -223,6 +231,8 @@ public struct SourceResourceDescriptor: Codable, Equatable, Sendable {
     public let sha1: String
     public let byteCount: Int64
     public let photoKitResourceDataUTI: String?
+    public let resourceType: Int?
+    public let selectorIndex: Int?
 
     public init(
         role: ResourceRole,
@@ -231,7 +241,9 @@ public struct SourceResourceDescriptor: Codable, Equatable, Sendable {
         sha256: String,
         sha1: String,
         byteCount: Int64,
-        photoKitResourceDataUTI: String? = nil
+        photoKitResourceDataUTI: String? = nil,
+        resourceType: Int? = nil,
+        selectorIndex: Int? = nil
     ) {
         self.role = role
         self.uti = uti
@@ -240,6 +252,46 @@ public struct SourceResourceDescriptor: Codable, Equatable, Sendable {
         self.sha1 = sha1
         self.byteCount = byteCount
         self.photoKitResourceDataUTI = photoKitResourceDataUTI
+        self.resourceType = resourceType
+        self.selectorIndex = selectorIndex
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case role
+        case uti
+        case originalFilename
+        case sha256
+        case sha1
+        case byteCount
+        case photoKitResourceDataUTI
+        case resourceType
+        case selectorIndex
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.role = try container.decode(ResourceRole.self, forKey: .role)
+        self.uti = try container.decode(String.self, forKey: .uti)
+        self.originalFilename = try container.decode(String.self, forKey: .originalFilename)
+        self.sha256 = try container.decode(String.self, forKey: .sha256)
+        self.sha1 = try container.decode(String.self, forKey: .sha1)
+        self.byteCount = try container.decode(Int64.self, forKey: .byteCount)
+        self.photoKitResourceDataUTI = try container.decodeIfPresent(String.self, forKey: .photoKitResourceDataUTI)
+        self.resourceType = try container.decodeIfPresent(Int.self, forKey: .resourceType)
+        self.selectorIndex = try container.decodeIfPresent(Int.self, forKey: .selectorIndex)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(role, forKey: .role)
+        try container.encode(uti, forKey: .uti)
+        try container.encode(originalFilename, forKey: .originalFilename)
+        try container.encode(sha256, forKey: .sha256)
+        try container.encode(sha1, forKey: .sha1)
+        try container.encode(byteCount, forKey: .byteCount)
+        try container.encodeIfPresent(photoKitResourceDataUTI, forKey: .photoKitResourceDataUTI)
+        try container.encodeIfPresent(resourceType, forKey: .resourceType)
+        try container.encodeIfPresent(selectorIndex, forKey: .selectorIndex)
     }
 
     public var originalContent: OriginalContent {
