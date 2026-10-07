@@ -219,7 +219,7 @@ public actor BackupEngine {
                         return
                     }
                     switch core {
-                    case .invalidContract, .invalidTransition, .recoveryRequired, .staleMapping:
+                    case .invalidContract, .invalidTransition, .recoveryRequired, .staleMapping, .stagedUnavailable:
                         let safe = Self.safe(error)
                         if started {
                             try await ledger.failAttempt(jobID: job.id, failure: UploadFailure(safe, disposition: .permanent, acceptance: .definitelyNotAccepted), runID: runID)

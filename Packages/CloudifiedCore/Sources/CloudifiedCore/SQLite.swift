@@ -94,13 +94,29 @@ extension Date { var sql: SQLValue { .real(timeIntervalSince1970) } }
 enum Schema {
     static func install(_ db: SQLite) throws {
         let version = try db.rows("PRAGMA user_version").first?.int("user_version") ?? 0
-        guard version <= 1 else { throw CoreError.invalidContract }
-        guard version == 0 else { return }
+        guard version <= 2 else { throw CoreError.invalidContract }
+        guard version < 2 else { return }
         try db.transaction {
-            for statement in statements { try db.execute(statement) }
-            try db.execute("PRAGMA user_version=1")
+            if version == 0 {
+                for statement in statements { try db.execute(statement) }
+            } else {
+                // Preserve P2 v1 receipts/attempts/transport holds; never reset the
+                // database to install source failures and verified cache metadata.
+                try db.execute(sourceFailureTable)
+                let columns = try db.rows("PRAGMA table_info(staged)").map { try $0.string("name") }
+                if !columns.contains("content") { try db.execute("ALTER TABLE staged ADD COLUMN content BLOB") }
+                for column in ["content_sha256", "content_sha1", "derived_from"] where !columns.contains(column) {
+                    try db.execute("ALTER TABLE staged ADD COLUMN \(column) TEXT")
+                }
+                let reservationColumns = try db.rows("PRAGMA table_info(reservations)").map { try $0.string("name") }
+                if !reservationColumns.contains("derived_from") { try db.execute("ALTER TABLE reservations ADD COLUMN derived_from TEXT") }
+                try db.execute(contentIndex)
+            }
+            try db.execute("PRAGMA user_version=2")
         }
     }
+    static let sourceFailureTable = "CREATE TABLE IF NOT EXISTS source_failures(seq INTEGER PRIMARY KEY AUTOINCREMENT, asset_id TEXT NOT NULL REFERENCES assets(id), destination_id TEXT NOT NULL REFERENCES destinations(id), error BLOB NOT NULL, permanent INTEGER NOT NULL, occurred REAL NOT NULL, UNIQUE(asset_id,destination_id))"
+    static let contentIndex = "CREATE INDEX IF NOT EXISTS staged_content ON staged(content_sha256,content_sha1,bytes)"
     static let statements = [
         "CREATE TABLE destinations(id TEXT PRIMARY KEY, provider TEXT NOT NULL, fingerprint TEXT NOT NULL, body BLOB NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, selected INTEGER NOT NULL DEFAULT 0, recovered INTEGER NOT NULL DEFAULT 0, blocked BLOB, resume_at REAL, UNIQUE(provider,fingerprint))",
         "CREATE UNIQUE INDEX selected_provider ON destinations(provider) WHERE selected=1",
@@ -109,6 +125,7 @@ enum Schema {
         "CREATE TABLE assets(id TEXT PRIMARY KEY, local_id TEXT NOT NULL, generation TEXT NOT NULL, kind TEXT NOT NULL, body BLOB NOT NULL, scan_id TEXT NOT NULL REFERENCES scans(id), UNIQUE(local_id,generation))",
         "CREATE INDEX assets_scan ON assets(scan_id,kind)",
         "CREATE TABLE source_recipes(asset_id TEXT PRIMARY KEY REFERENCES assets(id), body BLOB NOT NULL)",
+        sourceFailureTable,
         "CREATE TABLE jobs(seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, destination_id TEXT NOT NULL REFERENCES destinations(id), asset_id TEXT NOT NULL REFERENCES assets(id), coverage TEXT NOT NULL, plan BLOB NOT NULL, state TEXT NOT NULL, cycle TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0 CHECK(attempts BETWEEN 0 AND 3), retry_at REAL, failure BLOB, last_confirmed REAL, UNIQUE(destination_id,coverage))",
         "CREATE INDEX ready_jobs ON jobs(destination_id,state,retry_at,seq)",
         "CREATE TABLE aliases(job_id TEXT NOT NULL REFERENCES jobs(id), asset_id TEXT NOT NULL REFERENCES assets(id), destination_id TEXT NOT NULL REFERENCES destinations(id), PRIMARY KEY(job_id,asset_id), UNIQUE(asset_id,destination_id))",
@@ -123,10 +140,11 @@ enum Schema {
         "CREATE INDEX rotating_events ON events(seq) WHERE critical=0",
         "CREATE TABLE log_budget(id INTEGER PRIMARY KEY CHECK(id=1), byte_used INTEGER NOT NULL DEFAULT 0, pruned INTEGER NOT NULL DEFAULT 0, first_pruned REAL)",
         "INSERT INTO log_budget(id) VALUES(1)",
-        "CREATE TABLE staged(id TEXT PRIMARY KEY, relative_path TEXT NOT NULL UNIQUE, bytes INTEGER NOT NULL, oversized INTEGER NOT NULL DEFAULT 0, recoverable INTEGER NOT NULL DEFAULT 0, deleting INTEGER NOT NULL DEFAULT 0)",
+        "CREATE TABLE staged(id TEXT PRIMARY KEY, relative_path TEXT NOT NULL UNIQUE, bytes INTEGER NOT NULL, content BLOB, content_sha256 TEXT, content_sha1 TEXT, derived_from TEXT, oversized INTEGER NOT NULL DEFAULT 0, recoverable INTEGER NOT NULL DEFAULT 0, deleting INTEGER NOT NULL DEFAULT 0)",
+        contentIndex,
         "CREATE TABLE transfers(id TEXT PRIMARY KEY, destination_id TEXT NOT NULL REFERENCES destinations(id), job_id TEXT NOT NULL REFERENCES jobs(id), resource_id TEXT NOT NULL)",
         "CREATE TABLE holds(transfer_id TEXT NOT NULL REFERENCES transfers(id), file_id TEXT NOT NULL REFERENCES staged(id), destination_id TEXT NOT NULL REFERENCES destinations(id), job_id TEXT NOT NULL REFERENCES jobs(id), PRIMARY KEY(transfer_id,file_id))",
-        "CREATE TABLE reservations(id TEXT PRIMARY KEY, bytes INTEGER NOT NULL, oversized INTEGER NOT NULL CHECK(oversized IN (0,1)))",
+        "CREATE TABLE reservations(id TEXT PRIMARY KEY, bytes INTEGER NOT NULL, derived_from TEXT, oversized INTEGER NOT NULL CHECK(oversized IN (0,1)))",
         "CREATE UNIQUE INDEX one_oversized ON reservations(oversized) WHERE oversized=1"
     ]
 }

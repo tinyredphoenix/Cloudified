@@ -162,6 +162,7 @@ public actor Ledger {
                 }
             }
             try db.execute("INSERT INTO aliases(job_id,asset_id,destination_id) VALUES(?,?,?) ON CONFLICT(asset_id,destination_id) DO UPDATE SET job_id=excluded.job_id", [id.sql, assetID.sql, destinationID.sql])
+            try db.execute("DELETE FROM source_failures WHERE asset_id=? AND destination_id=?", [assetID.sql, destinationID.sql])
             // Deliberately do not reset failed/exhausted/unknown jobs on a rescan.
             return id
         }

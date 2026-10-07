@@ -38,7 +38,50 @@ public struct FailureRow: Sendable {
     public let confirmedResources: Int
     public let requiredResources: Int
 }
+public struct ScannedAssetRow: Sendable {
+    public let cursor: Int64
+    public let asset: AssetIdentity
+}
+public struct SourceFailureRow: Sendable {
+    public let cursor: Int64
+    public let asset: AssetIdentity
+    public let destination: Destination
+    public let error: SafeFailure
+    public let permanent: Bool
+    public let occurredAt: Date
+}
 extension Ledger {
+    /// Export/planning may fail before content hashes exist, so no valid upload job
+    /// can yet be built. Keep that obligation visible; do not invent a fake hash/job.
+    public func recordSourceFailure(assetID: UUID, destinationIDs: [UUID], error: SafeFailure, permanent: Bool) throws {
+        guard !destinationIDs.isEmpty, destinationIDs.count <= 2, Set(destinationIDs).count == destinationIDs.count else { throw CoreError.invalidContract }
+        try transaction {
+            for destinationID in destinationIDs {
+                try db.execute("INSERT INTO source_failures(asset_id,destination_id,error,permanent,occurred) VALUES(?,?,?,?,?) ON CONFLICT(asset_id,destination_id) DO UPDATE SET error=excluded.error,permanent=excluded.permanent,occurred=excluded.occurred", [assetID.sql, destinationID.sql, try db.encode(error), .integer(permanent ? 1 : 0), Date().sql])
+                try record(.preparation, context: EventContext(origin: .source, destinationID: destinationID, assetID: assetID), severity: .error, decision: permanent ? .skip : .wait, failure: error)
+            }
+        }
+    }
+    public func sourceFailurePage(beforeCursor: Int64? = nil, provider: Provider? = nil, kind: MediaKind? = nil, limit: Int = 50) throws -> [SourceFailureRow] {
+        guard (1...100).contains(limit) else { throw CoreError.invalidContract }
+        var clauses = ["f.seq<?", "d.selected=1", "a.scan_id=(SELECT value FROM meta WHERE key='scan')",
+                       "NOT EXISTS(SELECT 1 FROM aliases x JOIN jobs j ON j.id=x.job_id WHERE x.asset_id=a.id AND x.destination_id=d.id AND j.state='confirmed')"]
+        var args: [SQLValue] = [.integer(beforeCursor ?? Int64.max)]
+        if let provider { clauses.append("d.provider=?"); args.append(.text(provider.rawValue)) }
+        if let kind { clauses.append("a.kind=?"); args.append(.text(kind.rawValue)) }
+        args.append(.integer(Int64(limit)))
+        return try db.rows("SELECT f.*,a.body AS asset_body,d.body AS destination_body FROM source_failures f JOIN assets a ON a.id=f.asset_id JOIN destinations d ON d.id=f.destination_id WHERE \(clauses.joined(separator: " AND ")) ORDER BY f.seq DESC LIMIT ?", args).map {
+            SourceFailureRow(cursor: $0.int("seq"), asset: try db.decode(AssetIdentity.self, $0, "asset_body"), destination: try db.decode(Destination.self, $0, "destination_body"), error: try db.decode(SafeFailure.self, $0, "error"), permanent: $0.int("permanent") == 1, occurredAt: Date(timeIntervalSince1970: $0.double("occurred")!))
+        }
+    }
+    /// P3 scans first and then plans canonical returned identities in bounded pages.
+    /// Never synthesize another UUID when resolving a PHAsset after registration.
+    public func scannedAssetPage(scanID: UUID, afterCursor: Int64 = 0, limit: Int = 200) throws -> [ScannedAssetRow] {
+        guard afterCursor >= 0, (1...200).contains(limit) else { throw CoreError.invalidContract }
+        return try db.rows("SELECT rowid AS cursor,body FROM assets WHERE scan_id=? AND rowid>? ORDER BY rowid LIMIT ?", [scanID.sql, .integer(afterCursor), .integer(Int64(limit))]).map {
+            ScannedAssetRow(cursor: $0.int("cursor"), asset: try db.decode(AssetIdentity.self, $0, "body"))
+        }
+    }
     public func snapshot() throws -> LedgerSnapshot {
         // Single actor turn, no awaits: state cannot change between these queries.
         let scan = try db.rows("SELECT s.* FROM scans s JOIN meta m ON m.value=s.id WHERE m.key='scan'").first
@@ -75,13 +118,14 @@ extension Ledger {
         let row = try db.rows("""
             SELECT COUNT(*) AS total,
             COALESCE(SUM(j.state='confirmed'),0) AS confirmed,
-            COALESCE(SUM(j.state='failed'),0) AS failed,
-            COALESCE(SUM(j.state IN ('waiting','reconciling','delayed')),0) AS waiting,
+            COALESCE(SUM(j.state='failed' OR (f.permanent=1 AND j.state IS NOT 'confirmed')),0) AS failed,
+            COALESCE(SUM(j.state IS NOT 'confirmed' AND j.state IS NOT 'failed' AND (f.permanent IS NULL OR f.permanent=0) AND (j.state IN ('waiting','reconciling','delayed') OR f.permanent=0)),0) AS waiting,
             COALESCE(SUM(j.state='confirmed' AND EXISTS(SELECT 1 FROM obligations o JOIN receipts r ON r.tag=o.tag AND r.destination_id=j.destination_id WHERE o.job_id=j.id AND r.kind='uploaded')),0) AS uploaded
             FROM assets a LEFT JOIN aliases x ON x.asset_id=a.id AND x.destination_id=?
             LEFT JOIN jobs j ON j.id=x.job_id
+            LEFT JOIN source_failures f ON f.asset_id=a.id AND f.destination_id=?
             WHERE a.kind=? AND a.scan_id=(SELECT value FROM meta WHERE key='scan')
-            """, [destinationID.sql, .text(kind.rawValue)]).first!
+            """, [destinationID.sql, destinationID.sql, .text(kind.rawValue)]).first!
         let confirmed = Int(row.int("confirmed")), uploaded = Int(row.int("uploaded"))
         return MediaCounts(total: Int(row.int("total")), confirmed: confirmed, uploaded: uploaded,
                            alreadyPresent: confirmed - uploaded, failed: Int(row.int("failed")), waiting: Int(row.int("waiting")))

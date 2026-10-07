@@ -42,6 +42,15 @@ public enum ContentIdentity {
         guard UploadPlan.hex(resource.tag, length: 64) else { throw CoreError.invalidContract }
         return "\(version):\(resource.tag)"
     }
+    /// Physical cache identity is byte-content scoped, independent of provider,
+    /// requirement UUID, asset ID and process-randomized Swift hashValue.
+    public static func stagingFileID(for original: OriginalContent) throws -> UUID {
+        guard UploadPlan.hex(original.sha256, length: 64), UploadPlan.hex(original.sha1, length: 40), original.byteCount >= 0 else { throw CoreError.invalidContract }
+        struct Key: Encodable { let version: String; let sha256: String; let sha1: String; let bytes: Int64 }
+        let hex = Array(try digest(Key(version: "staging-v1", sha256: original.sha256, sha1: original.sha1, bytes: original.byteCount)).prefix(32))
+        let value = String(hex[0..<8]) + "-" + String(hex[8..<12]) + "-" + String(hex[12..<16]) + "-" + String(hex[16..<20]) + "-" + String(hex[20..<32])
+        guard let id = UUID(uuidString: value) else { throw CoreError.invalidContract }; return id
+    }
     private static func digest<T: Encodable>(_ value: T) throws -> String {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         return SHA256.hash(data: try encoder.encode(value)).map { String(format: "%02x", $0) }.joined()

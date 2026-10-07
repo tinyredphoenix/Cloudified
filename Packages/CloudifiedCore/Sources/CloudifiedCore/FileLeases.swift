@@ -56,7 +56,7 @@ public actor FileLeaseStore {
         leases.removeValue(forKey: ownership.token)
     }
     public func registerPublished(fileID: UUID, byteCount: Int64, reservationID: UUID,
-                                  reexportable: Bool) async throws -> LeasedFile {
+                                  reexportable: Bool, content: OriginalContent? = nil) async throws -> LeasedFile {
         guard !deleting.contains(fileID) else { throw CoreError.invalidTransition }
         let url = publishedURL(fileID: fileID)
         let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
@@ -65,21 +65,31 @@ public actor FileLeaseStore {
         // Pin before awaiting ledger: actor reentrancy cannot open a cleanup gap.
         let leaseID = UUID(); leases[leaseID] = fileID
         do {
-            try await ledger.registerStaged(fileID: fileID, relativePath: url.lastPathComponent, bytes: byteCount, reservationID: reservationID, reexportable: reexportable)
+            try await ledger.registerStaged(fileID: fileID, relativePath: url.lastPathComponent, bytes: byteCount, reservationID: reservationID, reexportable: reexportable, content: content)
             return LeasedFile(fileID: fileID, leaseID: leaseID, url: url, byteCount: byteCount)
         } catch { leases.removeValue(forKey: leaseID); throw error }
     }
-    public func acquire(fileID: UUID) async throws -> LeasedFile {
+    public func acquire(fileID: UUID, expectedContent: OriginalContent? = nil) async throws -> LeasedFile {
         guard !deleting.contains(fileID) else { throw CoreError.invalidTransition }
         let leaseID = UUID(); leases[leaseID] = fileID
         do {
             let record = try await ledger.stagedFile(fileID)
+            if let expectedContent {
+                guard record.content?.sha256 == expectedContent.sha256, record.content?.sha1 == expectedContent.sha1,
+                      record.bytes == expectedContent.byteCount else { throw CoreError.invalidContract }
+            }
             let url = root.appendingPathComponent(record.path)
             let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
             guard values.isRegularFile == true, values.isSymbolicLink != true, values.fileSize.map(Int64.init) == record.bytes else { throw CoreError.invalidContract }
             try await ledger.appendEvent(.leaseAcquire, context: EventContext(resourceID: fileID), decision: .proceed)
             return LeasedFile(fileID: fileID, leaseID: leaseID, url: url, byteCount: record.bytes)
         } catch { leases.removeValue(forKey: leaseID); throw error }
+    }
+    /// Planning can publish a fresh UUID before knowing hashes. The indexed full
+    /// content lookup then shares that same immutable file with both providers.
+    public func acquireContent(_ content: OriginalContent) async throws -> LeasedFile {
+        let id = try await ledger.findStagedContent(content)
+        return try await acquire(fileID: id, expectedContent: content)
     }
     public func release(_ file: LeasedFile) async throws {
         guard leases[file.leaseID] == file.fileID else { throw CoreError.invalidTransition }
@@ -158,7 +168,7 @@ public actor FileLeaseStore {
     private func nextURL(_ iterator: FileManager.DirectoryEnumerator) -> URL? { iterator.nextObject() as? URL }
 }
 
-struct StagedRecord: Sendable { let id: UUID; let path: String; let bytes: Int64 }
+struct StagedRecord: Sendable { let id: UUID; let path: String; let bytes: Int64; let content: OriginalContent? }
 extension Ledger {
     func isStaged(_ id: UUID) throws -> Bool { try !db.rows("SELECT id FROM staged WHERE id=?", [id.sql]).isEmpty }
     /// P3 source-change observation must revoke this permission if staged bytes
@@ -168,12 +178,13 @@ extension Ledger {
         guard db.changes == 1 else { throw CoreError.invalidTransition }
     }
     public func reserveStorage(bytes: Int64, availableBytes: Int64, transportOverhead: Int64, writtenBytes: Int64 = 0,
-                               replacing: UUID? = nil) throws -> StorageReservation {
+                               replacing: UUID? = nil, derivedFromFileID: UUID? = nil) throws -> StorageReservation {
         guard bytes >= 0, availableBytes >= 0, transportOverhead >= 0, writtenBytes >= 0, writtenBytes <= bytes else { throw CoreError.invalidContract }
         return try transaction {
             let soft: Int64 = 1_073_741_824, safety: Int64 = 536_870_912
-            let staged = try db.rows("SELECT COALESCE(SUM(bytes),0) AS n FROM staged").first!.int("n")
+            let staged = try db.rows("SELECT COALESCE(SUM(bytes),0) AS n FROM staged WHERE oversized=0 AND derived_from IS NULL").first!.int("n")
             let reserved = try db.rows("SELECT COALESCE(SUM(bytes),0) AS n FROM reservations WHERE id!=?", [replacing?.sql ?? .text("")]).first!.int("n")
+            let normalReserved = try db.rows("SELECT COALESCE(SUM(bytes),0) AS n FROM reservations WHERE id!=? AND oversized=0 AND derived_from IS NULL", [replacing?.sql ?? .text("")]).first!.int("n")
             let remainingWrite = bytes - writtenBytes
             // availableBytes already excludes files actually written. Reserve
             // outstanding promised bytes separately; never subtract staging twice.
@@ -183,29 +194,47 @@ extension Ledger {
                   bytes <= Int64.max - staged - reserved else {
                 throw SafeFailure(.diskFull, domain: .fileSystem, cause: .insufficientSpace)
             }
-            let oversized = staged + reserved + bytes > soft
+            let oversized: Bool
+            if let derivedFromFileID {
+                let parent = try stagedFile(derivedFromFileID)
+                guard bytes > 0, bytes <= 1_900_000_000, parent.bytes >= bytes,
+                      let original = parent.content, original.role != .manifest, original.partIndex == nil else { throw CoreError.invalidContract }
+                let activeParts = try db.rows("SELECT id FROM reservations WHERE derived_from IS NOT NULL AND id!=? UNION ALL SELECT id FROM staged WHERE derived_from IS NOT NULL", [replacing?.sql ?? .text("")])
+                guard activeParts.isEmpty else { throw SafeFailure(.diskFull, domain: .fileSystem, cause: .insufficientSpace) }
+                oversized = false // One bounded part of the existing original.
+            } else { oversized = staged + normalReserved + bytes > soft }
             if oversized, try db.rows("SELECT id FROM reservations WHERE oversized=1 AND id!=? UNION ALL SELECT id FROM staged WHERE oversized=1", [replacing?.sql ?? .text("")]).count > 0 {
                 throw SafeFailure(.diskFull, domain: .fileSystem, cause: .insufficientSpace)
             }
             let id = replacing ?? UUID()
-            try db.execute("INSERT INTO reservations(id,bytes,oversized) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET bytes=excluded.bytes,oversized=excluded.oversized", [id.sql, .integer(bytes), .integer(oversized ? 1 : 0)])
+            try db.execute("INSERT INTO reservations(id,bytes,oversized,derived_from) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET bytes=excluded.bytes,oversized=excluded.oversized,derived_from=excluded.derived_from", [id.sql, .integer(bytes), .integer(oversized ? 1 : 0), derivedFromFileID?.sql ?? .null])
             return StorageReservation(id: id, byteCount: bytes, oversized: oversized)
         }
     }
     public func releaseReservation(_ id: UUID) throws { try db.execute("DELETE FROM reservations WHERE id=?", [id.sql]) }
-    func registerStaged(fileID: UUID, relativePath: String, bytes: Int64, reservationID: UUID, reexportable: Bool) throws {
+    func registerStaged(fileID: UUID, relativePath: String, bytes: Int64, reservationID: UUID, reexportable: Bool, content: OriginalContent?) throws {
         guard relativePath == fileID.uuidString + ".original" else { throw CoreError.invalidContract }
+        if let content {
+            guard content.byteCount == bytes, UploadPlan.hex(content.sha256, length: 64), UploadPlan.hex(content.sha1, length: 40) else { throw CoreError.invalidContract }
+        }
         try transaction {
-            guard let reservation = try db.rows("SELECT bytes,oversized FROM reservations WHERE id=?", [reservationID.sql]).first, reservation.int("bytes") >= bytes else { throw CoreError.invalidContract }
-            try db.execute("INSERT INTO staged(id,relative_path,bytes,oversized,recoverable) VALUES(?,?,?,?,?)", [fileID.sql, .text(relativePath), .integer(bytes), .integer(reservation.int("oversized")), .integer(reexportable ? 1 : 0)])
+            guard let reservation = try db.rows("SELECT * FROM reservations WHERE id=?", [reservationID.sql]).first, reservation.int("bytes") >= bytes else { throw CoreError.invalidContract }
+            try db.execute("INSERT INTO staged(id,relative_path,bytes,content,content_sha256,content_sha1,derived_from,oversized,recoverable) VALUES(?,?,?,?,?,?,?,?,?)", [fileID.sql, .text(relativePath), .integer(bytes), try content.map { try db.encode($0) } ?? .null, content.map { .text($0.sha256) } ?? .null, content.map { .text($0.sha1) } ?? .null, reservation.values["derived_from"] ?? .null, .integer(reservation.int("oversized")), .integer(reexportable ? 1 : 0)])
             try db.execute("DELETE FROM reservations WHERE id=?", [reservationID.sql])
             try record(.leaseAcquire, context: EventContext(resourceID: fileID), decision: .proceed)
         }
     }
     func stagedFile(_ id: UUID) throws -> StagedRecord {
-        guard let row = try db.rows("SELECT * FROM staged WHERE id=? AND deleting=0", [id.sql]).first,
-              try row.string("relative_path") == id.uuidString + ".original" else { throw CoreError.invalidContract }
-        return StagedRecord(id: id, path: try row.string("relative_path"), bytes: row.int("bytes"))
+        guard let row = try db.rows("SELECT * FROM staged WHERE id=?", [id.sql]).first else { throw CoreError.stagedUnavailable }
+        guard row.int("deleting") == 0 else { throw CoreError.invalidTransition }
+        guard try row.string("relative_path") == id.uuidString + ".original" else { throw CoreError.invalidContract }
+        let content = try rowContent(row)
+        return StagedRecord(id: id, path: try row.string("relative_path"), bytes: row.int("bytes"), content: content)
+    }
+    func findStagedContent(_ content: OriginalContent) throws -> UUID {
+        guard UploadPlan.hex(content.sha256, length: 64), UploadPlan.hex(content.sha1, length: 40), content.byteCount >= 0 else { throw CoreError.invalidContract }
+        guard let row = try db.rows("SELECT id FROM staged WHERE content_sha256=? AND content_sha1=? AND bytes=? AND deleting=0 LIMIT 1", [.text(content.sha256), .text(content.sha1), .integer(content.byteCount)]).first else { throw CoreError.stagedUnavailable }
+        guard let id = UUID(uuidString: try row.string("id")) else { throw CoreError.invalidContract }; return id
     }
     func holdFiles(_ ids: [UUID], transferID: UUID, job: JobRecord, resourceID: UUID) throws {
         try transaction {
@@ -231,8 +260,11 @@ extension Ledger {
     func stagedCleanupCandidates(limit: Int) throws -> [StagedRecord] {
         try db.rows("SELECT * FROM staged s WHERE recoverable=1 AND NOT EXISTS(SELECT 1 FROM holds h WHERE h.file_id=s.id) LIMIT ?", [.integer(Int64(limit))]).map {
             guard let id = UUID(uuidString: try $0.string("id")), try $0.string("relative_path") == id.uuidString + ".original" else { throw CoreError.invalidContract }
-            return StagedRecord(id: id, path: try $0.string("relative_path"), bytes: $0.int("bytes"))
+            return StagedRecord(id: id, path: try $0.string("relative_path"), bytes: $0.int("bytes"), content: try rowContent($0))
         }
+    }
+    private func rowContent(_ row: SQLRow) throws -> OriginalContent? {
+        if case .blob = row.values["content"] { return try db.decode(OriginalContent.self, row, "content") }; return nil
     }
     func markDeleting(_ id: UUID) throws -> Bool {
         try db.execute("UPDATE staged SET deleting=1 WHERE id=? AND recoverable=1 AND NOT EXISTS(SELECT 1 FROM holds WHERE file_id=?)", [id.sql, id.sql])

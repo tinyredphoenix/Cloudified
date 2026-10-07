@@ -164,5 +164,5 @@ public protocol OriginalPreparer: Sendable {
     func prepare(job: JobRecord, resource: ResourceRequirement, receipts: [RemoteReceipt]) async throws -> [LeasedFile]
 }
 public enum CoreError: Error, Sendable {
-    case invalidContract, invalidTransition, recoveryRequired, staleMapping, persistence(Int32)
+    case invalidContract, invalidTransition, recoveryRequired, staleMapping, stagedUnavailable, persistence(Int32)
 }
