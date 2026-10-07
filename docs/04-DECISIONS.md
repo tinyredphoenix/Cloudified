@@ -136,3 +136,16 @@ checks. Compiler/package caches may reuse matching toolchain/project prefixes.
 Native failure stops builds; unavailable real linkage cannot be replaced with weak
 fake symbols. P4-A review requires R1 corrections; cache speed/native acceptance
 remain unmeasured until P7. See BUILD-CACHE and P4-REVIEW.
+
+## D32 — delivery uncertainty and verified crypto selection
+
+2026-10-08. Dropped native control/send updates cannot prove rejection or absence:
+throw/fence the session and preserve reconciliation obligations before new commands.
+Reserve each request's terminal outcome before awaiting diagnostics; persistent
+diagnostic failures propagate rather than being swallowed. Exact known-client IDs
+route only to their own session; floating/unsigned identifier overflow is rejected.
+R1 named OpenSSL 3.0.15 with a different source commit. Architect selected exact
+OpenSSL 3.5.9 LTS release commit and recorded public tag/support evidence in P4-R2
+and dependency manifests. Source/license/configuration verification remains R2;
+artifact/platform/link and native/runtime evidence remain P7. This is a source pin
+correction, not a claim that the new native recipe works.

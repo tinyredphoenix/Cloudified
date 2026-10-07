@@ -34,8 +34,9 @@ existing-file cleanup is part of this setup. See [build setup](docs/BUILD-SETUP.
 
 Builder completed P1; Architect directly implemented P2 critical core.
 Builder's P3-R2 implementation was reviewed; Architect completed critical source corrections.
-The next Builder batch is [P4-A-R1 foundation corrections](docs/P4-REVIEW.md).
-P4-A was submitted; native linkage/lifecycle findings require correction before P4-B.
+The next Builder batch is [P4-A-R2 remaining foundation corrections](docs/P4-R2.md).
+P4-A-R1 was reviewed; native recipe, receiver bounds/lifecycle and initialization
+findings still require correction before P4-B.
 P3 has source/compiler evidence only; see [review history](docs/P3-REVIEW.md), handbook 2 and
 the [core integration contract](docs/CORE-INTEGRATION.md).
 Application phases are assigned in batches; the handbook is not authorization to

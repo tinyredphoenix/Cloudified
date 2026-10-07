@@ -23,11 +23,20 @@
     {
       "name": "openssl",
       "repository": "https://github.com/openssl/openssl.git",
-      "commit": "1979ad30e4ad341ea22b31a84f3eb86f78878b27",
-      "version": "openssl-3.0.15",
+      "commit": "45e844fa2a14ec92d146bd8f5778ac130b6625fb",
+      "version": "openssl-3.5.9",
       "license": "Apache License 2.0",
-      "purpose": "Cryptographic backend for TDLib native network and database encryption on iOS"
+      "purpose": "Cryptographic backend for TDLib native network and database encryption on iOS",
+      "licenseVerifiedAtPin": false,
+      "artifactSha256": null,
+      "status": "source tag resolved; source/license/configuration inspection and native build pending P4-A-R2/P7",
+      "selectionEvidence": {
+        "selectedOn": "2026-10-08",
+        "method": "git ls-remote annotated release tag and peeled commit",
+        "tagObject": "d0ca66a1abe52545f14eca635c648932fcde5615",
+        "releaseSource": "https://openssl-library.org/source/"
+      }
     }
   ],
-  "transitiveStatus": "PhotosBackup requires Apple Foundation, CryptoKit, Security only. TDLib requires OpenSSL 3.0.15 (pinned above), Apple libz (zlib), and Apple libc++ for its complete native link closure. P4-A-R1 records exact transitive provenance in dependencies/tdlib-vendor.json."
+  "transitiveStatus": "OpenSSL 3.5.9 LTS exact source pin selected by Architect. License/source/configuration inspection remains P4-A-R2. Native closure/linking remains unbuilt until P7; manifest entries are not artifact evidence."
 }

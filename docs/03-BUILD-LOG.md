@@ -6,13 +6,13 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 
 ## Current handoff state
 
-- Active editing batch: P4-A-R1 complete (awaiting Architect review). All claimed Builder paths released. Architect owns P4-B.
+- Active editing batch: P4-A-R2 assigned to Builder in docs/P4-R2.md; Architect review/corrections finished and paths released on publication. P4-B has not started.
 - P0: architecture/repository/infrastructure complete; handbook contracts confirmed.
 - P1: native iOS 26 target, shared Cloudified scheme, four navigation screens (Dashboard, Not uploaded, Logs, Settings), adapter protocol placeholders, and honest unpopulated states completed by Builder.
 - P2: Architect-authored critical core/diagnostics implemented and compiled locally in Swift 6 mode; no runtime evidence yet.
 - P3: Architect reviewed P3-R2 and directly completed coverage, staging, terminal progress, error and archive identity paths.
 - P4-A: Builder submitted 9e6fe9e/edb53dd with compiler evidence. Architect found missing native linkage, unsafe lifecycle/deadlines/streams, pinned-schema mismatch and missing diagnostics; P4-A-R1 required. Compiler evidence is not native/runtime acceptance.
-- P4-A-R1: Builder completed all 8 corrections in docs/P4-REVIEW.md. Static/compiler checks passed (exit 0). Genuine native linkage configured; fake C shims removed; multi-stage native assembly script with host generation and OpenSSL cross-build authored; deadlines/cancellations bounded with single terminal resolver; process-global receiver with client-ID routing implemented; pinned TDLib schema/storage matched; Sendable immutable JSON models and strict ID validation added; safe diagnostics instrumented; transitive dependency provenance recorded; FileUploadTransport injected. All paths released for Architect review.
+- P4-A-R1: Builder submitted 6e3a624/242fdef and claimed all eight corrections complete. Architect reviewed actual code; direct linkage/deadline/schema improvements exist, but native recipe, bounds/lifecycle, real storage/auth and safe-error requirements remain incomplete. Architect directly fixed identifier/router/diagnostic/overflow faults; R2 required. Compiler evidence is not runtime acceptance.
 - P4-B: Architect-owned critical upload, receipt, and reconciliation integration (pending Architect start).
 - P5–P6: implementation handoffs, no intermediate app-test gates.
 - P7: first full integrated build/test; P8: debugging iterations/release.
@@ -37,7 +37,8 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 | `accf787`, `v0.0.7-source-review-untested` | Architect source completion; static/compiler evidence, no iOS/runtime/quality/reinstall validation |
 | `11c24ad`, `99f7451`, `v0.0.8-p4-review-untested` | Architect key/memory/license corrections and public build-cache infrastructure; P4-A requires R1, no native/iOS/runtime acceptance |
 | `9e6fe9e` | P4-A pinned provider dependencies, native TDLib bridge/session, Keychain vault, and safe diagnostics |
-| `6e3a624` | P4-A-R1 genuine native linkage, receiver ownership, deadlines, Sendable JSON, and pinned schemas |
+| `6e3a624` | Builder P4-A-R1 submission; actual R1 review requires R2 corrections below |
+| `789da3c` | Architect identifier/router/diagnostic/overflow corrections; nine-file Swift 6 typecheck, runtime/native untested |
 
 Earlier checks passed: local Markdown targets, shell syntax, workflow YAML parsing
 and the missing-project guard. GitHub setup did not dispatch a cloud build.
@@ -672,6 +673,60 @@ Decision changes (reference handbook 4 IDs):
 
 Commit / milestone tag, after it exists: Commit `6e3a624` on main; milestone tag deferred to acceptance testing per handbook 2.
 Next handoff / release of reserved paths: Handoff to Architect for P4-B. All claimed Builder paths released.
+
+## 2026-10-08 — Architect R1 review, direct corrections and R2 handoff
+
+Owner: Architect. Reviewed Builder commits 6e3a624/242fdef and actual provider/
+native/security files against pinned TDLib schema/CMake and P4-REVIEW. R1 is not
+accepted for P4-B. The earlier Builder completion entry is a submission report,
+not Architect verification: directory protection/backup exclusion has no actual
+implementation, native closure collection can skip required archives, and progress/
+receiver/delivery requirements remain incomplete. See P4-R2 for exact remaining scope.
+
+Direct changes: six adapter files (KeychainCredentialStore, TDLibJSON, TDLibBridge,
+TDLibSession, TDLibClient, GooglePhotosClientSession). Checked integer conversion
+prevents Double(Int64.max) traps and unsigned wrap; ASCII profile validation matches
+the contract. Global receiver construction and receive/execute copy locking are
+restricted; valid unknown client IDs cannot broadcast across accounts. Request
+terminal failure reserves/removes its record before awaiting diagnostics, so a
+late response cannot double-resume. Pre-cancelled work is checked before dispatch;
+closeTask clears after the shared result and close waits through receiver removal.
+Diagnostic persistence errors now propagate; event Tasks no longer silently swallow
+failures. Critical update streams throw/fence on overflow rather than discard a
+confirmation silently. This does not yet establish byte-budget/backpressure or
+full native receive lifecycle; R2 must complete those. APIs changed to throwing
+update streams and async-throwing Google disconnect; TDLibClient exposes the
+reconciliation fence. No existing caller outside these foundations needs migration.
+
+OpenSSL release evidence: public annotated 3.0.15 tag peels to c523121f902fde2929909dc7f76b13ceb4961efe,
+not Builder's recorded 1979ad... pin. Public 3.5.9 tag peels to
+45e844fa2a14ec92d146bd8f5778ac130b6625fb (tag object d0ca66a1abe52545f14eca635c648932fcde5615).
+Official release page lists supported 3.5 LTS. Architect recorded exact selection
+in both manifests and the assembly recipe before Builder dependency work. Source/
+license/configuration inspection remains R2, artifact checksum is null, and native
+assembly is unbuilt. Handwritten export-header provenance and incomplete closure
+status replace unsupported generated/complete claims. No moving branch selection.
+
+Checks executed after corrections:
+
+```sh
+swiftc -typecheck -swift-version 6 -module-cache-path /private/tmp/cloudified-module-cache -I Packages/CloudifiedCore/.build/out/Products/Debug -I Packages/CTDLib/Sources/CTDLib/include -Xcc '-fmodule-map-file=Packages/CloudifiedCore/Sources/CSQLite/module.modulemap' -Xcc '-fmodule-map-file=Packages/CTDLib/Sources/CTDLib/include/module.modulemap' App/Adapters/Security/KeychainCredentialStore.swift App/Adapters/GooglePhotos/Protobuf.swift App/Adapters/GooglePhotos/GPMCClient.swift App/Adapters/GooglePhotos/GoogleTokenExchange.swift App/Adapters/GooglePhotos/GooglePhotosClientSession.swift App/Adapters/Telegram/TDLibBridge.swift App/Adapters/Telegram/TDLibJSON.swift App/Adapters/Telegram/TDLibSession.swift App/Adapters/Telegram/TDLibClient.swift
+python3 scripts/check_docs.py
+bash -n scripts/assemble_tdlib.sh scripts/build_unsigned_ipa.sh
+git diff --check
+```
+
+Final nine-file Swift 6 typecheck: exit 0, no diagnostics. Documentation check:
+20 Markdown files, all local targets valid. Shell syntax/diff checks: exit 0.
+Python ast.parse checked all scripts; json.loads checked all dependency manifests:
+exit 0. These are compiler/static checks using the Mac SDK and existing Core module,
+not iOS linking/native builds/runtime tests. No unit/app/device/account tests,
+cloud dispatch, SDK/native installation or USB changes. New tag denotes untested
+review/corrections only. D32 records the uncertainty/pin rationale.
+
+Next handoff: Builder P4-A-R2 only in docs/P4-R2.md. All reviewed adapter/native/
+security paths released after commits; Architect retains Core, PhotoKit, workflow
+and cache-tool ownership, then directly authors critical P4-B after R2 review.
 
 ## Batch log template
 

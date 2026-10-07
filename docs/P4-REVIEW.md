@@ -1,4 +1,6 @@
-# P4-A review and assigned P4-A-R1 corrections
+# P4-A review and historical P4-A-R1 corrections
+
+Current assignment: [P4-A-R2](P4-R2.md) supersedes this historical R1 handoff.
 
 2026-10-08. Reviewed Builder commits 9e6fe9e and edb53dd, actual provider/native/
 credential/build sources and pinned upstream headers/schema/CMake. The compiler

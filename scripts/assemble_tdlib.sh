@@ -1,10 +1,11 @@
 #!/bin/bash
 # scripts/assemble_tdlib.sh
 # Deterministic assembly script for TDLib (pinned commit 42e6a5259551178d1dab54a22ad96d14bd906e20)
-# and OpenSSL 3.0.15 (pinned commit 1979ad30e4ad341ea22b31a84f3eb86f78878b27).
+# and OpenSSL 3.5.9 (pinned commit 45e844fa2a14ec92d146bd8f5778ac130b6625fb).
 # Designed for the selected cloud build runner (macOS-26 / Xcode 26).
 # Builds in an owned temporary directory with cleanup trap, targets iOS 26 arm64 device architecture,
-# combines the complete JSON static link closure, and seals the native cache per docs/BUILD-CACHE.md.
+# Native closure is unverified and requires P4-A-R2 corrections before P7 assembly.
+# Seals the native cache per docs/BUILD-CACHE.md; a seal does not prove link correctness.
 
 set -euo pipefail
 
@@ -12,7 +13,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PIN_COMMIT="42e6a5259551178d1dab54a22ad96d14bd906e20"
 TD_REPO_URL="https://github.com/tdlib/td.git"
 
-OPENSSL_PIN_COMMIT="1979ad30e4ad341ea22b31a84f3eb86f78878b27"
+OPENSSL_PIN_COMMIT="45e844fa2a14ec92d146bd8f5778ac130b6625fb"
 OPENSSL_REPO_URL="https://github.com/openssl/openssl.git"
 
 BUILD_ROOT="${CLOUDIFIED_BUILD_ROOT:-$REPO_ROOT/build}"

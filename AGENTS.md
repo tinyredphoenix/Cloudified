@@ -6,7 +6,7 @@ The root docs are planning contracts, not evidence of working app features.
 
 Start with docs/01-ARCHITECTURE.md and docs/02-BUILD-PHASES.md. Use
 docs/03-BUILD-LOG.md for active ownership/evidence and docs/04-DECISIONS.md for why.
-Builder submitted P4-A; Architect review requires P4-A-R1 in docs/P4-REVIEW.md before P4-B. Architect completed critical source corrections and directly authors P2 critical
+Architect reviewed P4-A-R1; Builder must complete P4-A-R2 in docs/P4-R2.md before P4-B. Architect completed critical source corrections and directly authors P2 critical
 core and critical protocol corrections. Coordinate ownership before overlapping work.
 
 Latest user direction: no demo/mock/seeded data, fake progress, sample logs or fake
@@ -46,5 +46,5 @@ not postponed until failures occur.
   describe evidence: plan tags are not app releases. Push history and tags to origin.
 
 Opening these instructions does not authorize every phase. Current Builder handoff
-is P4-A-R1 only in docs/P4-REVIEW.md, following the foundation and cache contracts. Architect owns P4-B critical upload/receipt/recovery integration. P2 core paths remain Architect-owned;
+is P4-A-R2 only in docs/P4-R2.md, following the foundation and cache contracts. Architect owns P4-B critical upload/receipt/recovery integration. P2 core paths remain Architect-owned;
 later application phases need their prerequisites and an assigned batch.
