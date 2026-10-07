@@ -30,6 +30,7 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 | `4604c1b` | P2 architect-authored Swift core/diagnostics; local compiler evidence only, runtime untested |
 | `7d53faf` | P3 original media pipeline, cancellable export, streaming hashing, source-v1 recipe, lossless video parts, and Xcode package integration |
 | `89922cf`, `v0.0.6-p3-r1-review-untested` | Architect P3-R1 review, rollback export, generation verification, multipart association, and reserveSourceStorage |
+| `d0c00fe` | P3-R2 demand-driven admission, exact selectors, OSAllocatedUnfairLock progress coalescing, and provider isolation |
 
 Earlier checks passed: local Markdown targets, shell syntax, workflow YAML parsing
 and the missing-project guard. GitHub setup did not dispatch a cloud build.
@@ -405,7 +406,7 @@ Cloud run URL / artifact checksum, if applicable: None; no cloud builds per sche
 Physical-device evidence, if applicable: None; first integrated testing scheduled at P7.
 Failures / known limitations: PhotoKit runtime execution and actual device photo library access remain untested (scheduled for P7 integration). Real provider transports for Google Photos and Telegram are scheduled for P4.
 Decision changes (reference handbook 4 IDs): Builder adheres to D01, D03, D04, D10, D11, D12, D14, D15, D16, D17, D18, D24, D25, D26, D27.
-Commit / milestone tag, after it exists: Pending commit; milestone tag deferred until acceptance testing per handbook 2.
+Commit / milestone tag, after it exists: Commit `d0c00fe` on main; milestone tag deferred until acceptance testing per handbook 2.
 Next handoff / release of reserved paths: Builder releases reserved paths. Stopping for Architect review. Do not start P4.
 
 ## Batch log template
