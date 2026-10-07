@@ -441,6 +441,16 @@ pbxproj_content = f"""// !$*UTF8*$!
 \t\t\t\t\t"$(inherited)",
 \t\t\t\t\t"@executable_path/Frameworks",
 \t\t\t\t);
+\t\t\t\tLIBRARY_SEARCH_PATHS = (
+\t\t\t\t\t"$(inherited)",
+\t\t\t\t\t"$(PROJECT_DIR)/build/tdlib/lib",
+\t\t\t\t);
+\t\t\t\tOTHER_LDFLAGS = (
+\t\t\t\t\t"$(inherited)",
+\t\t\t\t\t"-ltdjson",
+\t\t\t\t\t"-lc++",
+\t\t\t\t\t"-lz",
+\t\t\t\t);
 \t\t\t\tMARKETING_VERSION = 1.0.0;
 \t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.tinyredphoenix.Cloudified;
 \t\t\t\tPRODUCT_NAME = "$(TARGET_NAME)";
@@ -467,6 +477,16 @@ pbxproj_content = f"""// !$*UTF8*$!
 \t\t\t\tLD_RUNPATH_SEARCH_PATHS = (
 \t\t\t\t\t"$(inherited)",
 \t\t\t\t\t"@executable_path/Frameworks",
+\t\t\t\t);
+\t\t\t\tLIBRARY_SEARCH_PATHS = (
+\t\t\t\t\t"$(inherited)",
+\t\t\t\t\t"$(PROJECT_DIR)/build/tdlib/lib",
+\t\t\t\t);
+\t\t\t\tOTHER_LDFLAGS = (
+\t\t\t\t\t"$(inherited)",
+\t\t\t\t\t"-ltdjson",
+\t\t\t\t\t"-lc++",
+\t\t\t\t\t"-lz",
 \t\t\t\t);
 \t\t\t\tMARKETING_VERSION = 1.0.0;
 \t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.tinyredphoenix.Cloudified;

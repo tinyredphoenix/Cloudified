@@ -19,6 +19,15 @@
     "license": "Boost Software License 1.0 (see licenses/LICENSE-TDLib.txt)",
     "artifactSha256": null
   },
-  "transitiveDependencies": [],
-  "transitiveStatus": "PhotosBackup reference requires Apple frameworks only. TDLib OpenSSL and zlib dependencies were noted, but exact iOS crypto source/artifact pins and the complete native link closure are not yet supplied. P4-A-R1 must record them before integration."
+  "transitiveDependencies": [
+    {
+      "name": "openssl",
+      "repository": "https://github.com/openssl/openssl.git",
+      "commit": "1979ad30e4ad341ea22b31a84f3eb86f78878b27",
+      "version": "openssl-3.0.15",
+      "license": "Apache License 2.0",
+      "purpose": "Cryptographic backend for TDLib native network and database encryption on iOS"
+    }
+  ],
+  "transitiveStatus": "PhotosBackup requires Apple Foundation, CryptoKit, Security only. TDLib requires OpenSSL 3.0.15 (pinned above), Apple libz (zlib), and Apple libc++ for its complete native link closure. P4-A-R1 records exact transitive provenance in dependencies/tdlib-vendor.json."
 }

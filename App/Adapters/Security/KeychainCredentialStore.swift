@@ -4,6 +4,7 @@ import Security
 /// Classified credential storage failures.
 public enum CredentialError: Error, Sendable, Equatable {
     case notConfigured
+    case invalidProfile
     case accessDenied(OSStatus)
     case storageFailure(OSStatus)
     case corrupt
@@ -32,28 +33,25 @@ public struct StoredGoogleCredential: Codable, Equatable, Sendable {
     }
 }
 
-/// Telegram API credentials and encryption configuration persisted securely in Keychain.
+/// Telegram API credentials persisted securely in Keychain.
+/// Database encryption keys are stored separately in dedicated atomic entries
+/// via `KeychainCredentialStore.getOrCreateTDLibDatabaseKey(forProfile:)`.
+/// Bot credentials are not used; Cloudified operates under user-authorized TDLib sessions only.
 public struct StoredTelegramCredential: Codable, Equatable, Sendable {
     public let apiId: Int32
     public let apiHash: String
     public let phoneNumber: String?
-    public let botToken: String?
-    public let databaseEncryptionKey: String
     public let createdAt: Date
 
     public init(
         apiId: Int32,
         apiHash: String,
         phoneNumber: String? = nil,
-        botToken: String? = nil,
-        databaseEncryptionKey: String,
         createdAt: Date = Date()
     ) {
         self.apiId = apiId
         self.apiHash = apiHash
         self.phoneNumber = phoneNumber
-        self.botToken = botToken
-        self.databaseEncryptionKey = databaseEncryptionKey
         self.createdAt = createdAt
     }
 }
@@ -154,7 +152,7 @@ public struct SystemKeychainBackend: KeychainStoreBackend {
 
 /// Secure native Keychain storage for provider credentials and TDLib encryption keys.
 /// Items are protected with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` and bound
-/// by explicit private session/profile identifiers rather than display names or token hashes.
+/// by explicit validated private profile references rather than display names or token hashes.
 public final class KeychainCredentialStore: Sendable {
     public static let defaultService = "com.tinyredphoenix.cloudified.credentials"
 
@@ -169,32 +167,46 @@ public final class KeychainCredentialStore: Sendable {
         self.backend = backend
     }
 
-    private func googleAccountKey(sessionID: String) -> String {
-        "google.session.\(sessionID)"
+    /// Validates private profile identifier against strict alphanumeric and length constraints.
+    public static func validateProfileID(_ profileID: String) throws {
+        guard !profileID.isEmpty,
+              profileID.utf8.count <= 64,
+              profileID.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }) else {
+            throw CredentialError.invalidProfile
+        }
     }
 
-    private func telegramAccountKey(sessionID: String) -> String {
-        "telegram.session.\(sessionID)"
+    private func googleAccountKey(profileID: String) throws -> String {
+        try Self.validateProfileID(profileID)
+        return "google.profile.\(profileID)"
     }
 
-    private func tdlibKeyAccountKey(sessionID: String) -> String {
-        "telegram.tdlib_db_key.\(sessionID)"
+    private func telegramAccountKey(profileID: String) throws -> String {
+        try Self.validateProfileID(profileID)
+        return "telegram.profile.\(profileID)"
+    }
+
+    private func tdlibKeyAccountKey(profileID: String) throws -> String {
+        try Self.validateProfileID(profileID)
+        return "telegram.tdlib_db_key.\(profileID)"
     }
 
     // MARK: - Google Credentials
 
-    public func saveGoogleCredential(_ cred: StoredGoogleCredential, forSession sessionID: String) throws {
+    public func saveGoogleCredential(_ cred: StoredGoogleCredential, forProfile profileID: String) throws {
+        let key = try googleAccountKey(profileID: profileID)
         let data: Data
         do {
             data = try JSONEncoder().encode(cred)
         } catch {
             throw CredentialError.corrupt
         }
-        try backend.write(service: service, account: googleAccountKey(sessionID: sessionID), data: data)
+        try backend.write(service: service, account: key, data: data)
     }
 
-    public func loadGoogleCredential(forSession sessionID: String) throws -> StoredGoogleCredential {
-        guard let data = try backend.read(service: service, account: googleAccountKey(sessionID: sessionID)) else {
+    public func loadGoogleCredential(forProfile profileID: String) throws -> StoredGoogleCredential {
+        let key = try googleAccountKey(profileID: profileID)
+        guard let data = try backend.read(service: service, account: key) else {
             throw CredentialError.notConfigured
         }
         do {
@@ -204,24 +216,38 @@ public final class KeychainCredentialStore: Sendable {
         }
     }
 
+    public func deleteGoogleCredential(forProfile profileID: String) throws {
+        let key = try googleAccountKey(profileID: profileID)
+        try backend.delete(service: service, account: key)
+    }
+
+    // Backward compatibility aliases
+    public func saveGoogleCredential(_ cred: StoredGoogleCredential, forSession sessionID: String) throws {
+        try saveGoogleCredential(cred, forProfile: sessionID)
+    }
+    public func loadGoogleCredential(forSession sessionID: String) throws -> StoredGoogleCredential {
+        try loadGoogleCredential(forProfile: sessionID)
+    }
     public func deleteGoogleCredential(forSession sessionID: String) throws {
-        try backend.delete(service: service, account: googleAccountKey(sessionID: sessionID))
+        try deleteGoogleCredential(forProfile: sessionID)
     }
 
     // MARK: - Telegram Credentials
 
-    public func saveTelegramCredential(_ cred: StoredTelegramCredential, forSession sessionID: String) throws {
+    public func saveTelegramCredential(_ cred: StoredTelegramCredential, forProfile profileID: String) throws {
+        let key = try telegramAccountKey(profileID: profileID)
         let data: Data
         do {
             data = try JSONEncoder().encode(cred)
         } catch {
             throw CredentialError.corrupt
         }
-        try backend.write(service: service, account: telegramAccountKey(sessionID: sessionID), data: data)
+        try backend.write(service: service, account: key, data: data)
     }
 
-    public func loadTelegramCredential(forSession sessionID: String) throws -> StoredTelegramCredential {
-        guard let data = try backend.read(service: service, account: telegramAccountKey(sessionID: sessionID)) else {
+    public func loadTelegramCredential(forProfile profileID: String) throws -> StoredTelegramCredential {
+        let key = try telegramAccountKey(profileID: profileID)
+        guard let data = try backend.read(service: service, account: key) else {
             throw CredentialError.notConfigured
         }
         do {
@@ -231,8 +257,20 @@ public final class KeychainCredentialStore: Sendable {
         }
     }
 
+    public func deleteTelegramCredential(forProfile profileID: String) throws {
+        let key = try telegramAccountKey(profileID: profileID)
+        try backend.delete(service: service, account: key)
+    }
+
+    // Backward compatibility aliases
+    public func saveTelegramCredential(_ cred: StoredTelegramCredential, forSession sessionID: String) throws {
+        try saveTelegramCredential(cred, forProfile: sessionID)
+    }
+    public func loadTelegramCredential(forSession sessionID: String) throws -> StoredTelegramCredential {
+        try loadTelegramCredential(forProfile: sessionID)
+    }
     public func deleteTelegramCredential(forSession sessionID: String) throws {
-        try backend.delete(service: service, account: telegramAccountKey(sessionID: sessionID))
+        try deleteTelegramCredential(forProfile: sessionID)
     }
 
     // MARK: - TDLib Database Encryption Key
@@ -250,9 +288,10 @@ public final class KeychainCredentialStore: Sendable {
         return keyData.base64EncodedString()
     }
 
-    /// Loads the TDLib database key for this session or generates and persists a fresh 256-bit key.
-    public func getOrCreateTDLibDatabaseKey(forSession sessionID: String) throws -> String {
-        let account = tdlibKeyAccountKey(sessionID: sessionID)
+    /// Loads the TDLib database key for this profile or generates and persists a fresh 256-bit key.
+    /// Preserves Architect's atomic insert-if-absent and corrupt byte validation.
+    public func getOrCreateTDLibDatabaseKey(forProfile profileID: String) throws -> String {
+        let account = try tdlibKeyAccountKey(profileID: profileID)
         if let existingData = try backend.read(service: service, account: account) {
             return try Self.validatedDatabaseKey(existingData)
         }
@@ -271,6 +310,10 @@ public final class KeychainCredentialStore: Sendable {
         return try Self.validatedDatabaseKey(winner)
     }
 
+    public func getOrCreateTDLibDatabaseKey(forSession sessionID: String) throws -> String {
+        try getOrCreateTDLibDatabaseKey(forProfile: sessionID)
+    }
+
     private static func validatedDatabaseKey(_ data: Data) throws -> String {
         guard let key = String(data: data, encoding: .utf8),
               let decoded = Data(base64Encoded: key), decoded.count == 32,
@@ -278,7 +321,12 @@ public final class KeychainCredentialStore: Sendable {
         return key
     }
 
+    public func deleteTDLibDatabaseKey(forProfile profileID: String) throws {
+        let account = try tdlibKeyAccountKey(profileID: profileID)
+        try backend.delete(service: service, account: account)
+    }
+
     public func deleteTDLibDatabaseKey(forSession sessionID: String) throws {
-        try backend.delete(service: service, account: tdlibKeyAccountKey(sessionID: sessionID))
+        try deleteTDLibDatabaseKey(forProfile: sessionID)
     }
 }

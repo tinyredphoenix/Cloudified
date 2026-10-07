@@ -2,33 +2,43 @@ import Foundation
 import CloudifiedCore
 
 /// App-owned actor isolating the pinned GPMCClient implementation and credential vault.
-/// Handles session lifecycle, authenticated RPC dispatch, and classified error diagnostics
+/// Handles session lifecycle, authenticated RPC dispatch, transport injection, and classified error diagnostics
 /// while preserving the boundaries required before Phase 4-B critical upload integration.
 actor GooglePhotosClientSession {
-    private let sessionID: String
+    private let profileID: String
     private let credentialStore: KeychainCredentialStore
+    private let customTransport: (any FileUploadTransport)?
+    private let diagnosticSink: (@Sendable (EventOperation, EventContext, EventDecision, EventSeverity, SafeFailure?, TimeInterval?, Int64?, Int64?) async throws -> Void)?
+
     private var client: GPMCClient?
     private var isConfigured = false
 
     init(
-        sessionID: String = "primary",
-        credentialStore: KeychainCredentialStore = KeychainCredentialStore()
-    ) {
-        self.sessionID = sessionID
+        profileID: String,
+        credentialStore: KeychainCredentialStore = KeychainCredentialStore(),
+        transport: (any FileUploadTransport)? = nil,
+        diagnosticSink: (@Sendable (EventOperation, EventContext, EventDecision, EventSeverity, SafeFailure?, TimeInterval?, Int64?, Int64?) async throws -> Void)? = nil
+    ) throws {
+        try KeychainCredentialStore.validateProfileID(profileID)
+        self.profileID = profileID
         self.credentialStore = credentialStore
+        self.customTransport = transport
+        self.diagnosticSink = diagnosticSink
     }
 
-    /// Whether a credential has been configured and loaded for this session.
+    /// Whether a credential has been configured and loaded for this profile.
     var hasConfiguredCredential: Bool {
         isConfigured
     }
 
     /// Connects using an existing stored credential from Keychain.
     func loadSavedSession() async throws {
-        let cred = try credentialStore.loadGoogleCredential(forSession: sessionID)
-        let gpmc = try GPMCClient(authData: cred.authData)
+        let cred = try credentialStore.loadGoogleCredential(forProfile: profileID)
+        let gpmc = try GPMCClient(authData: cred.authData, fileUploadTransport: customTransport)
         self.client = gpmc
         self.isConfigured = true
+
+        try? await emitDiagnostic(.appStart, decision: .proceed, severity: .info)
     }
 
     /// Connects by exchanging a freshly acquired OAuth authorization token.
@@ -41,11 +51,13 @@ actor GooglePhotosClientSession {
             authData: result.authData,
             connectedAt: Date()
         )
-        try credentialStore.saveGoogleCredential(cred, forSession: sessionID)
+        try credentialStore.saveGoogleCredential(cred, forProfile: profileID)
 
-        let gpmc = try GPMCClient(authData: cred.authData)
+        let gpmc = try GPMCClient(authData: cred.authData, fileUploadTransport: customTransport)
         self.client = gpmc
         self.isConfigured = true
+
+        try? await emitDiagnostic(.enabledChanged, decision: .proceed, severity: .info)
         return cred
     }
 
@@ -53,7 +65,11 @@ actor GooglePhotosClientSession {
     func disconnect() throws {
         client = nil
         isConfigured = false
-        try credentialStore.deleteGoogleCredential(forSession: sessionID)
+        try credentialStore.deleteGoogleCredential(forProfile: profileID)
+
+        Task { [weak self] in
+            try? await self?.emitDiagnostic(.finalization, decision: .proceed, severity: .info)
+        }
     }
 
     private func requireClient() throws -> GPMCClient {
@@ -69,7 +85,9 @@ actor GooglePhotosClientSession {
         do {
             try await client.authenticate()
         } catch let err as GPMCError {
-            throw Self.classify(err)
+            let classified = Self.classify(err)
+            try? await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
+            throw classified
         }
     }
 
@@ -79,7 +97,9 @@ actor GooglePhotosClientSession {
         do {
             try await client.validateReadAccess()
         } catch let err as GPMCError {
-            throw Self.classify(err)
+            let classified = Self.classify(err)
+            try? await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
+            throw classified
         }
     }
 
@@ -89,7 +109,9 @@ actor GooglePhotosClientSession {
         do {
             return try await client.remoteMediaKey(sha1: sha1, asLivePhotoMotion: asLivePhotoMotion)
         } catch let err as GPMCError {
-            throw Self.classify(err)
+            let classified = Self.classify(err)
+            try? await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
+            throw classified
         }
     }
 
@@ -104,7 +126,9 @@ actor GooglePhotosClientSession {
         do {
             return try await client.prepareUpload(file: file, filename: filename, modified: modified, phase: phase)
         } catch let err as GPMCError {
-            throw Self.classify(err)
+            let classified = Self.classify(err)
+            try? await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
+            throw classified
         }
     }
 
@@ -126,7 +150,9 @@ actor GooglePhotosClientSession {
                 phase: phase
             )
         } catch let err as GPMCError {
-            throw Self.classify(err)
+            let classified = Self.classify(err)
+            try? await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
+            throw classified
         }
     }
 
@@ -142,7 +168,9 @@ actor GooglePhotosClientSession {
         do {
             return try await client.transfer(prepared, file: file, transferID: transferID, foreground: foreground, phase: phase)
         } catch let err as GPMCError {
-            throw Self.classify(err)
+            let classified = Self.classify(err)
+            try? await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
+            throw classified
         }
     }
 
@@ -158,7 +186,9 @@ actor GooglePhotosClientSession {
         do {
             return try await client.commit(prepared, useQuota: useQuota, saver: saver, pairedStillHash: pairedStillHash, phase: phase)
         } catch let err as GPMCError {
-            throw Self.classify(err)
+            let classified = Self.classify(err)
+            try? await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
+            throw classified
         }
     }
 
@@ -172,6 +202,17 @@ actor GooglePhotosClientSession {
     func forgetTransfer(_ transferID: UUID) async {
         guard let client else { return }
         await client.forgetTransfer(transferID)
+    }
+
+    private func emitDiagnostic(
+        _ operation: EventOperation,
+        decision: EventDecision,
+        severity: EventSeverity,
+        failure: SafeFailure? = nil
+    ) async throws {
+        guard let diagnosticSink else { return }
+        let context = EventContext(origin: .google)
+        try await diagnosticSink(operation, context, decision, severity, failure, nil, nil, nil)
     }
 
     // MARK: - Error Classification

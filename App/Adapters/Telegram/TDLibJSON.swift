@@ -1,133 +1,235 @@
 import Foundation
 
-/// Helpers for TDLib JSON encoding and decoding.
-/// Strictly preserves 64-bit integer IDs (chat_id, message_id, user_id) without Double rounding.
-public enum TDLibJSON {
+/// Genuinely immutable, Sendable JSON value model for TDLib interactions.
+public enum TDLibValue: Sendable, Equatable {
+    case string(String)
+    case integer(Int64)
+    case double(Double)
+    case boolean(Bool)
+    case null
+    case array([TDLibValue])
+    case object([String: TDLibValue])
 
-    /// Parses a JSON string into a top-level dictionary while preserving integer precision.
-    public static func parseDictionary(_ jsonString: String) -> [String: Any]? {
-        guard let data = jsonString.data(using: .utf8) else { return nil }
-        do {
-            guard let dict = try JSONSerialization.jsonObject(
-                with: data,
-                options: [.fragmentsAllowed]
-            ) as? [String: Any] else {
-                return nil
-            }
-            return dict
-        } catch {
-            return nil
-        }
+    public var stringValue: String? {
+        if case .string(let s) = self { return s }
+        return nil
     }
 
-    /// Serializes a request dictionary into a UTF-8 JSON string.
-    public static func serialize(_ dict: [String: Any]) throws -> String {
-        let data = try JSONSerialization.data(withJSONObject: dict, options: [])
-        guard let str = String(data: data, encoding: .utf8) else {
-            throw TDLibError.invalidResponse
-        }
-        return str
+    public var boolValue: Bool? {
+        if case .boolean(let b) = self { return b }
+        return nil
     }
 
-    /// Extracts an Int64 ID from a JSON field, supporting both String representation and integer numbers
-    /// without converting through a floating-point Double.
-    public static func parseID(_ value: Any?) -> Int64? {
-        guard let value else { return nil }
-        if let str = value as? String {
-            return Int64(str)
-        }
-        if let num = value as? NSNumber {
-            // Check if the number is an integer type to avoid Double rounding
-            let objCType = String(cString: num.objCType)
-            if objCType == "d" || objCType == "f" {
-                // If stored as float/double, decode via integer string if safe
-                return Int64(num.stringValue)
-            }
-            return num.int64Value
-        }
-        if let intVal = value as? Int64 {
-            return intVal
-        }
-        if let intVal = value as? Int {
-            return Int64(intVal)
+    public var int32Value: Int32? {
+        if case .integer(let n) = self, n >= Int64(Int32.min), n <= Int64(Int32.max) {
+            return Int32(n)
         }
         return nil
     }
 
-    /// Extracts the `@type` discriminator string from a TDLib object dictionary.
-    public static func parseType(_ dict: [String: Any]) -> String? {
-        dict["@type"] as? String
-    }
-
-    /// Extracts the `@extra` correlation string from a TDLib response dictionary.
-    public static func parseExtra(_ dict: [String: Any]) -> String? {
-        if let extraStr = dict["@extra"] as? String {
-            return extraStr
-        }
-        if let extraNum = dict["@extra"] as? NSNumber {
-            return extraNum.stringValue
-        }
+    public var int64Value: Int64? {
+        if case .integer(let n) = self { return n }
         return nil
     }
 
-    /// Checks if the dictionary represents a TDLib `error` object and extracts code and message.
-    public static func parseError(_ dict: [String: Any]) -> (code: Int32, message: String)? {
-        guard parseType(dict) == "error" else { return nil }
-        let code = (dict["code"] as? NSNumber)?.int32Value ?? 0
-        let message = dict["message"] as? String ?? "Unknown TDLib error"
-        return (code, message)
+    public var objectValue: [String: TDLibValue]? {
+        if case .object(let dict) = self { return dict }
+        return nil
+    }
+
+    public var arrayValue: [TDLibValue]? {
+        if case .array(let arr) = self { return arr }
+        return nil
     }
 }
 
-/// An immutable, Sendable wrapper around a TDLib response or update dictionary.
-public struct TDLibResponse: @unchecked Sendable {
-    public let raw: [String: Any]
+/// Genuinely immutable, Sendable representation of a TDLib response or update dictionary.
+public struct TDLibResponse: Sendable, Equatable {
+    public let fields: [String: TDLibValue]
 
-    public init(_ raw: [String: Any]) {
-        self.raw = raw
+    public init(fields: [String: TDLibValue]) {
+        self.fields = fields
     }
 
-    public subscript(key: String) -> Any? {
-        raw[key]
+    public subscript(key: String) -> TDLibValue? {
+        fields[key]
     }
 
     public var type: String? {
-        raw["@type"] as? String
+        fields["@type"]?.stringValue
     }
 
     public var isError: Bool {
         type == "error"
     }
 
-    public var errorCode: Int? {
-        (raw["code"] as? NSNumber)?.intValue ?? raw["code"] as? Int
+    public var errorCode: Int32? {
+        fields["code"]?.int32Value
     }
 
     public var errorMessage: String? {
-        raw["message"] as? String
+        fields["message"]?.stringValue
+    }
+
+    public var extra: String? {
+        fields["@extra"]?.stringValue
+    }
+
+    public var clientID: Int32? {
+        fields["@client_id"]?.int32Value
     }
 
     public func int64(forKey key: String) -> Int64? {
-        TDLibJSON.parseID(raw[key])
+        TDLibJSON.parseID(fields[key])
     }
 
     public func string(forKey key: String) -> String? {
-        raw[key] as? String
+        fields[key]?.stringValue
     }
 
     public func bool(forKey key: String) -> Bool? {
-        raw[key] as? Bool
-    }
-
-    public func int(forKey key: String) -> Int? {
-        (raw[key] as? NSNumber)?.intValue ?? raw[key] as? Int
-    }
-
-    public func double(forKey key: String) -> Double? {
-        (raw[key] as? NSNumber)?.doubleValue ?? raw[key] as? Double
+        fields[key]?.boolValue
     }
 
     public func object(forKey key: String) -> TDLibResponse? {
-        (raw[key] as? [String: Any]).map { TDLibResponse($0) }
+        guard let obj = fields[key]?.objectValue else { return nil }
+        return TDLibResponse(fields: obj)
+    }
+
+    public func array(forKey key: String) -> [TDLibValue]? {
+        fields[key]?.arrayValue
+    }
+}
+
+/// Helpers for TDLib JSON encoding and decoding.
+/// Strictly validates 64-bit integer IDs (chat_id, message_id, user_id), rejects rounded/fractional values,
+/// enforces size and depth limits, and preserves Sendable value models.
+public enum TDLibJSON {
+    public static let maxJSONBytes: Int = 10 * 1024 * 1024 // 10 MiB limit
+    public static let maxRecursionDepth: Int = 64
+
+    /// Parses a JSON string into an immutable Sendable TDLibResponse.
+    public static func parse(_ jsonString: String) throws -> TDLibResponse {
+        guard jsonString.utf8.count <= maxJSONBytes else {
+            throw TDLibError.malformedResponse
+        }
+        guard let data = jsonString.data(using: .utf8) else {
+            throw TDLibError.malformedResponse
+        }
+        let jsonObject: Any
+        do {
+            jsonObject = try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
+        } catch {
+            throw TDLibError.malformedResponse
+        }
+        guard let dict = jsonObject as? [String: Any] else {
+            throw TDLibError.malformedResponse
+        }
+        let converted = try convertDictionary(dict, depth: 0)
+        return TDLibResponse(fields: converted)
+    }
+
+    /// Converts Foundation object tree into TDLibValue with depth protection.
+    public static func convertValue(_ value: Any, depth: Int) throws -> TDLibValue {
+        guard depth <= maxRecursionDepth else {
+            throw TDLibError.malformedResponse
+        }
+        if let s = value as? String {
+            return .string(s)
+        }
+        if let num = value as? NSNumber {
+            // Strict check: CFBoolean is distinct from actual numeric numbers
+            if CFGetTypeID(num) == CFBooleanGetTypeID() {
+                return .boolean(num.boolValue)
+            }
+            let objCType = String(cString: num.objCType)
+            if objCType == "d" || objCType == "f" {
+                let d = num.doubleValue
+                if d.isFinite && d.rounded() == d && d >= Double(Int64.min) && d <= Double(Int64.max) {
+                    return .integer(Int64(d))
+                }
+                return .double(d)
+            }
+            return .integer(num.int64Value)
+        }
+        if let arr = value as? [Any] {
+            var items: [TDLibValue] = []
+            items.reserveCapacity(min(arr.count, 10_000))
+            for item in arr {
+                items.append(try convertValue(item, depth: depth + 1))
+            }
+            return .array(items)
+        }
+        if let dict = value as? [String: Any] {
+            return .object(try convertDictionary(dict, depth: depth + 1))
+        }
+        if value is NSNull {
+            return .null
+        }
+        throw TDLibError.malformedResponse
+    }
+
+    public static func convertDictionary(_ dict: [String: Any], depth: Int) throws -> [String: TDLibValue] {
+        var result: [String: TDLibValue] = [:]
+        for (k, v) in dict {
+            result[k] = try convertValue(v, depth: depth)
+        }
+        return result
+    }
+
+    /// Serializes a request dictionary into a UTF-8 JSON string.
+    public static func serializeRequest(_ dict: [String: Any]) throws -> String {
+        let data = try JSONSerialization.data(withJSONObject: dict, options: [])
+        guard data.count <= maxJSONBytes else {
+            throw TDLibError.malformedResponse
+        }
+        guard let str = String(data: data, encoding: .utf8) else {
+            throw TDLibError.malformedResponse
+        }
+        return str
+    }
+
+    /// Extracts an exact signed 64-bit integer ID.
+    /// Rejects Booleans, fractional/rounded floating values, overflowing unsigned numbers, and invalid strings.
+    public static func parseID(_ value: TDLibValue?) -> Int64? {
+        guard let value else { return nil }
+        switch value {
+        case .integer(let id):
+            return id
+        case .string(let str):
+            guard let id = Int64(str), String(id) == str else { return nil }
+            return id
+        case .boolean, .double, .null, .array, .object:
+            // Explicitly reject booleans, doubles, nulls, arrays, and objects
+            return nil
+        }
+    }
+
+    /// Legacy parseID overload for raw Any values.
+    public static func parseID(_ value: Any?) -> Int64? {
+        guard let value else { return nil }
+        if let str = value as? String {
+            guard let id = Int64(str), String(id) == str else { return nil }
+            return id
+        }
+        if let num = value as? NSNumber {
+            // Reject booleans
+            if CFGetTypeID(num) == CFBooleanGetTypeID() {
+                return nil
+            }
+            let objCType = String(cString: num.objCType)
+            // Reject float/double representations that could be fractional or rounded
+            if objCType == "d" || objCType == "f" {
+                return nil
+            }
+            return num.int64Value
+        }
+        if let id = value as? Int64 {
+            return id
+        }
+        if let id = value as? Int {
+            return Int64(id)
+        }
+        return nil
     }
 }

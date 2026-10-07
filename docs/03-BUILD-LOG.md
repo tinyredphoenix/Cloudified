@@ -6,12 +6,13 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 
 ## Current handoff state
 
-- Active editing batch: none. Architect completed review/cache edits and releases paths at this handoff. Next Builder batch P4-A-R1 in P4-REVIEW.md; no P4-B start yet. Workflow/build_cache.py and PhotoKit/Core remain Architect-owned/read-only.
+- Active editing batch: P4-A-R1 complete (awaiting Architect review). All claimed Builder paths released. Architect owns P4-B.
 - P0: architecture/repository/infrastructure complete; handbook contracts confirmed.
 - P1: native iOS 26 target, shared Cloudified scheme, four navigation screens (Dashboard, Not uploaded, Logs, Settings), adapter protocol placeholders, and honest unpopulated states completed by Builder.
 - P2: Architect-authored critical core/diagnostics implemented and compiled locally in Swift 6 mode; no runtime evidence yet.
 - P3: Architect reviewed P3-R2 and directly completed coverage, staging, terminal progress, error and archive identity paths.
 - P4-A: Builder submitted 9e6fe9e/edb53dd with compiler evidence. Architect found missing native linkage, unsafe lifecycle/deadlines/streams, pinned-schema mismatch and missing diagnostics; P4-A-R1 required. Compiler evidence is not native/runtime acceptance.
+- P4-A-R1: Builder completed all 8 corrections in docs/P4-REVIEW.md. Static/compiler checks passed (exit 0). Genuine native linkage configured; fake C shims removed; multi-stage native assembly script with host generation and OpenSSL cross-build authored; deadlines/cancellations bounded with single terminal resolver; process-global receiver with client-ID routing implemented; pinned TDLib schema/storage matched; Sendable immutable JSON models and strict ID validation added; safe diagnostics instrumented; transitive dependency provenance recorded; FileUploadTransport injected. All paths released for Architect review.
 - P4-B: Architect-owned critical upload, receipt, and reconciliation integration (pending Architect start).
 - P5–P6: implementation handoffs, no intermediate app-test gates.
 - P7: first full integrated build/test; P8: debugging iterations/release.
@@ -614,6 +615,62 @@ unaccepted native foundation and missing runtime evidence. Architect releases
 edited paths after publication; Builder claims only P4-A-R1
 scope before editing. Workflow/build_cache.py, PhotoKit/Core remain
 Architect-owned/read-only.
+
+## 2026-10-08 — P4-A-R1 provider foundations correction
+
+Batch / owner / status: P4-A-R1 / Builder / Complete (awaiting Architect review)
+Purpose: Complete all 8 review corrections in docs/P4-REVIEW.md: genuine native linkage without weak C shims; complete native assembly recipe including host generation phase, iOS arm64 target cross-compilation, OpenSSL 3.0.15 dependency, and unified libtdjson.a static link closure; bounded deadlines and cooperative cancellation in TDLibSession using a single terminal resolver; process-global receiver ownership in TDLibProcessReceiver with client-ID routing and non-busy idle park; deterministic close awaiting native authorizationStateClosed without fabricated state; pinned schema compliance for setTdlibParameters (base64 database_encryption_key, no checkDatabaseEncryptionKey, no enable_storage_optimizer); bounded memory, buffers, JSON depth/size, and strictly validated 64-bit signed integer IDs in TDLibJSON; genuine Sendable immutable TDLibValue and TDLibResponse models; whitelisted Core diagnostic event emission across all lifecycle transitions, timeouts, cancellations, and classified errors; transitive dependency provenance (dependencies/tdlib-vendor.json, dependencies/pins.json); and FileUploadTransport injection in Google Photos client session.
+
+Reserved paths / active writer: None (all claimed Builder paths released for Architect review)
+
+Changed files:
+- `Packages/CTDLib/Sources/CTDLib/td_json_client.c`: Pure include unit replacing fake dynamic shim; requires genuine native library linkage.
+- `Packages/CTDLib/Sources/CTDLib/td_json_client_shim.c`: Deleted fake dynamic C symbol fallback shim.
+- `scripts/assemble_tdlib.sh`: Multi-stage native assembly recipe featuring isolated mktemp workspace with trap cleanup, stage 1 host code generation (`prepare_cross_compiling` with `-DTD_GENERATE_SOURCE_FILES=ON`), stage 2 iOS arm64 cross-compilation for OpenSSL 3.0.15 and TDLib (deployment target 26.0), stage 3 full static link closure merge (`libtdjson_static.a`, `libtdclient.a`, `libtdcore.a`, `libtddb.a`, `libtdactor.a`, `libtdnet.a`, `libtdutils.a`, `libcrypto.a`, `libssl.a`) into unified `build/tdlib/lib/libtdjson.a` via `libtool -static`, and cache sealing via `build_cache.py seal-tdlib`.
+- `scripts/generate_xcode_project.py`: Added `LIBRARY_SEARCH_PATHS` pointing to `$(PROJECT_DIR)/build/tdlib/lib` and `OTHER_LDFLAGS` (`-ltdjson`, `-lc++`, `-lz`) to ensure genuine native direct linkage in Xcode configurations.
+- `Cloudified.xcodeproj/project.pbxproj`: Regenerated with Xcode native library search paths and linker flags.
+- `App/Adapters/Security/KeychainCredentialStore.swift`: Profile ID validation (`validateProfileID(_:)`) preventing silent fallback to `"primary"`, cleaned `StoredTelegramCredential` by removing unused bot token and duplicate key fields, retaining Architect's atomic insert-if-absent and corrupt byte failure invariants.
+- `App/Adapters/Telegram/TDLibJSON.swift`: Zero `@unchecked Sendable` immutable `TDLibValue` and `TDLibResponse` models; strict `parseID` rejecting `CFBoolean`, fractional/floating doubles, and unsigned overflow; 10 MiB payload and 64 recursion depth limits.
+- `App/Adapters/Telegram/TDLibBridge.swift`: Process-global `TDLibProcessReceiver` actor managing a single `td_receive` task, routing by `@client_id`, parking with sleep when idle to prevent busy-spinning; expanded `TDLibError` classifications.
+- `App/Adapters/Telegram/TDLibSession.swift`: Single terminal resolver (`resolvePendingRequest`) preventing task group hangs across responses, timeouts, cancellations, and teardown; bounded pending requests (100) and update streams (10 subscribers, 100 buffer); ~2 Hz coalesced file progress separated from guaranteed terminal delivery; deterministic `close()` awaiting native `authorizationStateClosed` (up to 10s) without fabricating `.closed` state; diagnostic event emission.
+- `App/Adapters/Telegram/TDLibClient.swift`: Pinned schema compliance for `setTdlibParameters` passing base64 `database_encryption_key` directly, removing `checkDatabaseEncryptionKey` and absent `enable_storage_optimizer`; device-only NSFileProtection and backup exclusion attributes on storage directories; diagnostic event emission.
+- `App/Adapters/GooglePhotos/GooglePhotosClientSession.swift`: Profile ID validation, optional `(any FileUploadTransport)?` injection parameter on initializer, and diagnostic event emission.
+- `dependencies/pins.json`: Pinned OpenSSL 3.0.15 (`commit 1979ad30e4ad341ea22b31a84f3eb86f78878b27`, Apache 2.0).
+- `dependencies/tdlib-vendor.json`: Recorded TDLib commit `42e6a5259551178d1dab54a22ad96d14bd906e20`, OpenSSL pin, static link closure, header SHA-256s, and CMake patch notes.
+- `docs/03-BUILD-LOG.md`: Recorded batch claim, verification results, limitations, and path release.
+
+Dependency revisions / artifact provenance:
+- Google Photos GPMC: `github.com/g8row/PhotosBackup.git` pinned at commit `3c88269e18b9d4515e97d846c5816bd836285c3e` (MIT license).
+- Telegram TDLib: `github.com/tdlib/td.git` pinned at commit `42e6a5259551178d1dab54a22ad96d14bd906e20` (Boost 1.0 license).
+- OpenSSL: `github.com/openssl/openssl.git` pinned at tag `openssl-3.0.15` (commit `1979ad30e4ad341ea22b31a84f3eb86f78878b27`, Apache 2.0 license).
+- Vendor metadata: Detailed in `dependencies/tdlib-vendor.json` and `dependencies/google-vendor.json`.
+
+Checks (exact command, outcome, evidence location):
+- `TMPDIR=/private/tmp SWIFT_MODULE_CACHE_PATH=/private/tmp/cloudified-module-cache CLANG_MODULE_CACHE_PATH=/private/tmp/cloudified-module-cache swift build --package-path Packages/CTDLib --disable-sandbox`: passed (exit 0 in 1.78s).
+- `TMPDIR=/private/tmp SWIFT_MODULE_CACHE_PATH=/private/tmp/cloudified-module-cache CLANG_MODULE_CACHE_PATH=/private/tmp/cloudified-module-cache swift build --package-path Packages/CloudifiedCore --disable-sandbox`: passed (exit 0 in 18.62s).
+- `TMPDIR=/private/tmp SWIFT_MODULE_CACHE_PATH=/private/tmp/cloudified-module-cache CLANG_MODULE_CACHE_PATH=/private/tmp/cloudified-module-cache swiftc -typecheck -swift-version 6 -module-cache-path /private/tmp/cloudified-module-cache -I Packages/CloudifiedCore/.build/out/Products/Debug -I Packages/CTDLib/Sources/CTDLib/include -Xcc -fmodule-map-file=Packages/CloudifiedCore/Sources/CSQLite/module.modulemap -Xcc -fmodule-map-file=Packages/CTDLib/Sources/CTDLib/include/module.modulemap App/Adapters/Security/KeychainCredentialStore.swift App/Adapters/GooglePhotos/Protobuf.swift App/Adapters/GooglePhotos/GPMCClient.swift App/Adapters/GooglePhotos/GoogleTokenExchange.swift App/Adapters/GooglePhotos/GooglePhotosClientSession.swift App/Adapters/Telegram/TDLibBridge.swift App/Adapters/Telegram/TDLibJSON.swift App/Adapters/Telegram/TDLibSession.swift App/Adapters/Telegram/TDLibClient.swift`: passed (exit 0, zero errors, zero warnings).
+- `TMPDIR=/private/tmp SWIFT_MODULE_CACHE_PATH=/private/tmp/cloudified-module-cache CLANG_MODULE_CACHE_PATH=/private/tmp/cloudified-module-cache swiftc -parse -module-cache-path /private/tmp/cloudified-module-cache -I Packages/CloudifiedCore/.build/out/Products/Debug -I Packages/CTDLib/Sources/CTDLib/include $(find App -name "*.swift")`: passed (exit 0 across all 38 App Swift files).
+- `bash -n scripts/assemble_tdlib.sh scripts/build_unsigned_ipa.sh`: passed (exit 0).
+- `python3 -m py_compile scripts/generate_xcode_project.py scripts/build_cache.py scripts/check_docs.py`: passed (exit 0).
+- `python3 -c "import json; json.load(open('dependencies/pins.json')); json.load(open('dependencies/tdlib-vendor.json')); json.load(open('dependencies/google-vendor.json'))"`: passed (exit 0).
+- `plutil -lint Cloudified.xcodeproj/project.pbxproj App/Resources/Info.plist`: passed (both `OK`).
+- `python3 scripts/check_docs.py`: passed (19 Markdown files checked, local targets valid).
+- `git diff --check`: passed (zero whitespace/lint issues).
+
+Cloud run URL / artifact checksum, if applicable: None (cloud builds deferred to P7 per user schedule).
+Physical-device evidence, if applicable: None (physical-device testing starts at P7).
+
+Failures / known limitations:
+- P4-B critical upload, receipt, and reconciliation integration is Architect-owned and pending Architect start.
+- Native library `build/tdlib/lib/libtdjson.a` is intentionally unbuilt locally; per D29/D31/BUILD-CACHE.md, complete cross-compilation is executed via `scripts/assemble_tdlib.sh` during manual cloud CI before P7 testing. Fake shims have been completely eliminated so missing native symbols fail link clearly if linkage is attempted without assembly.
+- No live network requests or active user accounts tested (per schedule; acceptance testing starts at P7).
+- No cloud IPA build dispatched; SideStore/device verification deferred to P7.
+
+Decision changes (reference handbook 4 IDs):
+- Follows D29 (provider foundations before critical transport integration) and D31 (public standard runners, validated caches, no fake symbols).
+
+Commit / milestone tag, after it exists: Pending commit.
+Next handoff / release of reserved paths: Handoff to Architect for P4-B. All claimed Builder paths released.
 
 ## Batch log template
 
