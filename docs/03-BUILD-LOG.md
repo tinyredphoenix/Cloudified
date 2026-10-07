@@ -6,7 +6,7 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 
 ## Current handoff state
 
-- Active editing batch: P4-A-R2 assigned to Builder in docs/P4-R2.md; Architect review/corrections finished and paths released on publication. P4-B has not started.
+- Active editing batch: Architect surgical R2 corrections completed; all edited paths released on publication. Builder remaining P4-A-R2 work is narrowed in docs/P4-R2.md. P4-B has not started.
 - P0: architecture/repository/infrastructure complete; handbook contracts confirmed.
 - P1: native iOS 26 target, shared Cloudified scheme, four navigation screens (Dashboard, Not uploaded, Logs, Settings), adapter protocol placeholders, and honest unpopulated states completed by Builder.
 - P2: Architect-authored critical core/diagnostics implemented and compiled locally in Swift 6 mode; no runtime evidence yet.
@@ -727,6 +727,41 @@ review/corrections only. D32 records the uncertainty/pin rationale.
 Next handoff: Builder P4-A-R2 only in docs/P4-R2.md. All reviewed adapter/native/
 security paths released after commits; Architect retains Core, PhotoKit, workflow
 and cache-tool ownership, then directly authors critical P4-B after R2 review.
+
+## 2026-10-08 — Architect surgical foundation corrections
+
+User asked Architect to handle small corrections directly and record the outcome
+in common files. No other active edits existed. Architect completed focused changes
+to four adapter files, build script, generator/project and Google vendor metadata.
+Large receiver/auth/delivery/native-closure work remains Builder P4-A-R2; P4-B has
+not started. These requirements are needed to avoid orphaned native ownership,
+missed confirmations, inaccurate retries/counts and invalid device linking.
+
+- TDLib native copy is bounded with strnlen before allocation and strict UTF-8;
+  receive/execute throw malformedResponse on invalid native data. The existing
+  pointer lock covers both bounded inspection and copy. Receiver parses once into
+  the immutable Sendable model and forwards Result<TDLibResponse, TDLibError>;
+  malformed data fences owned sessions instead of silent discard. Valid unknown
+  IDs are ignored. Receiver idle termination/ownership/capacity remains incomplete.
+- TDLib localized errors use controlled descriptions/numeric codes, excluding
+  associated raw prose. Google auth removes raw body snippets/challenge URLs/
+  network localized prose from generated failures and preserves cancellation.
+- GooglePhotosClientSession accepts a shared UploadRequestNetworkPolicy; both
+  initial token-exchange stages apply it. Existing GPMC RPC/auth/file requests use
+  the same object. Token wire fields and original/non-quota media semantics are
+  unchanged. Google vendor source SHA-256 is updated for the exact adapted bytes.
+- Debug/Release project/generator search paths use CLOUDIFIED_NATIVE_ROOT. The
+  unsigned build script resolves an absolute output root and passes its tdlib
+  path to xcodebuild. Existing compile-cache fingerprint includes project/build
+  script; no extra native recipe input or cache-policy change was introduced.
+
+Checks after source changes: the exact nine-file swiftc -typecheck command from
+the preceding review entry passed (exit 0, no diagnostics). Project regeneration
+completed; plutil -lint Cloudified.xcodeproj/project.pbxproj reports OK. bash -n
+scripts/build_unsigned_ipa.sh passed. Native build/linking, iOS policy enforcement
+and receive behavior remain untested; no account/network upload, cloud dispatch,
+runtime tests, SDK install or USB changes occurred. R2 preserves these completed
+items and now assigns only larger remaining work. All edited paths released.
 
 ## Batch log template
 

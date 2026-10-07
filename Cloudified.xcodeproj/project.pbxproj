@@ -514,6 +514,7 @@
 				CODE_SIGN_STYLE = Manual;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
+				CLOUDIFIED_NATIVE_ROOT = "$(PROJECT_DIR)/build/tdlib";
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
@@ -525,7 +526,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/build/tdlib/lib",
+					"$(CLOUDIFIED_NATIVE_ROOT)/lib",
 				);
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -551,6 +552,7 @@
 				CODE_SIGN_STYLE = Manual;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
+				CLOUDIFIED_NATIVE_ROOT = "$(PROJECT_DIR)/build/tdlib";
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
@@ -562,7 +564,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/build/tdlib/lib",
+					"$(CLOUDIFIED_NATIVE_ROOT)/lib",
 				);
 				OTHER_LDFLAGS = (
 					"$(inherited)",

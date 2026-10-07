@@ -157,8 +157,8 @@ public actor TDLibSession {
         self.processingFailure = nil
 
         // Register session handler with the process-global receiver
-        await receiver.registerSession(clientID: id) { [weak self] jsonString in
-            await self?.handleIncomingJSON(jsonString)
+        await receiver.registerSession(clientID: id) { [weak self] result in
+            await self?.handleIncomingResponse(result)
         }
 
         try await emitDiagnostic(.appStart, decision: .proceed, severity: .info)
@@ -282,9 +282,9 @@ public actor TDLibSession {
 
     // MARK: - Incoming Message Handling
 
-    private func handleIncomingJSON(_ jsonString: String) async {
+    private func handleIncomingResponse(_ result: Result<TDLibResponse, TDLibError>) async {
         let response: TDLibResponse
-        do { response = try TDLibJSON.parse(jsonString) }
+        do { response = try result.get() }
         catch {
             interruptInput(error)
             return

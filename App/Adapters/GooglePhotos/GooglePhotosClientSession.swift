@@ -8,6 +8,7 @@ actor GooglePhotosClientSession {
     private let profileID: String
     private let credentialStore: KeychainCredentialStore
     private let customTransport: (any FileUploadTransport)?
+    private let networkPolicy: UploadRequestNetworkPolicy
     private let diagnosticSink: (@Sendable (EventOperation, EventContext, EventDecision, EventSeverity, SafeFailure?, TimeInterval?, Int64?, Int64?) async throws -> Void)?
 
     private var client: GPMCClient?
@@ -17,12 +18,14 @@ actor GooglePhotosClientSession {
         profileID: String,
         credentialStore: KeychainCredentialStore = KeychainCredentialStore(),
         transport: (any FileUploadTransport)? = nil,
+        networkPolicy: UploadRequestNetworkPolicy = UploadRequestNetworkPolicy(),
         diagnosticSink: (@Sendable (EventOperation, EventContext, EventDecision, EventSeverity, SafeFailure?, TimeInterval?, Int64?, Int64?) async throws -> Void)? = nil
     ) throws {
         try KeychainCredentialStore.validateProfileID(profileID)
         self.profileID = profileID
         self.credentialStore = credentialStore
         self.customTransport = transport
+        self.networkPolicy = networkPolicy
         self.diagnosticSink = diagnosticSink
     }
 
@@ -34,7 +37,7 @@ actor GooglePhotosClientSession {
     /// Connects using an existing stored credential from Keychain.
     func loadSavedSession() async throws {
         let cred = try credentialStore.loadGoogleCredential(forProfile: profileID)
-        let gpmc = try GPMCClient(authData: cred.authData, fileUploadTransport: customTransport)
+        let gpmc = try GPMCClient(authData: cred.authData, networkPolicy: networkPolicy, fileUploadTransport: customTransport)
         self.client = gpmc
         self.isConfigured = true
 
@@ -43,7 +46,10 @@ actor GooglePhotosClientSession {
 
     /// Connects by exchanging a freshly acquired OAuth authorization token.
     func connect(oauthToken: String) async throws -> StoredGoogleCredential {
-        let result = try await GoogleTokenExchange.run(oauthToken: oauthToken)
+        let policy = networkPolicy
+        let result = try await GoogleTokenExchange.run(oauthToken: oauthToken, requestPolicy: { request in
+            policy.apply(to: &request)
+        })
         let cred = StoredGoogleCredential(
             androidId: result.androidId,
             email: result.email,
@@ -53,7 +59,7 @@ actor GooglePhotosClientSession {
         )
         try credentialStore.saveGoogleCredential(cred, forProfile: profileID)
 
-        let gpmc = try GPMCClient(authData: cred.authData, fileUploadTransport: customTransport)
+        let gpmc = try GPMCClient(authData: cred.authData, networkPolicy: networkPolicy, fileUploadTransport: customTransport)
         self.client = gpmc
         self.isConfigured = true
 

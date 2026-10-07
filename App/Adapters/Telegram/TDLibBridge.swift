@@ -16,26 +16,26 @@ public enum TDLibError: LocalizedError, Sendable, Equatable {
 
     public var errorDescription: String? {
         switch self {
-        case .nativeLibraryMissing(let msg):
-            return "Native TDLib library missing: \(msg)"
+        case .nativeLibraryMissing:
+            return "Native TDLib library is unavailable."
         case .clientCreationFailed:
             return "Failed to create TDLib client instance."
         case .clientClosed:
             return "TDLib client session has been closed."
-        case .unresolvedClose(let msg):
-            return "TDLib close deadline expired without native closed confirmation: \(msg)"
+        case .unresolvedClose:
+            return "TDLib has not confirmed closure; resource ownership remains unresolved."
         case .timeout:
             return "TDLib request timed out."
-        case .capacityExceeded(let msg):
-            return "TDLib capacity exceeded: \(msg)"
-        case .executionFailed(let msg):
-            return "TDLib execution failed: \(msg)"
+        case .capacityExceeded:
+            return "TDLib delivery capacity exceeded; reconciliation is required."
+        case .executionFailed:
+            return "TDLib could not complete the operation."
         case .malformedResponse:
             return "Malformed or oversized JSON response from TDLib."
-        case .invalidParameter(let msg):
-            return "Invalid TDLib parameter: \(msg)"
-        case .tdlibError(let code, let msg):
-            return "TDLib error (\(code)): \(msg)"
+        case .invalidParameter:
+            return "Invalid TDLib request parameters."
+        case .tdlibError(let code, _):
+            return "TDLib rejected the request (code \(code))."
         }
     }
 }
@@ -69,24 +69,35 @@ public final class TDLibBridge: Sendable {
     /// Receives the next response or update from TDLib with the specified timeout.
     /// Must only be called from a single process-global thread/task.
     /// The returned UTF-8 string is copied immediately from TDLib's memory.
-    fileprivate func receive(timeout: Double) -> String? {
+    fileprivate func receive(timeout: Double) throws -> String? {
         Self.pointerLock.lock(); defer { Self.pointerLock.unlock() }
         guard let cStr = td_receive(timeout) else {
             return nil
         }
-        return String(cString: cStr)
+        return try Self.copyResponse(cStr)
     }
 
     /// Synchronously executes a service TDLib request.
     /// The returned UTF-8 string is copied immediately from TDLib's memory.
-    public func execute(jsonRequest: String) -> String? {
+    public func execute(jsonRequest: String) throws -> String? {
         Self.pointerLock.lock(); defer { Self.pointerLock.unlock() }
-        return jsonRequest.withCString { cStr in
+        return try jsonRequest.withCString { cStr in
             guard let cStrRes = td_execute(cStr) else {
                 return nil
             }
-            return String(cString: cStrRes)
+            return try Self.copyResponse(cStrRes)
         }
+    }
+
+    /// Bound the native read before allocating a Swift string; invalid UTF-8 fails.
+    private static func copyResponse(_ pointer: UnsafePointer<CChar>) throws -> String {
+        let length = strnlen(pointer, TDLibJSON.maxJSONBytes + 1)
+        guard length <= TDLibJSON.maxJSONBytes else { throw TDLibError.malformedResponse }
+        let bytes = UnsafeRawPointer(pointer).assumingMemoryBound(to: UInt8.self)
+        guard let string = String(bytes: UnsafeBufferPointer(start: bytes, count: length), encoding: .utf8) else {
+            throw TDLibError.malformedResponse
+        }
+        return string
     }
 
     /// Sets the native log message callback and verbosity level.
@@ -101,7 +112,7 @@ public actor TDLibProcessReceiver {
     public static let shared = TDLibProcessReceiver()
 
     private let bridge: TDLibBridge
-    private var activeSessions: [Int32: @Sendable (String) async -> Void] = [:]
+    private var activeSessions: [Int32: @Sendable (Result<TDLibResponse, TDLibError>) async -> Void] = [:]
     private var receiveTask: Task<Void, Never>?
     private var isRunning: Bool = false
 
@@ -109,7 +120,7 @@ public actor TDLibProcessReceiver {
         self.bridge = bridge
     }
 
-    public func registerSession(clientID: Int32, handler: @escaping @Sendable (String) async -> Void) {
+    public func registerSession(clientID: Int32, handler: @escaping @Sendable (Result<TDLibResponse, TDLibError>) async -> Void) {
         activeSessions[clientID] = handler
         startReceiveLoopIfNeeded()
     }
@@ -136,20 +147,35 @@ public actor TDLibProcessReceiver {
                     continue
                 }
 
-                if let jsonString = bridge.receive(timeout: 1.0) {
-                    await self.routeIncomingJSON(jsonString)
+                do {
+                    if let jsonString = try bridge.receive(timeout: 1.0) {
+                        await self.routeIncomingJSON(jsonString)
+                    }
+                } catch {
+                    await self.reportProtocolFailure()
                 }
             }
         }
     }
 
     private func routeIncomingJSON(_ jsonString: String) async {
-        guard let response = try? TDLibJSON.parse(jsonString),
-              let targetClientID = response.clientID, targetClientID > 0,
-              let handler = activeSessions[targetClientID] else {
+        let response: TDLibResponse
+        do { response = try TDLibJSON.parse(jsonString) }
+        catch { await reportProtocolFailure(); return }
+        guard let targetClientID = response.clientID, targetClientID > 0 else {
+            await reportProtocolFailure()
             return
         }
+        guard let handler = activeSessions[targetClientID] else { return }
         // An unknown/old client cannot change another account's auth or close state.
-        await handler(jsonString)
+        await handler(.success(response))
+    }
+
+    private func reportProtocolFailure() async {
+        // Corrupt routing cannot establish the affected account; fence all owned
+        // sessions instead of losing a possible acceptance/close confirmation.
+        for handler in Array(activeSessions.values) {
+            await handler(.failure(.malformedResponse))
+        }
     }
 }

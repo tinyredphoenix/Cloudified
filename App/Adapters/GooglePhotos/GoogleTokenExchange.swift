@@ -48,16 +48,18 @@ public enum GoogleTokenExchange {
     public static func run(
         oauthToken: String,
         androidId: String = randomAndroidId(),
-        session: URLSession = .shared
+        session: URLSession = .shared,
+        requestPolicy: @Sendable (inout URLRequest) -> Void = { _ in }
     ) async throws -> Result {
         let (masterToken, email, enc1) = try await exchangeOAuthToken(
             oauthToken: oauthToken,
             androidId: androidId,
-            session: session
+            session: session,
+            requestPolicy: requestPolicy
         )
 
         let cred = googlePhotosCredentialBody(androidId: androidId, email: email, masterToken: masterToken)
-        let (accessToken, expiry, enc2) = try await redeemCredential(body: cred, session: session)
+        let (accessToken, expiry, enc2) = try await redeemCredential(body: cred, session: session, requestPolicy: requestPolicy)
 
         return Result(
             androidId: androidId,
@@ -106,9 +108,11 @@ public enum GoogleTokenExchange {
     private static func exchangeOAuthToken(
         oauthToken: String,
         androidId: String,
-        session: URLSession
+        session: URLSession,
+        requestPolicy: @Sendable (inout URLRequest) -> Void
     ) async throws -> (String, String, Bool) {
-        let req = makeRequest(formPairs: oauthExchangeBody(oauthToken: oauthToken, androidId: androidId))
+        var req = makeRequest(formPairs: oauthExchangeBody(oauthToken: oauthToken, androidId: androidId))
+        requestPolicy(&req)
         let (data, _) = try await send(req, session: session, stage: "master token")
         let fields = parseAuthResponse(data)
 
@@ -151,7 +155,8 @@ public enum GoogleTokenExchange {
 
     private static func redeemCredential(
         body: String,
-        session: URLSession
+        session: URLSession,
+        requestPolicy: @Sendable (inout URLRequest) -> Void
     ) async throws -> (String, Date?, Bool) {
         var req = URLRequest(url: authURL)
         req.httpMethod = "POST"
@@ -160,7 +165,7 @@ public enum GoogleTokenExchange {
         req.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
         req.httpBody = Data(body.utf8)
         req.timeoutInterval = 60
-
+        requestPolicy(&req)
         let (data, _) = try await send(req, session: session, stage: "photos token")
         let fields = parseAuthResponse(data)
 
@@ -186,8 +191,12 @@ public enum GoogleTokenExchange {
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await session.data(for: req)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            throw CancellationError()
         } catch {
-            throw Failure(stage: stage, message: "Network error: \(error.localizedDescription)")
+            throw Failure(stage: stage, message: "Could not reach Google authentication service.")
         }
         guard let http = response as? HTTPURLResponse else {
             throw Failure(stage: stage, message: "Non-HTTP response.")
@@ -199,8 +208,7 @@ public enum GoogleTokenExchange {
             return (data, http)
         }
         guard (200..<300).contains(http.statusCode) else {
-            let snippet = String(decoding: data.prefix(200), as: UTF8.self)
-            throw Failure(stage: stage, message: "HTTP \(http.statusCode). \(snippet)")
+            throw Failure(stage: stage, message: "Authentication service returned HTTP \(http.statusCode).")
         }
         return (data, http)
     }
@@ -221,10 +229,8 @@ public enum GoogleTokenExchange {
         case "NeedsBrowser", "DeviceManagementRequiredOrSyncDisabled":
             return "\(code) — Google requested interactive challenge."
         default:
-            var msg = code
-            if let d = detail { msg += " (\(d))" }
-            if let u = url { msg += " see \(u)" }
-            return msg
+            // Unknown code/detail/challenge URLs may contain private server data.
+            return "Google rejected authentication; interactive sign-in may be required."
         }
     }
 

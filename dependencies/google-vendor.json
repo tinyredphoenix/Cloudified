@@ -19,8 +19,8 @@
       "sourcePath": "App/Sources/TokenExchange.swift",
       "sourceSha256": "d76ffd0fdeeaaa2940efd349b67bb4eb68f7ef0102ebedc88f6de699b4a29f32",
       "vendoredPath": "App/Adapters/GooglePhotos/GoogleTokenExchange.swift",
-      "vendoredSha256": "1af4beea32ee046041e56b48eecbc66038e304b522de0a2b8a759311236e331d"
+      "vendoredSha256": "c73c819e6f036b5d4d2132fd111eec1b2576be24c3e4922f2c0b647523431509"
     }
   ],
-  "patchNotes": "See docs/P4-REVIEW.md. Hashes record vendored source provenance; no functional or protocol acceptance claim."
+  "patchNotes": "See docs/P4-REVIEW.md and docs/P4-R2.md. Architect token boundary applies injected network policy and removes raw server/network details while preserving cancellation and wire fields. Hashes record provenance, not protocol/runtime acceptance."
 }

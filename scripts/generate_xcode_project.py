@@ -432,6 +432,7 @@ pbxproj_content = f"""// !$*UTF8*$!
 \t\t\t\tCODE_SIGN_STYLE = Manual;
 \t\t\t\tCODE_SIGNING_ALLOWED = NO;
 \t\t\t\tCODE_SIGNING_REQUIRED = NO;
+\t\t\t\tCLOUDIFIED_NATIVE_ROOT = "$(PROJECT_DIR)/build/tdlib";
 \t\t\t\tCURRENT_PROJECT_VERSION = 1;
 \t\t\t\tDEVELOPMENT_TEAM = "";
 \t\t\t\tENABLE_PREVIEWS = YES;
@@ -443,7 +444,7 @@ pbxproj_content = f"""// !$*UTF8*$!
 \t\t\t\t);
 \t\t\t\tLIBRARY_SEARCH_PATHS = (
 \t\t\t\t\t"$(inherited)",
-\t\t\t\t\t"$(PROJECT_DIR)/build/tdlib/lib",
+\t\t\t\t\t"$(CLOUDIFIED_NATIVE_ROOT)/lib",
 \t\t\t\t);
 \t\t\t\tOTHER_LDFLAGS = (
 \t\t\t\t\t"$(inherited)",
@@ -469,6 +470,7 @@ pbxproj_content = f"""// !$*UTF8*$!
 \t\t\t\tCODE_SIGN_STYLE = Manual;
 \t\t\t\tCODE_SIGNING_ALLOWED = NO;
 \t\t\t\tCODE_SIGNING_REQUIRED = NO;
+\t\t\t\tCLOUDIFIED_NATIVE_ROOT = "$(PROJECT_DIR)/build/tdlib";
 \t\t\t\tCURRENT_PROJECT_VERSION = 1;
 \t\t\t\tDEVELOPMENT_TEAM = "";
 \t\t\t\tENABLE_PREVIEWS = YES;
@@ -480,7 +482,7 @@ pbxproj_content = f"""// !$*UTF8*$!
 \t\t\t\t);
 \t\t\t\tLIBRARY_SEARCH_PATHS = (
 \t\t\t\t\t"$(inherited)",
-\t\t\t\t\t"$(PROJECT_DIR)/build/tdlib/lib",
+\t\t\t\t\t"$(CLOUDIFIED_NATIVE_ROOT)/lib",
 \t\t\t\t);
 \t\t\t\tOTHER_LDFLAGS = (
 \t\t\t\t\t"$(inherited)",

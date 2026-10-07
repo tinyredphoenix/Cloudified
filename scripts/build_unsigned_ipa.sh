@@ -19,6 +19,7 @@ if [[ -e "$output_root/IPA" || -e "$output_root/Build.xcresult" ]]; then
 fi
 
 mkdir -p "$output_root"
+output_root="$(cd "$output_root" && pwd)"
 
 python3 "$repo_root/scripts/build_cache.py" prepare --build-root "$output_root"
 if ! python3 "$repo_root/scripts/build_cache.py" verify-tdlib --build-root "$output_root"; then
@@ -39,6 +40,7 @@ xcodebuild \
   -resultBundlePath "$output_root/Build.xcresult" \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
+  "CLOUDIFIED_NATIVE_ROOT=$output_root/tdlib" \
   build 2>&1 | tee "$output_root/xcodebuild.log"
 
 app_path="$output_root/DerivedData/Build/Products/Release-iphoneos/Cloudified.app"

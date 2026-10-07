@@ -149,3 +149,12 @@ OpenSSL 3.5.9 LTS release commit and recorded public tag/support evidence in P4-
 and dependency manifests. Source/license/configuration verification remains R2;
 artifact/platform/link and native/runtime evidence remain P7. This is a source pin
 correction, not a claim that the new native recipe works.
+
+## D33 — Architect handles focused corrections directly
+
+2026-10-08. User requests small surgical fixes directly to shorten handoff cycles.
+Architect corrected bounded native copying/typed routing, safe errors, Google
+network-policy injection and custom linker-root wiring, recording evidence in
+shared files. Larger receiver/auth/delivery/native assembly work remains R2;
+advancing the phase cannot substitute for those required implementations. Future
+small review fixes should be completed directly when paths are free.

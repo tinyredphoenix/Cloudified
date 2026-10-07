@@ -36,7 +36,9 @@ Builder completed P1; Architect directly implemented P2 critical core.
 Builder's P3-R2 implementation was reviewed; Architect completed critical source corrections.
 The next Builder batch is [P4-A-R2 remaining foundation corrections](docs/P4-R2.md).
 P4-A-R1 was reviewed; native recipe, receiver bounds/lifecycle and initialization
-findings still require correction before P4-B.
+findings still require correction before P4-B. Architect directly completed the
+small response-bound/error/network-policy/build-root corrections; P4-R2 lists only
+the remaining larger foundation work.
 P3 has source/compiler evidence only; see [review history](docs/P3-REVIEW.md), handbook 2 and
 the [core integration contract](docs/CORE-INTEGRATION.md).
 Application phases are assigned in batches; the handbook is not authorization to
