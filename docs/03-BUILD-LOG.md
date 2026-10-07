@@ -28,6 +28,7 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 | `2154262` | Private remote created; main and annotated planning tag verified remotely; setup blocker resolved |
 | `016e449` | P1 native iOS 26 target, shared Cloudified scheme, four navigation screens, adapter protocol placeholders, and honest unpopulated states |
 | `4604c1b` | P2 architect-authored Swift core/diagnostics; local compiler evidence only, runtime untested |
+| `7d53faf` | P3 original media pipeline, cancellable export, streaming hashing, source-v1 recipe, lossless video parts, and Xcode package integration |
 
 Earlier checks passed: local Markdown targets, shell syntax, workflow YAML parsing
 and the missing-project guard. GitHub setup did not dispatch a cloud build.
@@ -227,7 +228,7 @@ Checks (exact command, outcome, evidence location):
 - `swiftc -parse -I /private/tmp/cloudified-p2-compile/out/Products/Debug` across all Swift files in `App/`: passed with 0 errors.
 Failures / known limitations: No runtime test suites, simulator sessions, or PhotoKit permission prompts executed (first complete app test scheduled at P7). Real provider transports for Google Photos and Telegram are scheduled for P4.
 Decision changes: None; strictly adheres to D01, D03, D04, D10, D11, D12, D14, D15, D16, D17, D18.
-Commit / milestone tag, after it exists: Pending git commit and push.
+Commit / milestone tag, after it exists: Commit `7d53faf` on main; milestone tag deferred until acceptance testing per handbook 2.
 Next handoff / release of reserved paths: Handoff to Builder for Phase 4 (P4: real provider adapters for Google Photos and Telegram). Reserved paths released.
 
 ## Batch log template
