@@ -6,11 +6,11 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 
 ## Current handoff state
 
-- Active editing batch: none (P3 completed by Builder; reserved paths released). P4 ready for Builder.
+- Active editing batch: none after Architect corrections. Next assigned batch P3-R1 Builder, as specified in P3-REVIEW.md. Core remains Architect-owned. P4 is not assigned; P3 has unresolved static-review blockers.
 - P0: architecture/repository/infrastructure complete; handbook contracts confirmed.
 - P1: native iOS 26 target, shared Cloudified scheme, four navigation screens (Dashboard, Not uploaded, Logs, Settings), adapter protocol placeholders, and honest unpopulated states completed by Builder.
 - P2: Architect-authored critical core/diagnostics implemented and compiled locally in Swift 6 mode; no runtime evidence yet.
-- P3: Original media pipeline completed by Builder (PhotoKit enumeration, cancellable original export, streaming SHA-256/SHA-1, source-v1 recipe, Live Photo coverage, lossless video part preparation, ArchiveManifestBuilder, PhotoLibraryOriginalPreparer, and Xcode project CloudifiedCore package integration). Static review passed.
+- P3: Builder implementation committed; architect review found cancellation fencing, split-hash, canonical-ID, staging/admission, resource-matching and diagnostics blockers. Syntax parsing passed; that is not interface/typecheck or critical-review acceptance.
 - P4–P6: implementation handoffs, no intermediate app-test gates.
 - P7: first full integrated build/test; P8: debugging iterations/release.
 - No demo/mock/seeded data or simulated uploads are permitted.
@@ -200,7 +200,7 @@ The handoff commit and annotated milestone are published together after this rec
 
 ## 2026-10-08 — P3 original media pipeline and core package integration
 
-Batch / owner / status: P3 / Builder / Completed (static review passed; no app tests or cloud builds per schedule).
+Batch / owner / status: P3 / Builder / Reported completed; Architect review found blockers (see P3-REVIEW.md). Syntax parsing passed; no app tests or cloud builds per schedule.
 Purpose: Real PhotoKit scanning, original export, streaming SHA-256/SHA-1, source-v1 recipe schema, Live Photo coverage, lossless video-part preparation, ArchiveManifestBuilder, PhotoLibraryOriginalPreparer conforming to OriginalPreparer, and local CloudifiedCore package integration in Xcode project.
 Reserved paths / active writer: `App/Adapters/PhotoLibrary/`, `App/Adapters/System/`, `Cloudified.xcodeproj/`, `scripts/generate_xcode_project.py`, `docs/03-BUILD-LOG.md` owned by Builder. Core paths (`Packages/CloudifiedCore`) preserved untouched for Architect.
 Changed files:
@@ -221,7 +221,7 @@ Changed files:
 - `docs/03-BUILD-LOG.md`
 Dependency revisions / artifact provenance: Local `CloudifiedCore` package (`Packages/CloudifiedCore`) integrated via `XCLocalSwiftPackageReference` into `Cloudified.xcodeproj`; native Apple frameworks only (Photos, CryptoKit, Foundation).
 Source recipe schema: `source-v1` Codable JSON containing asset local identifier, generation SHA-256, media kind, isLivePhoto flag, measured resource descriptors (role, UTI, original filename, SHA-256, SHA-1, byte count), external asset metadata (creation/modification dates, pixel dimensions, duration, favorite, location metadata for manifests only), and optional lossless video split recipe. Total recipe JSON strictly guarded to <= 256 KiB as enforced by Ledger.
-Diagnostic event coverage: Emits whitelisted events (`.scanStart`, `.scanPage`, `.scanComplete`, `.export`, `.hashing`, `.cleanup`) with `EventOrigin.source` and UUID context references. Zero private metadata, filenames, paths, or GPS in diagnostic events.
+Diagnostic event coverage (Builder report): claimed scan/export/hashing/cleanup coverage. Architect's focused review found only one try?-wrapped export append in the source adapter; scan events are emitted by Ledger. Source hash/iCloud/cancel/error/cleanup instrumentation remains incomplete. Correction required in P3-R1.
 Checks (exact command, outcome, evidence location):
 - `python3 scripts/check_docs.py`: passed, 15 Markdown files valid.
 - `plutil -lint Cloudified.xcodeproj/project.pbxproj`: passed (`OK`).
@@ -229,7 +229,70 @@ Checks (exact command, outcome, evidence location):
 Failures / known limitations: No runtime test suites, simulator sessions, or PhotoKit permission prompts executed (first complete app test scheduled at P7). Real provider transports for Google Photos and Telegram are scheduled for P4.
 Decision changes: None; strictly adheres to D01, D03, D04, D10, D11, D12, D14, D15, D16, D17, D18.
 Commit / milestone tag, after it exists: Commit `7d53faf` on main; milestone tag deferred until acceptance testing per handbook 2.
-Next handoff / release of reserved paths: Handoff to Builder for Phase 4 (P4: real provider adapters for Google Photos and Telegram). Reserved paths released.
+Next handoff / release of reserved paths: Builder released its paths. Proposed P4 handoff was not accepted by Architect; P3-R1 corrections are assigned first.
+
+## 2026-10-08 — Architect P3 review and critical corrections
+
+Status: direct critical fixes implemented; remaining P3-R1 source wiring assigned
+to Builder. No runtime/app tests, cloud runs, SDK downloads or USB changes.
+
+Focused review covered source callbacks/writer, plan/manifest identity, splitter,
+source pipeline/preparer, canonical scan flow, protection and package references.
+Review found real-code blockers missed by syntax parsing, including placeholder
+part hashes; full untracked/unadmitted measurement exports; randomized staging
+keys; role-only source matching; discarded canonical IDs; missing pre-job failures;
+ignored receipts in manifests; incomplete diagnostics and swallowed storage errors.
+Full findings and next assignment are [P3 review](P3-REVIEW.md).
+
+Architect corrections: terminal-only synchronized PhotoKit cancellation/error
+completion; exclusive protected writer ownership and accurate safe causes; stable
+manifest recipe without local generation/IDs, full-original metadata and confirmed
+references outside identity; selected original coverage and Live Photo validation;
+removal of inaccessible internal validate calls; bounded cancellable exact splitter
+reads; canonical asset paging; durable scoped pre-job source errors/counts; verified
+full-content cache lookup; corrected normal/oversized/derived-part storage budgets.
+Schema v2 includes a v1 migration retaining confirmations, attempts and holds.
+P3-R1 must consume the new APIs; their existence is not integrated app evidence.
+
+Checks:
+
+- Core `swift build` passed with Swift 6.4/Swift 6 mode and local macOS CLT, using
+  the P2 temporary-cache/scratch command recorded above. Same missing CLT framework
+  search-path warning; build exits 0. No unit/runtime executable was run.
+- Real Swift 6 typecheck passed for the eight portable source/support files below.
+  This checks access/concurrency/interfaces, beyond syntax parsing.
+- `swiftc -parse` passed for all 30 App Swift files; no app execution.
+- `python3 scripts/check_docs.py` passed (16 Markdown files); project plutil passed;
+  `git diff --check` passed. Staged whitespace is checked before each commit.
+
+Portable typecheck command:
+
+```sh
+swiftc -typecheck -swift-version 6 \
+  -module-cache-path /private/tmp/cloudified-p3-review-module-cache \
+  -I /private/tmp/cloudified-p2-compile/out/Products/Debug \
+  -Xcc '-fmodule-map-file=Packages/CloudifiedCore/Sources/CSQLite/module.modulemap' \
+  App/Adapters/PhotoLibrary/SourceRecipe.swift \
+  App/Adapters/PhotoLibrary/StreamingHasher.swift \
+  App/Adapters/PhotoLibrary/SharedExportPermit.swift \
+  App/Adapters/PhotoLibrary/ArchiveManifestBuilder.swift \
+  App/Adapters/PhotoLibrary/UploadPlanProducer.swift \
+  App/Adapters/PhotoLibrary/LosslessVideoPartSplitter.swift \
+  App/Adapters/System/StorageLayout.swift \
+  App/Presentation/Settings/SettingsViewState.swift
+```
+
+Limitations: no iOS SDK/PhotoKit typecheck locally. Cancellation callbacks, schema
+migration/reopen, split correctness, partial leases, storage peaks, actual providers
+and reinstall behavior remain untested. Recipe/order/source matching, admission,
+cache reuse and instrumentation wiring still require Builder P3-R1. No P4 acceptance
+or release tag. Decisions D24–D25; critical ownership is released for the assigned
+Builder paths while core/identity invariants remain Architect-owned.
+
+Direct correction commits: `7d8b0c4` (core), `37b8750` (media). Staged whitespace
+checks passed for both commits. Handoff documentation is published with annotated
+`v0.0.5-p3-review-untested`: reviewed/partially corrected implementation, P3-R1
+pending, no runtime or provider evidence and no release acceptance.
 
 ## Batch log template
 

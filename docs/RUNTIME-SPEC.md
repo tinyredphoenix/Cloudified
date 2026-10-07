@@ -86,6 +86,13 @@ Maintain a safety reserve (initial proposal 512 MiB) and measured transport over
 Use available-capacity APIs and real bytes written, not private PhotoKit `fileSize`
 KVC. Unknown resource sizes require progressive checks and cancellable export.
 
+2026-10-08 clarification: one bounded <=1,900,000,000-byte derived part of a verified
+leased original can coexist with the oversized master. Ordinary staging still has
+its own 1 GiB soft allowance; this avoids blocking Telegram slicing while Google
+owns the master, or starving small work because one large original is active.
+At most one part is reserved/staged globally. All allocations still pass actual
+capacity/reserve/copy-overhead admission; device peaks remain unmeasured.
+
 [Apple's upload-task documentation](https://developer.apple.com/documentation/foundation/urlsessionuploadtask?changes=_8&language=objc)
 says background file uploads copy the source to temporary storage. Budget for
 that extra allocation as well as app staging, Telegram's possible cache copies,

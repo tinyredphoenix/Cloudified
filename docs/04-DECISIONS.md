@@ -30,6 +30,8 @@ than repeatedly reconsider the user's chosen storage services.
 | D21 | Durable transport holds plus runtime cleanup fences | Protect file ownership across crash and actor reentrancy; one provider's unresolved transfers cannot gate the other's recovery |
 | D22 | Ready drains and explicit producer wakeups | Both workers start before either is awaited; one timer handles future deadlines; diagnostic invalidations cannot trigger empty-run loops |
 | D23 | Rotating diagnostics separate from durable evidence | Ten MiB is diagnostic payload budget; critical transitions/receipts/attempts/failures and first-test summaries remain reviewable |
+| D24 | One bounded derived part alongside the oversized original, ordinary staging accounted separately | Telegram can slice while Google owns the master; small work can proceed; actual disk/copy reserve and one-part cap still apply |
+| D25 | Pre-hash source failures are durable scoped obligations without fake jobs | Export failures before identity exists remain visible and counted; provider plan failures stay isolated |
 
 ## Version 1 defaults
 

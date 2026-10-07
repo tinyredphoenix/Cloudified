@@ -4,6 +4,12 @@ Architect-authored, 2026-10-07. Production implementation, compiler/static evide
 only; no device, provider, SQLite runtime or resource measurements yet. P3–P6 must
 connect real components before P7. No demo adapters, sample records or test suites.
 
+Updated 2026-10-08: [P3 review/correction assignment](P3-REVIEW.md) takes precedence
+for the current batch. P3 is not yet accepted for P4. Schema v2 adds pre-job source
+failures and verified content caching with migration from v1. `scannedAssetPage`
+supplies canonical producer IDs; `recordSourceFailure`/`sourceFailurePage` expose
+failures before content identity exists. P5 must present those real obligations too.
+
 ## File map and ownership
 
 Local Swift package: `Packages/CloudifiedCore/Package.swift`, product `CloudifiedCore`.
@@ -92,6 +98,21 @@ callbacks before ending ownership/removing bytes and release the reservation.
 Reuse a staged file via `acquire`; shared files may have multiple independent
 leases. The Engine acquires a durable transfer hold before sending and releases
 worker leases after return. Source must release every lease if prepare throws.
+
+Planning can publish a fresh UUID and persist measured `content: OriginalContent`.
+`acquireContent` finds that file using full SHA-256/SHA-1/length, not provider/job
+UUID. `acquire(expectedContent:)` validates its private verified metadata. Known
+content can use ContentIdentity.stagingFileID; hashValue is never a stable key.
+Only stagedUnavailable means a clean cache miss; a persistence/mismatch/deletion
+error cannot be silently treated as absent. Unverified old cache metadata is not
+proof of identity and must not be promoted without verification.
+
+Updated admission: ordinary staged/promised bytes share the 1 GiB soft allowance;
+one oversized original and one <=1,900,000,000-byte derived part may additionally
+be admitted. `derivedFromFileID` must name a verified staged unfragmented original,
+and the source holds its lease while slicing. Extra allocations still pass the
+512 MiB reserve and copy-overhead checks. A second part cannot be admitted until
+the previous part is safely released/removed. These remain unmeasured defaults.
 Keep at most one small ready resource ahead; do not pre-export the library.
 Manifest input is one bounded file <=1 MiB; ordinary input lengths/order must match
 the required originals. Live-pair inputs can contain two unmodified originals.
