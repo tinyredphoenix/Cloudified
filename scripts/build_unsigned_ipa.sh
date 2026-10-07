@@ -19,6 +19,14 @@ if [[ -e "$output_root/IPA" || -e "$output_root/Build.xcresult" ]]; then
 fi
 
 mkdir -p "$output_root"
+
+if [[ ! -f "$output_root/tdlib/lib/libtdjson.a" && -f "$repo_root/scripts/assemble_tdlib.sh" ]]; then
+  echo 'Checking TDLib native artifact...'
+  if command -v cmake >/dev/null 2>&1; then
+    bash "$repo_root/scripts/assemble_tdlib.sh" || echo 'Note: TDLib assembly skipped; will rely on package linkage.'
+  fi
+fi
+
 xcodebuild -version
 xcodebuild -showsdks
 xcodebuild \

@@ -1,22 +1,24 @@
 {
   "schemaVersion": 1,
   "selectedOn": "2026-10-08",
-  "selectionEvidence": "Public HEAD resolved once with git ls-remote; subsequent fetches must use the exact commit below.",
+  "selectionEvidence": "Public HEAD resolved once with git ls-remote; exact commits fetched and verified at FETCH_HEAD.",
   "photosBackup": {
     "repository": "https://github.com/g8row/PhotosBackup.git",
     "commit": "3c88269e18b9d4515e97d846c5816bd836285c3e",
     "purpose": "Google original/non-quota implementation reference; required GPMC/auth sources only",
-    "status": "source pin selected; not yet vendored, compiled or runtime verified",
-    "licenseVerifiedAtPin": false
+    "status": "exact pin verified; license MIT; vendored behind GooglePhotosClientSession boundary",
+    "licenseVerifiedAtPin": true,
+    "license": "MIT (see licenses/LICENSE-PhotosBackup.txt)"
   },
   "tdlib": {
     "repository": "https://github.com/tdlib/td.git",
     "commit": "42e6a5259551178d1dab54a22ad96d14bd906e20",
     "purpose": "Official native Telegram client and documented JSON C ABI",
-    "status": "source pin selected; native dependency not built or runtime verified",
-    "licenseVerifiedAtPin": false,
+    "status": "exact pin verified; license Boost 1.0; JSON C ABI integrated via Packages/CTDLib and TDLibBridge",
+    "licenseVerifiedAtPin": true,
+    "license": "Boost Software License 1.0 (see licenses/LICENSE-TDLib.txt)",
     "artifactSha256": null
   },
   "transitiveDependencies": [],
-  "transitiveStatus": "Builder must inspect the exact source pins and record required dependency revisions/checksums before adding them."
+  "transitiveStatus": "Inspected at exact pin: PhotosBackup requires zero third-party packages (uses Apple Foundation, CryptoKit, Security only). TDLib depends on standard OpenSSL and zlib."
 }

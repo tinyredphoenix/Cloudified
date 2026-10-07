@@ -1,0 +1,206 @@
+import Foundation
+import CloudifiedCore
+
+/// App-owned actor isolating the pinned GPMCClient implementation and credential vault.
+/// Handles session lifecycle, authenticated RPC dispatch, and classified error diagnostics
+/// while preserving the boundaries required before Phase 4-B critical upload integration.
+actor GooglePhotosClientSession {
+    private let sessionID: String
+    private let credentialStore: KeychainCredentialStore
+    private var client: GPMCClient?
+    private var isConfigured = false
+
+    init(
+        sessionID: String = "primary",
+        credentialStore: KeychainCredentialStore = KeychainCredentialStore()
+    ) {
+        self.sessionID = sessionID
+        self.credentialStore = credentialStore
+    }
+
+    /// Whether a credential has been configured and loaded for this session.
+    var hasConfiguredCredential: Bool {
+        isConfigured
+    }
+
+    /// Connects using an existing stored credential from Keychain.
+    func loadSavedSession() async throws {
+        let cred = try credentialStore.loadGoogleCredential(forSession: sessionID)
+        let gpmc = try GPMCClient(authData: cred.authData)
+        self.client = gpmc
+        self.isConfigured = true
+    }
+
+    /// Connects by exchanging a freshly acquired OAuth authorization token.
+    func connect(oauthToken: String) async throws -> StoredGoogleCredential {
+        let result = try await GoogleTokenExchange.run(oauthToken: oauthToken)
+        let cred = StoredGoogleCredential(
+            androidId: result.androidId,
+            email: result.email,
+            masterToken: result.masterToken,
+            authData: result.authData,
+            connectedAt: Date()
+        )
+        try credentialStore.saveGoogleCredential(cred, forSession: sessionID)
+
+        let gpmc = try GPMCClient(authData: cred.authData)
+        self.client = gpmc
+        self.isConfigured = true
+        return cred
+    }
+
+    /// Clears active client state and removes stored credentials from Keychain.
+    func disconnect() throws {
+        client = nil
+        isConfigured = false
+        try credentialStore.deleteGoogleCredential(forSession: sessionID)
+    }
+
+    private func requireClient() throws -> GPMCClient {
+        guard let client else {
+            throw SafeFailure(.authentication, domain: .google, cause: .loginRequired)
+        }
+        return client
+    }
+
+    /// Authenticates or refreshes the underlying access token.
+    func authenticate() async throws {
+        let client = try requireClient()
+        do {
+            try await client.authenticate()
+        } catch let err as GPMCError {
+            throw Self.classify(err)
+        }
+    }
+
+    /// Validates read access by running an authenticated dry-run hash check.
+    func validateReadAccess() async throws {
+        let client = try requireClient()
+        do {
+            try await client.validateReadAccess()
+        } catch let err as GPMCError {
+            throw Self.classify(err)
+        }
+    }
+
+    /// Checks remote presence by SHA-1 hash without uploading.
+    func checkPresence(sha1: Data, asLivePhotoMotion: Bool = false) async throws -> String? {
+        let client = try requireClient()
+        do {
+            return try await client.remoteMediaKey(sha1: sha1, asLivePhotoMotion: asLivePhotoMotion)
+        } catch let err as GPMCError {
+            throw Self.classify(err)
+        }
+    }
+
+    /// Prepares an upload session for a standard photo or video original.
+    func prepareUpload(
+        file: URL,
+        filename: String,
+        modified: Date? = nil,
+        phase: @escaping @Sendable (UploadPhase) -> Void
+    ) async throws -> UploadPreparation {
+        let client = try requireClient()
+        do {
+            return try await client.prepareUpload(file: file, filename: filename, modified: modified, phase: phase)
+        } catch let err as GPMCError {
+            throw Self.classify(err)
+        }
+    }
+
+    /// Prepares an upload session for the motion video of a Live Photo.
+    func prepareMotionUpload(
+        file: URL,
+        filename: String,
+        modified: Date? = nil,
+        stillHash: Data,
+        phase: @escaping @Sendable (UploadPhase) -> Void
+    ) async throws -> UploadPreparation {
+        let client = try requireClient()
+        do {
+            return try await client.prepareMotionUpload(
+                file: file,
+                filename: filename,
+                modified: modified,
+                stillHash: stillHash,
+                phase: phase
+            )
+        } catch let err as GPMCError {
+            throw Self.classify(err)
+        }
+    }
+
+    /// Transfers file bytes to the resumable upload URL using the configured transport.
+    func transfer(
+        prepared: PreparedUpload,
+        file: URL,
+        transferID: UUID,
+        foreground: Bool = false,
+        phase: @escaping @Sendable (UploadPhase) -> Void
+    ) async throws -> PreparedUpload {
+        let client = try requireClient()
+        do {
+            return try await client.transfer(prepared, file: file, transferID: transferID, foreground: foreground, phase: phase)
+        } catch let err as GPMCError {
+            throw Self.classify(err)
+        }
+    }
+
+    /// Commits the upload receipt to Google Photos.
+    func commit(
+        prepared: PreparedUpload,
+        useQuota: Bool,
+        saver: Bool,
+        pairedStillHash: Data? = nil,
+        phase: @escaping @Sendable (UploadPhase) -> Void
+    ) async throws -> UploadOutcome {
+        let client = try requireClient()
+        do {
+            return try await client.commit(prepared, useQuota: useQuota, saver: saver, pairedStillHash: pairedStillHash, phase: phase)
+        } catch let err as GPMCError {
+            throw Self.classify(err)
+        }
+    }
+
+    /// Cancels a running background transfer.
+    func cancelTransfer(_ transferID: UUID) async {
+        guard let client else { return }
+        await client.cancelTransfer(transferID)
+    }
+
+    /// Forgets a completed transfer token association.
+    func forgetTransfer(_ transferID: UUID) async {
+        guard let client else { return }
+        await client.forgetTransfer(transferID)
+    }
+
+    // MARK: - Error Classification
+
+    /// Maps GPMC protocol errors to Core classified SafeFailure values.
+    static func classify(_ error: GPMCError) -> SafeFailure {
+        switch error.kind {
+        case .credentialRejected:
+            return SafeFailure(.authentication, domain: .google, cause: .loginRequired)
+        case .tokenBound:
+            return SafeFailure(.authentication, domain: .google, cause: .loginRequired)
+        case .storageFull:
+            return SafeFailure(.quota, domain: .google, cause: .quotaExceeded)
+        case .transport:
+            return SafeFailure(.connectivity, domain: .google, cause: .offline)
+        case .invalidUploadReceipt:
+            return SafeFailure(.transfer, domain: .google, cause: .providerRejected)
+        case .pairedPhotoMissing:
+            return SafeFailure(.transfer, domain: .google, cause: .unknown)
+        case .server(let code):
+            if code == 429 {
+                return SafeFailure(.rateLimit, domain: .google, code: code, cause: .serverRateLimit)
+            }
+            if code == 408 {
+                return SafeFailure(.timeout, domain: .google, code: code, cause: .deadlineExceeded)
+            }
+            return SafeFailure(.transfer, domain: .google, code: code, cause: .providerRejected)
+        case .malformed:
+            return SafeFailure(.transfer, domain: .google, cause: .formatRejected)
+        }
+    }
+}

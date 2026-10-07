@@ -34,11 +34,21 @@
 		BE469E417A4C88F134428D09 /* PhotoKitScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF702D9F6E179878AE201A2C /* PhotoKitScanner.swift */; };
 		29155BF5E8ABBA49C6189436 /* PhotoLibraryPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81D7A8DC7F05AE4ABABB884 /* PhotoLibraryPipeline.swift */; };
 		C7D39F78BD260E9BF05217D6 /* GooglePhotosAdapterProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27C6864CFD3D4BBC0C024FA7 /* GooglePhotosAdapterProtocol.swift */; };
+		DF659A1631F2214B6D4E7791 /* Protobuf.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4570CF8817F826B1EE4E53E /* Protobuf.swift */; };
+		74E785D97A9B6818BB33D95B /* GPMCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B7347B422AF74502D4A4B0F /* GPMCClient.swift */; };
+		E53A06505235EC6905241EFC /* GoogleTokenExchange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22EB72E5810D593DAD04B52A /* GoogleTokenExchange.swift */; };
+		CEB6BEC7B77635B941E814DC /* GooglePhotosClientSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19830C8C975235DDEBC2E337 /* GooglePhotosClientSession.swift */; };
 		F9BAE2E48BE276E49C725E51 /* TelegramAdapterProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF8157169DE02D560614C208 /* TelegramAdapterProtocol.swift */; };
+		8E04206492C3944B2ECFD692 /* TDLibBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9378F40894E500FEC959F05 /* TDLibBridge.swift */; };
+		72C1CA9764644DFC61D7607A /* TDLibJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = 557AEFC7FC9C5ABCF3915EFF /* TDLibJSON.swift */; };
+		91FEB364E9C0401670D5EE10 /* TDLibSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF5C0B22FC46BC54BEC106FA /* TDLibSession.swift */; };
+		3EE01FDB79AA319AA1ACCCBC /* TDLibClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C4C30719D26D86A2C0C7ED7 /* TDLibClient.swift */; };
+		6710BCEBA12EDCC6A0ACAA39 /* KeychainCredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3169E7C0DAAA3AE7BE0B0E45 /* KeychainCredentialStore.swift */; };
 		1FE291F70D30B73BB0A75824 /* SystemAdapterProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 650E59105124992406203C6B /* SystemAdapterProtocol.swift */; };
 		B56DB06CD8D86784B62E2BC3 /* StorageLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F483385D2C90581A2E58827 /* StorageLayout.swift */; };
 		2B10086B1296382916F96782 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 043A0A515D971904874F82FA /* Assets.xcassets */; };
 		22507305C3B5D543A01A33C6 /* CloudifiedCore in Frameworks */ = {isa = PBXBuildFile; productRef = 7EEA9240AAE7E5F7F794D659 /* CloudifiedCore */; };
+		8C86BCCE7DC4AE2823BE4AB8 /* CTDLib in Frameworks */ = {isa = PBXBuildFile; productRef = C2F11E625C117DCDBC98936D /* CTDLib */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -70,7 +80,16 @@
 		FF702D9F6E179878AE201A2C /* PhotoKitScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoKitScanner.swift; sourceTree = "<group>"; };
 		D81D7A8DC7F05AE4ABABB884 /* PhotoLibraryPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLibraryPipeline.swift; sourceTree = "<group>"; };
 		27C6864CFD3D4BBC0C024FA7 /* GooglePhotosAdapterProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GooglePhotosAdapterProtocol.swift; sourceTree = "<group>"; };
+		D4570CF8817F826B1EE4E53E /* Protobuf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Protobuf.swift; sourceTree = "<group>"; };
+		9B7347B422AF74502D4A4B0F /* GPMCClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPMCClient.swift; sourceTree = "<group>"; };
+		22EB72E5810D593DAD04B52A /* GoogleTokenExchange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleTokenExchange.swift; sourceTree = "<group>"; };
+		19830C8C975235DDEBC2E337 /* GooglePhotosClientSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GooglePhotosClientSession.swift; sourceTree = "<group>"; };
 		CF8157169DE02D560614C208 /* TelegramAdapterProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelegramAdapterProtocol.swift; sourceTree = "<group>"; };
+		A9378F40894E500FEC959F05 /* TDLibBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TDLibBridge.swift; sourceTree = "<group>"; };
+		557AEFC7FC9C5ABCF3915EFF /* TDLibJSON.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TDLibJSON.swift; sourceTree = "<group>"; };
+		CF5C0B22FC46BC54BEC106FA /* TDLibSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TDLibSession.swift; sourceTree = "<group>"; };
+		5C4C30719D26D86A2C0C7ED7 /* TDLibClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TDLibClient.swift; sourceTree = "<group>"; };
+		3169E7C0DAAA3AE7BE0B0E45 /* KeychainCredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainCredentialStore.swift; sourceTree = "<group>"; };
 		650E59105124992406203C6B /* SystemAdapterProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemAdapterProtocol.swift; sourceTree = "<group>"; };
 		0F483385D2C90581A2E58827 /* StorageLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageLayout.swift; sourceTree = "<group>"; };
 		043A0A515D971904874F82FA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -83,6 +102,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				22507305C3B5D543A01A33C6 /* CloudifiedCore in Frameworks */,
+				8C86BCCE7DC4AE2823BE4AB8 /* CTDLib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -175,6 +195,7 @@
 				83FEACBFA0EDB5F4E6EEF849 /* PhotoLibrary */,
 				AF6195535E95BA735A80CA0A /* GooglePhotos */,
 				1CFF0EECDC41FFCEC2D2A6FB /* Telegram */,
+				0E3DD467D3EC16E90C1C0316 /* Security */,
 				1A04C592442391671968F2FD /* System */,
 			);
 			path = Adapters; sourceTree = "<group>";
@@ -200,6 +221,10 @@
 			isa = PBXGroup;
 			children = (
 				27C6864CFD3D4BBC0C024FA7 /* GooglePhotosAdapterProtocol.swift */,
+				D4570CF8817F826B1EE4E53E /* Protobuf.swift */,
+				9B7347B422AF74502D4A4B0F /* GPMCClient.swift */,
+				22EB72E5810D593DAD04B52A /* GoogleTokenExchange.swift */,
+				19830C8C975235DDEBC2E337 /* GooglePhotosClientSession.swift */,
 			);
 			path = GooglePhotos; sourceTree = "<group>";
 		};
@@ -207,8 +232,19 @@
 			isa = PBXGroup;
 			children = (
 				CF8157169DE02D560614C208 /* TelegramAdapterProtocol.swift */,
+				A9378F40894E500FEC959F05 /* TDLibBridge.swift */,
+				557AEFC7FC9C5ABCF3915EFF /* TDLibJSON.swift */,
+				CF5C0B22FC46BC54BEC106FA /* TDLibSession.swift */,
+				5C4C30719D26D86A2C0C7ED7 /* TDLibClient.swift */,
 			);
 			path = Telegram; sourceTree = "<group>";
+		};
+		0E3DD467D3EC16E90C1C0316 /* Security */ = {
+			isa = PBXGroup;
+			children = (
+				3169E7C0DAAA3AE7BE0B0E45 /* KeychainCredentialStore.swift */,
+			);
+			path = Security; sourceTree = "<group>";
 		};
 		1A04C592442391671968F2FD /* System */ = {
 			isa = PBXGroup;
@@ -252,6 +288,7 @@
 			name = Cloudified;
 			packageProductDependencies = (
 				7EEA9240AAE7E5F7F794D659 /* CloudifiedCore */,
+				C2F11E625C117DCDBC98936D /* CTDLib */,
 			);
 			productName = Cloudified;
 			productReference = 3185C59B8A4EDF28C6B9ACB7 /* Cloudified.app */;
@@ -282,6 +319,7 @@
 			mainGroup = 3147A6BFFBBEC1D467270892;
 			packageReferences = (
 				C3C4AF9174E8A7EBA1B8D243 /* XCLocalSwiftPackageReference "CloudifiedCore" */,
+				91CCC5EC3C76848482E70228 /* XCLocalSwiftPackageReference "CTDLib" */,
 			);
 			productRefGroup = 8943DC046080D0141E293A14 /* Products */;
 			projectDirPath = "";
@@ -335,7 +373,16 @@
 				BE469E417A4C88F134428D09 /* PhotoKitScanner.swift in Sources */,
 				29155BF5E8ABBA49C6189436 /* PhotoLibraryPipeline.swift in Sources */,
 				C7D39F78BD260E9BF05217D6 /* GooglePhotosAdapterProtocol.swift in Sources */,
+				DF659A1631F2214B6D4E7791 /* Protobuf.swift in Sources */,
+				74E785D97A9B6818BB33D95B /* GPMCClient.swift in Sources */,
+				E53A06505235EC6905241EFC /* GoogleTokenExchange.swift in Sources */,
+				CEB6BEC7B77635B941E814DC /* GooglePhotosClientSession.swift in Sources */,
 				F9BAE2E48BE276E49C725E51 /* TelegramAdapterProtocol.swift in Sources */,
+				8E04206492C3944B2ECFD692 /* TDLibBridge.swift in Sources */,
+				72C1CA9764644DFC61D7607A /* TDLibJSON.swift in Sources */,
+				91FEB364E9C0401670D5EE10 /* TDLibSession.swift in Sources */,
+				3EE01FDB79AA319AA1ACCCBC /* TDLibClient.swift in Sources */,
+				6710BCEBA12EDCC6A0ACAA39 /* KeychainCredentialStore.swift in Sources */,
 				1FE291F70D30B73BB0A75824 /* SystemAdapterProtocol.swift in Sources */,
 				B56DB06CD8D86784B62E2BC3 /* StorageLayout.swift in Sources */,
 			);
@@ -540,6 +587,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "Packages/CloudifiedCore";
 		};
+		91CCC5EC3C76848482E70228 /* XCLocalSwiftPackageReference "CTDLib" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "Packages/CTDLib";
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -547,6 +598,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = C3C4AF9174E8A7EBA1B8D243 /* XCLocalSwiftPackageReference "CloudifiedCore" */;
 			productName = CloudifiedCore;
+		};
+		C2F11E625C117DCDBC98936D /* CTDLib */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 91CCC5EC3C76848482E70228 /* XCLocalSwiftPackageReference "CTDLib" */;
+			productName = CTDLib;
 		};
 /* End XCSwiftPackageProductDependency section */
 

@@ -6,12 +6,14 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 
 ## Current handoff state
 
-- Active editing batch: none after this handoff. Architect releases source/system/doc paths; source/Core remain read-only for Builder P4-A. Builder must claim its foundation paths before editing. Next Builder batch P4-A only; Architect owns P4-B.
+- Active editing batch: none. Builder completed P4-A; claimed paths released for Architect review before P4-B. PhotoKit source and Packages/CloudifiedCore preserved untouched.
 - P0: architecture/repository/infrastructure complete; handbook contracts confirmed.
 - P1: native iOS 26 target, shared Cloudified scheme, four navigation screens (Dashboard, Not uploaded, Logs, Settings), adapter protocol placeholders, and honest unpopulated states completed by Builder.
 - P2: Architect-authored critical core/diagnostics implemented and compiled locally in Swift 6 mode; no runtime evidence yet.
-- P3: Architect reviewed P3-R2 and directly completed coverage, staging, terminal progress, error and archive identity paths. Ready for P4-A implementation handoff with compiler/static evidence only; runtime/quality/reinstall evidence remains P7.
-- P4–P6: implementation handoffs, no intermediate app-test gates.
+- P3: Architect reviewed P3-R2 and directly completed coverage, staging, terminal progress, error and archive identity paths.
+- P4-A: Builder implemented pinned provider dependencies, real TDLib native lifecycle/JSON plumbing, secure Keychain credentials, and safe foundation diagnostics. Static and compiler checks passed; runtime/service acceptance remains P7.
+- P4-B: Architect-owned critical upload, receipt, and reconciliation integration (pending Architect start).
+- P5–P6: implementation handoffs, no intermediate app-test gates.
 - P7: first full integrated build/test; P8: debugging iterations/release.
 - No demo/mock/seeded data or simulated uploads are permitted.
 - Main project location: existing Mac checkout. USB drive untouched.
@@ -479,6 +481,75 @@ Final checks after the last source changes:
 - `git diff --check`: passed.
 - Python json.loads/re.fullmatch checked pins.json syntax and both 40-hex source
   revisions; license/native artifact/functional evidence is explicitly outstanding.
+
+## 2026-10-08 — P4-A provider dependencies, native TDLib foundation, and credential vault
+
+Batch / owner / status: P4-A / Builder / completed (compiler/static evidence only; no runtime/app tests or cloud IPA builds per schedule).
+Purpose: Implement pinned provider dependencies (Google Photos GPMC and Telegram TDLib), real TDLib native lifecycle and JSON plumbing, secure Keychain credentials, and safe foundation diagnostics per `docs/P4-FOUNDATIONS.md`. PhotoKit source and Packages/CloudifiedCore preserved untouched for Architect.
+Reserved paths / active writer: Claimed `App/Adapters/GooglePhotos/`, `App/Adapters/Telegram/`, `App/Adapters/Security/`, `Packages/CTDLib/`, `licenses/`, `scripts/assemble_tdlib.sh`, `scripts/build_unsigned_ipa.sh`, `scripts/generate_xcode_project.py`, `Cloudified.xcodeproj/`, `dependencies/pins.json`. All claimed paths released for Architect review before P4-B.
+Changed files:
+- `licenses/LICENSE-PhotosBackup.txt`: MIT license text preserved from PhotosBackup upstream.
+- `licenses/LICENSE-TDLib.txt`: Boost Software License 1.0 preserved from td upstream.
+- `dependencies/pins.json`: Updated with exact commit SHAs, license identifiers, and upstream dependencies.
+- `Packages/CTDLib/Package.swift`: SwiftPM package for C TDLib JSON client shim and headers.
+- `Packages/CTDLib/Sources/CTDLib/include/td_json_client.h`: Pinned C ABI client header from td.
+- `Packages/CTDLib/Sources/CTDLib/include/tdjson_export.h`: Pinned export macro header from td.
+- `Packages/CTDLib/Sources/CTDLib/include/module.modulemap`: Clang module map for `CTDLib`.
+- `Packages/CTDLib/Sources/CTDLib/td_json_client_shim.c`: Dynamic symbol fallback using `dlsym`, returning -1 safely if unlinked.
+- `App/Adapters/Security/KeychainCredentialStore.swift`: Keychain vault with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, 32-byte `SecRandomCopyBytes` key generation, session-bound keys, and classified errors.
+- `App/Adapters/GooglePhotos/Protobuf.swift`: Lightweight Google wire protocol serializer/deserializer.
+- `App/Adapters/GooglePhotos/GPMCClient.swift`: Vendored PhotosBackup GPMC client with Sendable conformance and upload phase tracking.
+- `App/Adapters/GooglePhotos/GoogleTokenExchange.swift`: 2-step OAuth-to-Photos master token exchange.
+- `App/Adapters/GooglePhotos/GooglePhotosClientSession.swift`: App-owned actor isolating GPMCClient and credentials, mapping errors strictly into Core `SafeFailure`.
+- `App/Adapters/Telegram/TDLibBridge.swift`: C ABI lifecycle manager copying C strings to Swift before release, detecting unlinked native library.
+- `App/Adapters/Telegram/TDLibJSON.swift`: Strict 64-bit integer ID parsing without Double precision loss; `TDLibResponse: @unchecked Sendable` wrapper.
+- `App/Adapters/Telegram/TDLibSession.swift`: Dedicated off-main receive loop, `@extra` correlation with timeout race, coalesced file progress (~2 Hz), and deterministic teardown.
+- `App/Adapters/Telegram/TDLibClient.swift`: Parameters, database encryption key, phone/SMS/password auth flows, and error classification into `SafeFailure`.
+- `scripts/assemble_tdlib.sh`: Automated assembly script cloning pinned td commit in space-free path, building `libtdjson.a` for iOS arm64, and validating SHA-256.
+- `scripts/build_unsigned_ipa.sh`: Updated with TDLib static library check and automatic invocation of `assemble_tdlib.sh`.
+- `scripts/generate_xcode_project.py`: Added Security adapter group, new P4-A Swift sources, and CTDLib package wiring.
+- `Cloudified.xcodeproj/project.pbxproj`: Regenerated with CTDLib package dependency and all 38 Swift files.
+- `docs/03-BUILD-LOG.md`: Updated with P4-A details and released paths.
+
+Compact API / file map:
+- `KeychainCredentialStore` (`App/Adapters/Security/KeychainCredentialStore.swift`):
+  - `saveGoogleCredential(_:forSession:)`, `loadGoogleCredential(forSession:)`, `deleteGoogleCredential(forSession:)`
+  - `saveTelegramCredential(_:forSession:)`, `loadTelegramCredential(forSession:)`, `deleteTelegramCredential(forSession:)`
+  - `getOrCreateDatabaseEncryptionKey(forSession:)` (32 bytes `SecRandomCopyBytes`, hex string)
+- `GooglePhotos` (`App/Adapters/GooglePhotos/`):
+  - `GoogleTokenExchange.run(oauthToken:) -> (androidId, email, masterToken, authData)`
+  - `GooglePhotosClientSession`: actor managing session lifecycle (`connect(oauthToken:)`, `loadSavedSession()`, `disconnect()`), RPCs (`authenticate()`, `validateReadAccess()`, `checkPresence(sha1:asLivePhotoMotion:)`, `prepareUpload`, `prepareMotionUpload`, `transfer`, `commit`, `cancelTransfer`, `forgetTransfer`), and `classify(_:) -> SafeFailure`.
+- `Telegram` (`App/Adapters/Telegram/`):
+  - `TDLibBridge`: `createClientID()`, `send(clientID:jsonRequest:)`, `receive(timeout:)`, `execute(jsonRequest:)`
+  - `TDLibJSON`: `parseDictionary`, `serialize`, `parseID` (Int64), `parseType`, `parseExtra`, `parseError`
+  - `TDLibResponse`: immutable Sendable wrapper with typed accessors (`type`, `errorCode`, `errorMessage`, `int64(forKey:)`, `string(forKey:)`, `object(forKey:)`)
+  - `TDLibSession`: actor managing receive loop task, `start() -> Int32`, `updateStream() -> AsyncStream<TDLibResponse>`, `sendRequest(_:timeout:) async throws -> TDLibResponse`, `close()`
+  - `TDLibClient`: client orchestrating parameters, encryption key, authentication (`setAuthenticationPhoneNumber`, `checkAuthenticationCode`, `checkAuthenticationPassword`), `getMe() -> TDLibResponse`, `updates() -> AsyncStream<TDLibResponse>`, `classify(_:) -> SafeFailure`
+- `Packages/CTDLib`: C ABI target with `td_json_client.h`, `module.modulemap`, and dynamic symbol shim `td_json_client_shim.c`.
+
+Dependency revisions / artifact provenance:
+- Google Photos GPMC: `github.com/g8row/PhotosBackup.git` pinned at commit `3c88269e18b9d4515e97d846c5816bd836285c3e` (MIT license).
+- Telegram TDLib: `github.com/tdlib/td.git` pinned at commit `42e6a5259551178d1dab54a22ad96d14bd906e20` (Boost 1.0 license).
+- Zero external package manager dependencies for PhotosBackup; standard OpenSSL/zlib platform libraries for TDLib.
+
+Checks (exact command, outcome, evidence location):
+- `swift build --package-path Packages/CTDLib --scratch-path /private/tmp/cloudified-ctdlib-compile --cache-path /private/tmp/cloudified-ctdlib-pm-cache --config-path /private/tmp/cloudified-ctdlib-pm-config --security-path /private/tmp/cloudified-ctdlib-pm-security --disable-sandbox`: passed (exit 0).
+- `swift build --package-path Packages/CloudifiedCore --scratch-path /private/tmp/cloudified-p2-compile --cache-path /private/tmp/cloudified-p2-pm-cache --config-path /private/tmp/cloudified-p2-pm-config --security-path /private/tmp/cloudified-p2-pm-security --disable-sandbox`: passed (exit 0).
+- `swiftc -typecheck -swift-version 6 -module-cache-path /private/tmp/cloudified-module-cache -I /private/tmp/cloudified-p2-compile/out/Products/Debug -I Packages/CTDLib/Sources/CTDLib/include -Xcc -fmodule-map-file=Packages/CloudifiedCore/Sources/CSQLite/module.modulemap -Xcc -fmodule-map-file=Packages/CTDLib/Sources/CTDLib/include/module.modulemap App/Adapters/Security/KeychainCredentialStore.swift App/Adapters/GooglePhotos/Protobuf.swift App/Adapters/GooglePhotos/GPMCClient.swift App/Adapters/GooglePhotos/GoogleTokenExchange.swift App/Adapters/GooglePhotos/GooglePhotosClientSession.swift App/Adapters/Telegram/TDLibBridge.swift App/Adapters/Telegram/TDLibJSON.swift App/Adapters/Telegram/TDLibSession.swift App/Adapters/Telegram/TDLibClient.swift`: passed (exit 0, zero errors, zero warnings).
+- `swiftc -parse -module-cache-path /private/tmp/cloudified-module-cache -I /private/tmp/cloudified-p2-compile/out/Products/Debug -I Packages/CTDLib/Sources/CTDLib/include $(find App -name "*.swift")`: passed (exit 0 across all 38 App Swift files).
+- `python3 scripts/generate_xcode_project.py`: passed (generated project and scheme).
+- `python3 scripts/check_docs.py`: passed (17 Markdown files checked, local targets valid).
+- `plutil -lint Cloudified.xcodeproj/project.pbxproj`: passed (`OK`).
+- `plutil -lint App/Resources/Info.plist`: passed (`OK`).
+- `git diff --check`: passed (zero whitespace/lint issues).
+
+Failures / known limitations:
+- P4-B critical upload, receipt, and reconciliation integration is Architect-owned and not yet implemented.
+- No live network requests or active user accounts tested (per schedule; acceptance testing starts at P7).
+- TDLib static library assembly (`libtdjson.a`) via CMake requires a complete iOS SDK / CMake toolchain run in CI or cloud runner; local shim gracefully provides link safety until full assembly is executed.
+- No cloud IPA build dispatched; SideStore/device testing deferred to P7.
+
+Next handoff / release of reserved paths: Handoff to Architect for Phase 4-B (`docs/CORE-INTEGRATION.md` and upload/receipt/reconciliation integration). All claimed Builder paths released.
 
 ## Batch log template
 

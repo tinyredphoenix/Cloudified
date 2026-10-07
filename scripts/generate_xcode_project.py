@@ -27,6 +27,7 @@ groups = [
     ("photo_library", "PhotoLibrary", "adapters", "PhotoLibrary"),
     ("google_photos", "GooglePhotos", "adapters", "GooglePhotos"),
     ("telegram", "Telegram", "adapters", "Telegram"),
+    ("security", "Security", "adapters", "Security"),
     ("system", "System", "adapters", "System"),
     ("resources", "Resources", "app", "Resources"),
     ("products", "Products", "main", "")
@@ -62,7 +63,16 @@ sources = [
     ("PhotoKitScanner.swift", "photo_library"),
     ("PhotoLibraryPipeline.swift", "photo_library"),
     ("GooglePhotosAdapterProtocol.swift", "google_photos"),
+    ("Protobuf.swift", "google_photos"),
+    ("GPMCClient.swift", "google_photos"),
+    ("GoogleTokenExchange.swift", "google_photos"),
+    ("GooglePhotosClientSession.swift", "google_photos"),
     ("TelegramAdapterProtocol.swift", "telegram"),
+    ("TDLibBridge.swift", "telegram"),
+    ("TDLibJSON.swift", "telegram"),
+    ("TDLibSession.swift", "telegram"),
+    ("TDLibClient.swift", "telegram"),
+    ("KeychainCredentialStore.swift", "security"),
     ("SystemAdapterProtocol.swift", "system"),
     ("StorageLayout.swift", "system")
 ]
@@ -81,6 +91,10 @@ prod_ref_id = gid("Product_Cloudified_App")
 pkg_ref_id = gid("LocalPackage_CloudifiedCore")
 pkg_prod_id = gid("ProductDep_CloudifiedCore")
 pkg_buildfile_id = gid("BuildFile_CloudifiedCore_Frameworks")
+
+ctdlib_pkg_ref_id = gid("LocalPackage_CTDLib")
+ctdlib_pkg_prod_id = gid("ProductDep_CTDLib")
+ctdlib_pkg_buildfile_id = gid("BuildFile_CTDLib_Frameworks")
 
 proj_cfg_list = gid("ProjConfigList")
 proj_cfg_dbg = gid("ProjConfigDebug")
@@ -108,6 +122,7 @@ for rname, _, _, in_phase in resources:
         build_file_lines.append(f"\t\t{bf_id} /* {rname} in Resources */ = {{isa = PBXBuildFile; fileRef = {fr_id} /* {rname} */; }};")
 
 build_file_lines.append(f"\t\t{pkg_buildfile_id} /* CloudifiedCore in Frameworks */ = {{isa = PBXBuildFile; productRef = {pkg_prod_id} /* CloudifiedCore */; }};")
+build_file_lines.append(f"\t\t{ctdlib_pkg_buildfile_id} /* CTDLib in Frameworks */ = {{isa = PBXBuildFile; productRef = {ctdlib_pkg_prod_id} /* CTDLib */; }};")
 
 # Generate PBXFileReference entries
 file_ref_lines = [
@@ -203,6 +218,7 @@ pbxproj_content = f"""// !$*UTF8*$!
 \t\t\tbuildActionMask = 2147483647;
 \t\t\tfiles = (
 \t\t\t\t{pkg_buildfile_id} /* CloudifiedCore in Frameworks */,
+\t\t\t\t{ctdlib_pkg_buildfile_id} /* CTDLib in Frameworks */,
 \t\t\t);
 \t\t\trunOnlyForDeploymentPostprocessing = 0;
 \t\t}};
@@ -228,6 +244,7 @@ pbxproj_content = f"""// !$*UTF8*$!
 \t\t\tname = Cloudified;
 \t\t\tpackageProductDependencies = (
 \t\t\t\t{pkg_prod_id} /* CloudifiedCore */,
+\t\t\t\t{ctdlib_pkg_prod_id} /* CTDLib */,
 \t\t\t);
 \t\t\tproductName = Cloudified;
 \t\t\tproductReference = {prod_ref_id} /* Cloudified.app */;
@@ -258,6 +275,7 @@ pbxproj_content = f"""// !$*UTF8*$!
 \t\t\tmainGroup = {gid("Group_main")};
 \t\t\tpackageReferences = (
 \t\t\t\t{pkg_ref_id} /* XCLocalSwiftPackageReference "CloudifiedCore" */,
+\t\t\t\t{ctdlib_pkg_ref_id} /* XCLocalSwiftPackageReference "CTDLib" */,
 \t\t\t);
 \t\t\tproductRefGroup = {gid("Group_products")} /* Products */;
 \t\t\tprojectDirPath = "";
@@ -487,6 +505,10 @@ pbxproj_content = f"""// !$*UTF8*$!
 \t\t\tisa = XCLocalSwiftPackageReference;
 \t\t\trelativePath = "Packages/CloudifiedCore";
 \t\t}};
+\t\t{ctdlib_pkg_ref_id} /* XCLocalSwiftPackageReference "CTDLib" */ = {{
+\t\t\tisa = XCLocalSwiftPackageReference;
+\t\t\trelativePath = "Packages/CTDLib";
+\t\t}};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -494,6 +516,11 @@ pbxproj_content = f"""// !$*UTF8*$!
 \t\t\tisa = XCSwiftPackageProductDependency;
 \t\t\tpackage = {pkg_ref_id} /* XCLocalSwiftPackageReference "CloudifiedCore" */;
 \t\t\tproductName = CloudifiedCore;
+\t\t}};
+\t\t{ctdlib_pkg_prod_id} /* CTDLib */ = {{
+\t\t\tisa = XCSwiftPackageProductDependency;
+\t\t\tpackage = {ctdlib_pkg_ref_id} /* XCLocalSwiftPackageReference "CTDLib" */;
+\t\t\tproductName = CTDLib;
 \t\t}};
 /* End XCSwiftPackageProductDependency section */
 
