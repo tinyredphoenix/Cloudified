@@ -7,6 +7,17 @@ import CloudifiedCore
 public enum PhotoKitScanner {
     public static let maxPageSize = 200
 
+    /// Refetch a current PhotoKit snapshot; checking an already fetched immutable
+    /// PHAsset again cannot establish that it stayed unchanged during export.
+    public static func verifyGeneration(_ identity: AssetIdentity) throws {
+        guard let current = PHAsset.fetchAssets(withLocalIdentifiers: [identity.localIdentifier], options: nil).firstObject else {
+            throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing)
+        }
+        guard computeGeneration(for: current) == identity.generation else {
+            throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .contentChanged)
+        }
+    }
+
     /// Computes a canonical deterministic generation hash for a local PHAsset.
     public static func computeGeneration(for asset: PHAsset) -> String {
         var descriptor = "\(asset.localIdentifier):\(asset.pixelWidth)x\(asset.pixelHeight):\(asset.mediaType.rawValue)"
@@ -91,6 +102,7 @@ public enum PhotoKitScanner {
         page.reserveCapacity(maxPageSize)
 
         for i in 0..<totalCount {
+            try Task.checkCancellation()
             let asset = fetchResult.object(at: i)
             let generation = computeGeneration(for: asset)
             let mediaKind = kind(for: asset)

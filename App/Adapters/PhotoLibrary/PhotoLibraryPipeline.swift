@@ -66,8 +66,9 @@ public final class PhotoLibraryPipeline: PhotoLibraryAdapterProtocol, Sendable {
 
             let isLive = phAsset.mediaSubtypes.contains(.photoLive)
             let allResources = PHAssetResource.assetResources(for: phAsset)
-            var originalResources = allResources.filter { PhotoKitScanner.isOriginalResourceType($0.type) }
-            originalResources.sort { ($0.type.rawValue, $0.originalFilename) < ($1.type.rawValue, $1.originalFilename) }
+            let originalResources = allResources.filter { PhotoKitScanner.isOriginalResourceType($0.type) }
+                .sorted { ($0.type.rawValue, $0.originalFilename, $0.uniformTypeIdentifier) <
+                    ($1.type.rawValue, $1.originalFilename, $1.uniformTypeIdentifier) }
 
             guard !originalResources.isEmpty else {
                 throw SafeFailure(.unsupportedOriginal, domain: .photos, cause: .formatRejected)
@@ -121,10 +122,12 @@ public final class PhotoLibraryPipeline: PhotoLibraryAdapterProtocol, Sendable {
                     do {
                         ownership = try await fileStore.beginExport(fileID: stagingID)
                     } catch {
-                        try? await ledger.releaseReservation(reservation.id)
+                        try await ledger.releaseReservation(reservation.id)
                         throw error
                     }
 
+                    var publishedLease: LeasedFile?
+                    var exportEnded = false
                     do {
                         let (sha256, sha1, bytesWritten) = try await exporter.exportResource(
                             res,
@@ -137,10 +140,7 @@ public final class PhotoLibraryPipeline: PhotoLibraryAdapterProtocol, Sendable {
                         )
 
                         // Verify generation after measurement
-                        let postGen = PhotoKitScanner.computeGeneration(for: phAsset)
-                        guard postGen == asset.generation else {
-                            throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .contentChanged)
-                        }
+                        try PhotoKitScanner.verifyGeneration(asset)
 
                         // Atomically move partial to published path
                         try FileManager.default.moveItem(at: ownership.partialURL, to: ownership.publishedURL)
@@ -163,7 +163,9 @@ public final class PhotoLibraryPipeline: PhotoLibraryAdapterProtocol, Sendable {
                             reexportable: true,
                             content: content
                         )
+                        publishedLease = leased
                         try await fileStore.endExport(ownership)
+                        exportEnded = true
 
                         // Emit export & hashing events
                         try await ledger.appendEvent(
@@ -198,6 +200,7 @@ public final class PhotoLibraryPipeline: PhotoLibraryAdapterProtocol, Sendable {
                         }
 
                         // Release lease; file remains in cache with recoverable=1 for upload reuse/cleanup
+                        publishedLease = nil // release removes its runtime pin even if diagnostics fail
                         try await fileStore.release(leased)
 
                         measuredDescriptors.append(SourceResourceDescriptor(
@@ -210,11 +213,15 @@ public final class PhotoLibraryPipeline: PhotoLibraryAdapterProtocol, Sendable {
                             photoKitResourceDataUTI: res.uniformTypeIdentifier
                         ))
                     } catch {
-                        try? FileManager.default.removeItem(at: ownership.partialURL)
-                        try? FileManager.default.removeItem(at: ownership.publishedURL)
-                        try? await fileStore.endExport(ownership)
-                        try? await ledger.releaseReservation(reservation.id)
-                        throw error
+                        var cleanupError: (any Error)?
+                        if let leased = publishedLease {
+                            do { try await fileStore.release(leased) } catch { cleanupError = error }
+                        }
+                        if !exportEnded {
+                            do { try await fileStore.rollbackExport(ownership, reservationID: reservation.id) }
+                            catch { cleanupError = error }
+                        }
+                        throw cleanupError ?? error
                     }
                 }
 
@@ -319,6 +326,7 @@ public final class PhotoLibraryPipeline: PhotoLibraryAdapterProtocol, Sendable {
         var lastCursor = afterCursor
 
         for row in page {
+            try Task.checkCancellation()
             lastCursor = max(lastCursor, row.cursor)
             do {
                 try await planAsset(
@@ -329,6 +337,8 @@ public final class PhotoLibraryPipeline: PhotoLibraryAdapterProtocol, Sendable {
                     videoPartThreshold: videoPartThreshold
                 )
                 planned += 1
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 failed += 1
                 // Failure already durably recorded via recordSourceFailure inside planAsset

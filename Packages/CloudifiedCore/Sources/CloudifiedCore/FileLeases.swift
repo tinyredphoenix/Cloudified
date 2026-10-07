@@ -55,6 +55,24 @@ public actor FileLeaseStore {
         guard leases[ownership.token] == ownership.fileID else { throw CoreError.invalidTransition }
         leases.removeValue(forKey: ownership.token)
     }
+    /// Source calls only after its writer/callbacks are terminal. Keep the export
+    /// pin while checking registration and deleting. Published ledger-owned files
+    /// are NEVER rollback targets, even if a later diagnostic/lease release fails.
+    /// On persistence/cleanup failure retain ownership for recovery rather than
+    /// guessing that registered bytes can be removed.
+    public func rollbackExport(_ ownership: ExportFileOwnership, reservationID: UUID) async throws {
+        guard leases[ownership.token] == ownership.fileID else { throw CoreError.invalidTransition }
+        let registered = try await ledger.isStaged(ownership.fileID)
+        if !registered {
+            for url in [ownership.partialURL, ownership.publishedURL] {
+                if FileManager.default.fileExists(atPath: url.path) {
+                    try FileManager.default.removeItem(at: url)
+                }
+            }
+        }
+        try await ledger.releaseReservation(reservationID)
+        try endExport(ownership)
+    }
     public func registerPublished(fileID: UUID, byteCount: Int64, reservationID: UUID,
                                   reexportable: Bool, content: OriginalContent? = nil) async throws -> LeasedFile {
         guard !deleting.contains(fileID) else { throw CoreError.invalidTransition }
@@ -171,6 +189,32 @@ public actor FileLeaseStore {
 struct StagedRecord: Sendable { let id: UUID; let path: String; let bytes: Int64; let content: OriginalContent? }
 extension Ledger {
     func isStaged(_ id: UUID) throws -> Bool { try !db.rows("SELECT id FROM staged WHERE id=?", [id.sql]).isEmpty }
+    /// Unknown PhotoKit sizes need a finite bound based on capacity, not an
+    /// arbitrary per-file limit. Existing oversized work leaves the ordinary pool
+    /// available for small originals. Copy count/overhead must be conservative
+    /// for the enabled transports; callbacks still check real free space.
+    public func reserveSourceStorage(availableBytes: Int64, additionalCopyCount: Int,
+                                     fixedOverheadBytes: Int64) throws -> StorageReservation {
+        guard availableBytes >= 0, (0...2).contains(additionalCopyCount), fixedOverheadBytes >= 0 else {
+            throw CoreError.invalidContract
+        }
+        let safety: Int64 = 536_870_912, soft: Int64 = 1_073_741_824
+        let reserved = try db.rows("SELECT COALESCE(SUM(bytes),0) AS n FROM reservations").first!.int("n")
+        guard availableBytes >= safety, fixedOverheadBytes <= availableBytes - safety,
+              reserved < availableBytes - safety - fixedOverheadBytes else {
+            throw SafeFailure(.diskFull, domain: .fileSystem, cause: .insufficientSpace)
+        }
+        var cap = (availableBytes - safety - fixedOverheadBytes - reserved) / Int64(1 + additionalCopyCount)
+        let oversizedExists = try !db.rows("SELECT id FROM reservations WHERE oversized=1 UNION ALL SELECT id FROM staged WHERE oversized=1 LIMIT 1").isEmpty
+        if oversizedExists {
+            let ordinary = try db.rows("SELECT COALESCE(SUM(bytes),0) AS n FROM (SELECT bytes FROM staged WHERE oversized=0 AND derived_from IS NULL UNION ALL SELECT bytes FROM reservations WHERE oversized=0 AND derived_from IS NULL)").first!.int("n")
+            cap = min(cap, max(0, soft - ordinary))
+        }
+        guard cap > 0 else { throw SafeFailure(.diskFull, domain: .fileSystem, cause: .insufficientSpace) }
+        // Division above bounds this arithmetic by availableBytes.
+        return try reserveStorage(bytes: cap, availableBytes: availableBytes,
+            transportOverhead: fixedOverheadBytes + cap * Int64(additionalCopyCount))
+    }
     /// P3 source-change observation must revoke this permission if staged bytes
     /// become the only recoverable copy. Transport holds still take precedence.
     public func setReexportable(fileID: UUID, _ allowed: Bool) throws {

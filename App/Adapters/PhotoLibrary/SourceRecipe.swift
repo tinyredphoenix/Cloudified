@@ -142,14 +142,21 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
             throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
         }
 
+        var splitKeys: Set<String> = []
+        var mediaRequirementCount = resources.count
         for split in videoSplits {
-            guard split.targetPartSize > 0, split.totalByteCount > 0,
-                  !split.parts.isEmpty, split.parts.count <= 255 else {
+            guard split.targetPartSize > 0, split.targetPartSize <= 1_900_000_000,
+                  split.totalByteCount > 0, isHex(split.originalSha256, length: 64),
+                  split.parts.count > 1, split.parts.count <= 255,
+                  splitKeys.insert("\(split.role.rawValue):\(split.originalSha256)").inserted,
+                  resources.contains(where: { $0.sha256 == split.originalSha256 &&
+                      $0.role == split.role && $0.byteCount == split.totalByteCount }) else {
                 throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
             }
+            mediaRequirementCount += split.parts.count - 1
+            guard mediaRequirementCount <= 255 else { throw CoreError.invalidContract }
 
             var expectedOffset: Int64 = 0
-            var accumulatedBytes: Int64 = 0
 
             for (index, part) in split.parts.enumerated() {
                 guard part.partIndex == index,
@@ -172,24 +179,12 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
                     }
                 }
 
+                guard expectedOffset <= Int64.max - part.byteCount else { throw CoreError.invalidContract }
                 expectedOffset += part.byteCount
-                accumulatedBytes += part.byteCount
             }
 
-            guard accumulatedBytes == split.totalByteCount else {
+            guard expectedOffset == split.totalByteCount else {
                 throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
-            }
-
-            if !split.originalSha256.isEmpty {
-                guard isHex(split.originalSha256, length: 64) else {
-                    throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
-                }
-                guard let original = resources.first(where: { $0.sha256 == split.originalSha256 }) else {
-                    throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
-                }
-                guard original.byteCount == split.totalByteCount, original.role == split.role else {
-                    throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
-                }
             }
         }
     }

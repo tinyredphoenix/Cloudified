@@ -8,6 +8,7 @@ public enum UploadPlanProducer {
         recipe: SourceRecipe,
         livePhotoFallback: LivePhotoFallbackOption = .bothSeparately
     ) throws -> UploadPlan {
+        try recipe.validate()
         var requirements: [ResourceRequirement] = []
         let policyVersion: String
 
@@ -47,13 +48,14 @@ public enum UploadPlanProducer {
 
     /// Builds the Telegram upload plan requiring every original resource/part plus archive manifest.
     public static func buildTelegramPlan(recipe: SourceRecipe) throws -> UploadPlan {
+        try recipe.validate()
         let policyVersion = "telegram-archive-v1"
         var requirements: [ResourceRequirement] = []
         var manifestEntries: [ArchiveManifestBuilder.ManifestResourceEntry] = []
 
         for resDesc in recipe.resources {
             if let split = recipe.videoSplits.first(where: {
-                ($0.originalSha256 == resDesc.sha256 || ($0.role == resDesc.role && $0.totalByteCount == resDesc.byteCount))
+                $0.originalSha256 == resDesc.sha256 && $0.role == resDesc.role && $0.totalByteCount == resDesc.byteCount
             }), split.parts.count > 1 {
                 // Multipart oversized original
                 for part in split.parts {
