@@ -11,46 +11,30 @@ public enum UploadPlanProducer {
         var requirements: [ResourceRequirement] = []
         let policyVersion: String
 
+        let selected: [SourceResourceDescriptor]
         if recipe.isLivePhoto {
-            let stillDesc = recipe.resources.first { $0.role == .still }
-            let motionDesc = recipe.resources.first { $0.role == .motion }
-
+            let hasStill = recipe.resources.contains { $0.role == .still }
+            let hasMotion = recipe.resources.contains { $0.role == .motion }
             switch livePhotoFallback {
             case .keyImageOnly:
+                guard hasStill else { throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing) }
                 policyVersion = "google-live-keyImageOnly-v1"
-                if let still = stillDesc {
-                    let req = try ContentIdentity.resource(role: .still, originals: [still.originalContent])
-                    requirements.append(req)
-                }
+                selected = recipe.resources.filter { $0.role != .motion }
             case .motionVideoOnly:
+                guard hasMotion else { throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing) }
                 policyVersion = "google-live-motionVideoOnly-v1"
-                if let motion = motionDesc {
-                    let req = try ContentIdentity.resource(role: .motion, originals: [motion.originalContent])
-                    requirements.append(req)
-                }
+                selected = recipe.resources.filter { $0.role == .motion }
             case .bothSeparately:
+                guard hasStill && hasMotion else { throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing) }
                 policyVersion = "google-live-bothSeparately-v1"
-                if let still = stillDesc {
-                    let reqStill = try ContentIdentity.resource(role: .still, originals: [still.originalContent])
-                    requirements.append(reqStill)
-                }
-                if let motion = motionDesc {
-                    let reqMotion = try ContentIdentity.resource(role: .motion, originals: [motion.originalContent])
-                    requirements.append(reqMotion)
-                }
-            }
-        } else if recipe.mediaKind == .video {
-            policyVersion = "google-video-v1"
-            if let videoDesc = recipe.resources.first(where: { $0.role == .video }) {
-                let req = try ContentIdentity.resource(role: .video, originals: [videoDesc.originalContent])
-                requirements.append(req)
+                selected = recipe.resources
             }
         } else {
-            policyVersion = "google-photo-v1"
-            if let stillDesc = recipe.resources.first(where: { $0.role == .still }) {
-                let req = try ContentIdentity.resource(role: .still, originals: [stillDesc.originalContent])
-                requirements.append(req)
-            }
+            policyVersion = recipe.mediaKind == .video ? "google-video-v1" : "google-photo-v1"
+            selected = recipe.resources
+        }
+        for original in selected {
+            requirements.append(try ContentIdentity.resource(role: original.role, originals: [original.originalContent]))
         }
 
         guard !requirements.isEmpty else {
@@ -58,7 +42,6 @@ public enum UploadPlanProducer {
         }
 
         let plan = try ContentIdentity.plan(policyVersion: policyVersion, resources: requirements)
-        try plan.validate()
         return plan
     }
 
@@ -102,10 +85,10 @@ public enum UploadPlanProducer {
 
         // Generate manifest association hash
         let (_, associationHash) = try ArchiveManifestBuilder.buildManifest(
-            generation: recipe.generation,
             kind: recipe.mediaKind,
             isLivePhoto: recipe.isLivePhoto,
             metadata: recipe.metadata,
+            originals: recipe.resources,
             resources: manifestEntries
         )
 
@@ -118,7 +101,6 @@ public enum UploadPlanProducer {
         requirements.append(manifestReq)
 
         let plan = try ContentIdentity.plan(policyVersion: policyVersion, resources: requirements)
-        try plan.validate()
         return plan
     }
 }

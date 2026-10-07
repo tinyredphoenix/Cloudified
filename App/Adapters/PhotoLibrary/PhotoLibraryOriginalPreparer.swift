@@ -105,13 +105,21 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
             }
         }
 
+        let requiredTags = Set(entries.map(\.tag))
+        guard requiredTags.isSubset(of: Set(receipts.filter { $0.destinationID == job.destination.id }.map(\.tag))) else {
+            throw SafeFailure(.invariant, domain: .core, cause: .invalidContract)
+        }
         let (manifestData, associationHash) = try ArchiveManifestBuilder.buildManifest(
-            generation: recipe.generation,
             kind: recipe.mediaKind,
             isLivePhoto: recipe.isLivePhoto,
             metadata: recipe.metadata,
-            resources: entries
+            originals: recipe.resources,
+            resources: entries,
+            receipts: receipts.filter { $0.destinationID == job.destination.id }
         )
+
+        let expected = try ContentIdentity.resource(role: .manifest, originals: [], associationHash: associationHash)
+        guard expected.tag == resource.tag else { throw CoreError.invalidContract }
 
         let available = storageLayout.availableDiskSpace()
         let reservation = try await ledger.reserveStorage(
