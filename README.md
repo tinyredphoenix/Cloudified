@@ -10,6 +10,8 @@ Architecture and build infrastructure only. No application target or working IPA
 exists yet. PhotosBackup supplies the chosen Google implementation reference;
 TDLib supplies Telegram's native transport. Reference projects inform implementation
 only; the interface is designed independently for this app's upload/status tasks.
+Local history/tag exist; remote creation is blocked by GitHub server errors.
+See [actual setup status](docs/SETUP-STATUS.md).
 
 ## Stack and build location
 
