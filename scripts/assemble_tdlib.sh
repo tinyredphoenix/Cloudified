@@ -12,7 +12,7 @@ PIN_COMMIT="42e6a5259551178d1dab54a22ad96d14bd906e20"
 TD_REPO_URL="https://github.com/tdlib/td.git"
 
 BUILD_DIR="/tmp/cloudified_tdlib_build"
-OUTPUT_DIR="$REPO_ROOT/build/tdlib"
+OUTPUT_DIR="${CLOUDIFIED_BUILD_ROOT:-$REPO_ROOT/build}/tdlib"
 
 echo "=== TDLib Deterministic Assembly ==="
 echo "Pinned commit: $PIN_COMMIT"
@@ -96,3 +96,4 @@ cp "$BUILD_DIR/build/td/telegram/tdjson_export.h" "$OUTPUT_DIR/include/"
 
 echo "=== TDLib assembly complete ==="
 echo "Artifact: $OUTPUT_DIR/lib/libtdjson.a"
+python3 "$REPO_ROOT/scripts/build_cache.py" seal-tdlib --build-root "${CLOUDIFIED_BUILD_ROOT:-$REPO_ROOT/build}"

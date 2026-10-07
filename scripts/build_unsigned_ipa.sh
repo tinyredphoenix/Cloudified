@@ -20,11 +20,12 @@ fi
 
 mkdir -p "$output_root"
 
-if [[ ! -f "$output_root/tdlib/lib/libtdjson.a" && -f "$repo_root/scripts/assemble_tdlib.sh" ]]; then
-  echo 'Checking TDLib native artifact...'
-  if command -v cmake >/dev/null 2>&1; then
-    bash "$repo_root/scripts/assemble_tdlib.sh" || echo 'Note: TDLib assembly skipped; will rely on package linkage.'
-  fi
+python3 "$repo_root/scripts/build_cache.py" prepare --build-root "$output_root"
+if ! python3 "$repo_root/scripts/build_cache.py" verify-tdlib --build-root "$output_root"; then
+  echo 'Native TDLib cache absent or invalid; assembling the exact pinned dependency.'
+  python3 "$repo_root/scripts/build_cache.py" reset-tdlib --build-root "$output_root"
+  CLOUDIFIED_BUILD_ROOT="$output_root" bash "$repo_root/scripts/assemble_tdlib.sh"
+  python3 "$repo_root/scripts/build_cache.py" verify-tdlib --build-root "$output_root"
 fi
 
 xcodebuild -version

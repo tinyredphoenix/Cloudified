@@ -6,19 +6,19 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 
 ## Current handoff state
 
-- Active editing batch: none. Builder completed P4-A; claimed paths released for Architect review before P4-B. PhotoKit source and Packages/CloudifiedCore preserved untouched.
+- Active editing batch: Architect review/build-cache corrections; workflow/cache and review docs reserved until commit/push. Builder released paths. Next Builder batch P4-A-R1 in P4-REVIEW.md; no P4-B start yet. PhotoKit/Core unchanged.
 - P0: architecture/repository/infrastructure complete; handbook contracts confirmed.
 - P1: native iOS 26 target, shared Cloudified scheme, four navigation screens (Dashboard, Not uploaded, Logs, Settings), adapter protocol placeholders, and honest unpopulated states completed by Builder.
 - P2: Architect-authored critical core/diagnostics implemented and compiled locally in Swift 6 mode; no runtime evidence yet.
 - P3: Architect reviewed P3-R2 and directly completed coverage, staging, terminal progress, error and archive identity paths.
-- P4-A: Builder implemented pinned provider dependencies, real TDLib native lifecycle/JSON plumbing, secure Keychain credentials, and safe foundation diagnostics. Static and compiler checks passed; runtime/service acceptance remains P7.
+- P4-A: Builder submitted 9e6fe9e/edb53dd with compiler evidence. Architect found missing native linkage, unsafe lifecycle/deadlines/streams, pinned-schema mismatch and missing diagnostics; P4-A-R1 required. Compiler evidence is not native/runtime acceptance.
 - P4-B: Architect-owned critical upload, receipt, and reconciliation integration (pending Architect start).
 - P5–P6: implementation handoffs, no intermediate app-test gates.
 - P7: first full integrated build/test; P8: debugging iterations/release.
 - No demo/mock/seeded data or simulated uploads are permitted.
 - Main project location: existing Mac checkout. USB drive untouched.
 - Full local Xcode: absent; Swift command-line compiler available.
-- GitHub: private `tinyredphoenix/Cloudified`, origin configured, main synced.
+- GitHub: public `tinyredphoenix/Cloudified` by explicit user request; visibility verified with gh. Standard hosted runner use is free; cache/storage limits remain separate.
 - Cloud builds/device integration: no app build or device upload demonstrated.
 
 ## Verified earlier milestones
@@ -552,6 +552,65 @@ Failures / known limitations:
 
 Commit / milestone tag, after it exists: Commit `9e6fe9e` on main; milestone tag deferred until acceptance testing per handbook 2.
 Next handoff / release of reserved paths: Handoff to Architect for Phase 4-B (`docs/CORE-INTEGRATION.md` and upload/receipt/reconciliation integration). All claimed Builder paths released.
+
+## 2026-10-08 — Architect P4-A review/public cache infrastructure
+
+Reviewed Builder 9e6fe9e/edb53dd and the complete user-pasted report. Foundation is
+not accepted for P4-B: real native library linkage is missing, weak C stubs can
+satisfy symbols, assembly does not package its pinned CMake dependency closure,
+request timeout/cancel can hang and close can falsely acknowledge native cleanup.
+Also found unbounded streams/maps, pinned auth-schema mismatch, unchecked mutable
+JSON/unsafe ID conversions and absent claimed diagnostics. P4-REVIEW.md assigns
+the focused P4-A-R1 correction batch; no later phase is assigned.
+
+Direct source corrections: restore upstream Google per-chunk autoreleasepool;
+fail corrupt database keys without replacement; atomically create a key only if
+absent, reading a competing creator's winning key; retain Keychain accessibility
+on updates and reject corrupt successful reads. Preserved the exact upstream
+license texts (Builder's Boost disclaimer had incorrect MIT-style substitution).
+Recorded actual upstream/vendored Google file digests in google-vendor.json;
+focused vendoring changes include visibility/Sendable wrappers, convenience-method
+removal, comment/format/error-wording changes and restored upstream hashing drain.
+Wire/profile behavior was not redesigned or tested.
+
+User explicitly requested public repository visibility and reusable future build
+caches. Scanned all 197 existing tracked history blobs for recognized private-key,
+GitHub-token and Google-refresh-token patterns (zero matches; bounded heuristic,
+not a comprehensive assurance). `gh repo edit tinyredphoenix/Cloudified --visibility
+public --accept-visibility-change-consequences` succeeded; `gh repo view ... --json
+visibility,url` returned PUBLIC. GitHub official billing documentation confirms
+standard public hosted runners are free; cache storage has its separate 10 GB
+allowance. No cache-limit increase, paid runner, workflow dispatch or schedule.
+
+Build changes: pinned official cache action 0057852bfaa89a56745cba8c7296529d2fc39830
+from public v4 git ref; exact native artifact cache keyed by pins/recipe/header/
+toolchain/SDK/runner/target with SHA-256 inventory/provenance and arm64 checks;
+matching compiler-intermediate/module/Swift package caches. Missing/invalid native
+output reassembles under the same contract; assembly failure stops IPA building.
+Generated cache/artifacts stay ignored. Native assembly/linkage remain explicitly
+unbuilt and require Builder R1 corrections plus P7 evidence; no cache speed claim.
+
+Checks performed after source/build changes:
+- Existing nine P4-A Swift files typechecked in Swift 6 using compiled unchanged
+  CloudifiedCore and CTDLib header module maps: exit 0, no diagnostic output. Same
+  recorded Builder command above; this does not link the real native library.
+- `bash -n scripts/assemble_tdlib.sh scripts/build_unsigned_ipa.sh`: passed.
+- Python ast.parse on build_cache.py/generate_xcode_project.py and json.loads on
+  pins.json/google-vendor.json: passed.
+- Ruby YAML.load_file on the workflow: passed; actionlint is not installed. Hosted
+  cache actions/tool commands and native build behavior have not executed.
+- Byte comparison of both license texts against pinned fetched upstream files and
+  SHA-256 comparison of all recorded Google source/vendor entries: passed after
+  restoring the licenses. Initial comparison identified the wrong Boost disclaimer.
+- `python3 scripts/check_docs.py`: 19 Markdown files/local targets valid.
+- `git diff --check`: passed.
+
+No unit/runtime/app/account/private-media/native-artifact/cloud/USB operation or
+SDK installation. Decision D31. Source/license/provenance corrections committed
+as `11c24ad`. Cache/review publication and tag are recorded after creation.
+Architect releases edited paths after publication; Builder claims only P4-A-R1
+scope before editing. Workflow/build_cache.py, PhotoKit/Core remain
+Architect-owned/read-only.
 
 ## Batch log template
 

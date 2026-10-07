@@ -125,3 +125,14 @@ favorite/location metadata as well as existing asset attributes, so cached recip
 cannot silently freeze earlier archive metadata. Remote media identities continue
 to depend on bytes; local generation identifiers remain private. Device storage
 peaks and metadata correctness still require P7 evidence.
+
+## D31 — public standard runners and validated caches
+
+2026-10-08. User explicitly requested public GitHub visibility to avoid private
+Actions minute usage. Visibility changed and verified. Keep manual standard runners;
+no paid larger runner or expanded cache limit. Native artifacts restore only under
+exact input/toolchain keys with checksum inventory, provenance and architecture
+checks. Compiler/package caches may reuse matching toolchain/project prefixes.
+Native failure stops builds; unavailable real linkage cannot be replaced with weak
+fake symbols. P4-A review requires R1 corrections; cache speed/native acceptance
+remain unmeasured until P7. See BUILD-CACHE and P4-REVIEW.

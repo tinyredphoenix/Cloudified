@@ -1,5 +1,9 @@
 # P4-A — pinned dependencies and secure native client foundation
 
+Current handoff: Builder submitted P4-A; Architect requires P4-A-R1 corrections
+in P4-REVIEW.md before accepting this foundation or starting P4-B. This original
+assignment remains the foundation contract, not evidence of completion.
+
 Assigned 2026-10-08 by Architect following P3-R2 review/direct completion.
 P3 is ready for the next implementation handoff with static/compiler evidence;
 original quality, iOS lifecycle, source storage peaks and reinstall behavior remain

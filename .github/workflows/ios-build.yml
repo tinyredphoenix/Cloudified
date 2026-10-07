@@ -26,6 +26,14 @@ jobs:
             echo '::error::The app project is not implemented yet. No macOS build will start.'
             exit 1
           fi
+      - name: Require public standard-runner build
+        env:
+          REPOSITORY_IS_PRIVATE: ${{ github.event.repository.private }}
+        run: |
+          if [ "$REPOSITORY_IS_PRIVATE" != false ]; then
+            echo '::error::Build stopped: recheck allowance before building a private repository.'
+            exit 1
+          fi
 
   build:
     needs: preflight
@@ -39,6 +47,39 @@ jobs:
           persist-credentials: false
       - name: Require pinned Xcode
         run: test -d "$DEVELOPER_DIR"
+      - name: Fingerprint compiler and native dependencies
+        id: inputs
+        run: python3 scripts/build_cache.py prepare
+      - name: Restore exact native dependency cache
+        id: native-cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: build/tdlib
+          key: cloudified-native-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.inputs.outputs.native-key }}
+      - name: Verify or assemble native dependencies
+        run: |
+          if ! python3 scripts/build_cache.py verify-tdlib; then
+            python3 scripts/build_cache.py reset-tdlib
+            bash scripts/assemble_tdlib.sh
+          fi
+          python3 scripts/build_cache.py verify-tdlib
+      - name: Save verified native dependencies
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: build/tdlib
+          key: ${{ steps.native-cache.outputs.cache-primary-key }}
+      - name: Restore compiler and Swift package caches
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            build/DerivedData/ModuleCache.noindex
+            build/DerivedData/SDKStatCaches.noindex
+            build/DerivedData/Build/Intermediates.noindex
+            build/DerivedData/SourcePackages
+          key: cloudified-compile-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.inputs.outputs.compile-key }}-${{ github.sha }}
+          restore-keys: |
+            cloudified-compile-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.inputs.outputs.compile-key }}-
       - name: Build unsigned device IPA
         run: bash scripts/build_unsigned_ipa.sh
       - name: Keep build evidence

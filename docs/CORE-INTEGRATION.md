@@ -6,7 +6,8 @@ connect real components before P7. No demo adapters, sample records or test suit
 
 Updated 2026-10-08: [P3 review/correction assignment](P3-REVIEW.md) takes precedence
 for historical source corrections. P3-R2 was directly completed by Architect;
-next Builder batch is P4-A in P4-FOUNDATIONS.md, with runtime evidence deferred to P7. Schema v2 adds pre-job source
+next Builder batch is P4-A-R1 in P4-REVIEW.md after foundation review,
+with runtime evidence deferred to P7. Schema v2 adds pre-job source
 failures and verified content caching with migration from v1. `scannedAssetPage`
 supplies canonical producer IDs; `recordSourceFailure`/`sourceFailurePage` expose
 failures before content identity exists. P5 must present those real obligations too.

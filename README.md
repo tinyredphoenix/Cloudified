@@ -11,7 +11,7 @@ evidence; the full iOS app, real adapters and device behavior remain unverified.
 No working IPA exists yet. PhotosBackup supplies the chosen Google implementation reference;
 TDLib supplies Telegram's native transport. Reference projects inform implementation
 only; the interface is designed independently for this app's upload/status tasks.
-Local history and the planning tag are synced to the private
+Local history and milestone tags are synced to the public
 [GitHub repository](https://github.com/tinyredphoenix/Cloudified).
 See [actual setup status](docs/SETUP-STATUS.md).
 
@@ -34,7 +34,8 @@ existing-file cleanup is part of this setup. See [build setup](docs/BUILD-SETUP.
 
 Builder completed P1; Architect directly implemented P2 critical core.
 Builder's P3-R2 implementation was reviewed; Architect completed critical source corrections.
-The next Builder batch is [P4-A provider foundations](docs/P4-FOUNDATIONS.md).
+The next Builder batch is [P4-A-R1 foundation corrections](docs/P4-REVIEW.md).
+P4-A was submitted; native linkage/lifecycle findings require correction before P4-B.
 P3 has source/compiler evidence only; see [review history](docs/P3-REVIEW.md), handbook 2 and
 the [core integration contract](docs/CORE-INTEGRATION.md).
 Application phases are assigned in batches; the handbook is not authorization to
@@ -62,8 +63,10 @@ shared `Cloudified` scheme. It then uses hosted Xcode to build a device app and
 package an unsigned IPA for local SideStore signing. It does not upload signing
 credentials or contact Google/Telegram accounts. Device/account tests remain separate.
 
-Private GitHub Actions builds use the account's included allowance and may incur
-charges after that allowance. Workflows are manual, bounded and use short artifact
-retention. Verify available allowance/budget before starting a cloud build.
+Standard GitHub-hosted runner use is free for this public repository and does not
+consume private-repository minutes. Larger runners remain paid; cache storage has
+its own allowance. Manual builds reuse verified native artifacts and compiler/package
+caches; see [cache contracts](docs/BUILD-CACHE.md). Keep the free cache limit, short
+artifact retention and P7 build schedule; verify visibility/storage before dispatch.
 
 Git milestone `v0.0.1-plan` denotes architecture/infrastructure, not an app release.

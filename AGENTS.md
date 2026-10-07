@@ -6,7 +6,7 @@ The root docs are planning contracts, not evidence of working app features.
 
 Start with docs/01-ARCHITECTURE.md and docs/02-BUILD-PHASES.md. Use
 docs/03-BUILD-LOG.md for active ownership/evidence and docs/04-DECISIONS.md for why.
-Builder completed P1 and submitted P3-R2; Architect completed critical source corrections. Next Builder batch is P4-A in docs/P4-FOUNDATIONS.md. Architect directly authors P2 critical
+Builder submitted P4-A; Architect review requires P4-A-R1 in docs/P4-REVIEW.md before P4-B. Architect completed critical source corrections and directly authors P2 critical
 core and critical protocol corrections. Coordinate ownership before overlapping work.
 
 Latest user direction: no demo/mock/seeded data, fake progress, sample logs or fake
@@ -30,7 +30,9 @@ not postponed until failures occur.
 - Memory/storage/cleanup rules in docs/RUNTIME-SPEC.md are required.
 - Small error-list thumbnails only; no gallery or full-screen media viewer.
 - Source stays in this checkout. No large local Xcode/SDK download by default.
-  Cloud workflow is manual; verify allowance before dispatch. Never use a larger
+  Cloud workflow is manual. Public standard runners do not consume private minutes;
+  verify public visibility and storage/budget limits before dispatch. Keep caching
+  within the existing free limit and follow docs/BUILD-CACHE.md. Never use a larger
   paid runner or automatic build schedule without user authorization.
 - Never format/repartition the USB drive or remove unrelated files. No drive
   installation is currently part of the selected cloud-build setup.
@@ -44,5 +46,5 @@ not postponed until failures occur.
   describe evidence: plan tags are not app releases. Push history and tags to origin.
 
 Opening these instructions does not authorize every phase. Current Builder handoff
-is P4-A only as specified in docs/P4-FOUNDATIONS.md and docs/CORE-INTEGRATION.md. Architect owns P4-B critical upload/receipt/recovery integration. P2 core paths remain Architect-owned;
+is P4-A-R1 only in docs/P4-REVIEW.md, following the foundation and cache contracts. Architect owns P4-B critical upload/receipt/recovery integration. P2 core paths remain Architect-owned;
 later application phases need their prerequisites and an assigned batch.
