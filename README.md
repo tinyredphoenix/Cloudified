@@ -33,8 +33,8 @@ existing-file cleanup is part of this setup. See [build setup](docs/BUILD-SETUP.
 4. [Decisions and their reasons](docs/04-DECISIONS.md)
 
 Builder completed P1; Architect directly implemented P2 critical core.
-Builder's P3 implementation is under review. Next assigned batch is
-[P3-R1 corrections](docs/P3-REVIEW.md), before P4; see handbook 2 and
+Builder's P3-R1 implementation was reviewed and needs further corrections. Next assigned batch is
+[P3-R2 corrections](docs/P3-REVIEW.md), before P4; see handbook 2 and
 the [core integration contract](docs/CORE-INTEGRATION.md).
 Application phases are assigned in batches; the handbook is not authorization to
 implement every phase at once. Both Google and Telegram execute concurrently once

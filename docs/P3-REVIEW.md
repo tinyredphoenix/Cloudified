@@ -1,4 +1,8 @@
-# P3 architectural review and correction assignment
+# P3 architectural reviews and correction assignments
+
+Current next batch: **P3-R2 only**, described below. P3-R1 commits `377b647` and
+`5253218` were reviewed; P3 is not accepted for P4. The earlier P3-R1 assignment
+is retained as history, not the current handoff.
 
 2026-10-08. Builder commits `7d53faf`/`b7523e4` are present and pushed. They contain
 real implementation work, but P3 is **not accepted** for the P4 handoff. Syntax
@@ -107,3 +111,115 @@ and the existing SettingsViewState enum declarations. Syntax parsing covers the
 PhotoKit-dependent files but does not establish their iOS type/concurrency correctness.
 The exact compiler commands are recorded in handbook 3. All runtime scenarios,
 real media bytes, original quality and reinstall behavior remain P7 work.
+
+## P3-R1 review — 2026-10-08
+
+Report read and compared with `377b647`/`5253218`, not treated as acceptance.
+Real part hashing, canonical paging, protocol conformance, verified cache lookup
+and normal per-provider plan rejection handling are present. Important omissions:
+
+| Reviewed defect | Disposition |
+| --- | --- |
+| Every unknown original reserves up to 2,000,000,000 bytes; larger originals are cancelled as disk full even with ample capacity | Builder P3-R2 must replace the arbitrary cap. Architect added `Ledger.reserveSourceStorage` for a finite real-capacity bound, allowing ordinary allocations while an oversized root exists. |
+| Post-registration errors remove published files and lose acquired leases | Architect added/wired `FileLeaseStore.rollbackExport`, tracked acquired leases and export completion, and fenced rollback against the durable staged record. Registered files are released, never unlinked by source catches. Failed rollback retains its pin for recovery. |
+| Same PHAsset instance checked before/after export | Architect added refetch-based `verifyGeneration` and wired post-export checks. Frozen recipe identity also must match the job. |
+| Same-role/same-length OR matching selects another original's split | Architect requires exact master SHA-256/role/length and complete part identity; validates mandatory master associations, duplicate splits, aggregate requirement count and overflow-safe lengths. |
+| Manifest retry republishes at the old requirement UUID | Architect uses a fresh physical UUID per document; its stable remote tag remains recipe-derived. |
+| Part setup capacity-query failures leak master; sweep errors ignored | Architect widened tracked cleanup over all setup operations and made sweep failures visible. Startup inventory remains a prerequisite. |
+| Planner exports up to 50 assets in one call, never sweeps, and does not yield an enqueue/drain opportunity between assets | Builder P3-R2 must expose bounded demand-driven production and idle-file reclamation. A durable recipe is not a media cache obligation. |
+| Re-export chooses first candidate when descriptors tie | Builder P3-R2 must freeze a private selector; sorting identical candidates does not disambiguate them. |
+| `.progress`/2 Hz coverage claimed, but no source `.progress` emission, coalescer or onProgress use exists | Build log corrected to actual evidence. Builder P3-R2 must implement this wiring. Ledger scan/lease events exist, but do not establish iCloud/cancel/preparer-failure coverage. |
+| Cancellation and persistence failures swallowed or called unsupported format | Architect added scan/batch cancellation checks; Builder must finish error propagation and classification below. |
+| StorageLayout singleton fatal-errors, and availableDiskSpace still converts unknown to zero | Builder must use throwing composition and remove misleading convenience paths. |
+
+The direct fixes are compiler/static-reviewed only. No actual media, SQLite
+runtime, iOS SDK, cancellation, account or provider tests have run. The storage API
+is new and must be consumed by Builder; it is not evidence of device performance.
+
+## Builder batch P3-R2 — implement this, then stop
+
+Read README/AGENTS, this current assignment and CORE-INTEGRATION. Claim paths in
+handbook 3. Allowed source paths: PhotoLibrary adapters, StorageLayout, related
+protocols/project/generator references and build log. Core remains Architect-owned.
+Preserve exporter terminal fencing, rollback registration checks, hash identities,
+archive whitelist and strict multipart association. Do not start P4/provider/auth/UI.
+
+1. **Unknown size admission.** Replace the 2 GB cap with
+   `ledger.reserveSourceStorage(availableBytes:additionalCopyCount:fixedOverheadBytes:)`.
+   Its returned `byteCount` is the maximum permitted write. The API accounts for
+   actual capacity, outstanding reservations, the 512 MiB reserve and ordinary
+   staging room if an oversized root exists. Use conservative enabled-transport
+   copies (up to two additional full copies); separately admit a derived part and
+   its cache/copy allowance. Recheck actual capacity synchronously during bounded
+   writes, not only the nominal cap. No KVC/undocumented file size, async per-chunk
+   tasks or main-thread blocking. Resize to measured bytes with conservative
+   overhead before publication. Known-original, manifest and part admissions also
+   need truthful copy allowances; current zero-overhead exports/parts are unfinished.
+   Do not invent a global 2 GB source format limit. An original that cannot fit
+   safely waits visibly and permits other assets to proceed without recompression.
+2. **Bounded producer/cache.** Plan at most one asset per demand/return to P5,
+   with accurate cursor/more/planned/failed results; do not export 50 assets before
+   returning or require uploads to wait for an entire-library measurement pass.
+   Expose each enqueue to the caller so P5 can merge a ready drain immediately;
+   never wait for network completion while holding the source permit. Retain at
+   most one small ready original ahead, reclaim older idle originals through the
+   fenced store after startup inventory, and respect active leases/holds. Avoid
+   duplicate exports using a matching validated persisted recipe/content when safe;
+   never assume old remote absence or reset attempts. Preserve large master leases
+   while preparing parts, and don't sweep useful masters on every part if avoidable.
+   Both empty destination arguments must cause no export/enqueue work.
+3. **Exact selector.** Freeze private resource type and deterministic enumeration
+   selector/disambiguation in SourceResourceDescriptor when measuring. Resolve the
+   same descriptor on re-export, validate type/UTI/filename and current generation,
+   then prove byte identity. Ambiguity or selector mismatch must be explicit, never
+   choose `first` after sorting equal keys. Keep private selectors out of remote
+   manifest association and diagnostic logs. Legacy recipes without an unambiguous
+   selector need safe remeasurement/rejection without resetting frozen jobs.
+4. **Genuine independence.** Compute Telegram splits only when required by its
+   selected destination. A split/hash failure must not prevent Google from planning
+   the already verified full original. Likewise, a failed Live motion component
+   must not block a Google key-image-only plan whose entire required coverage is
+   available. Catalogue each provider's required original coverage before export;
+   accumulate resource/provider failures and reject incomplete plans for only those
+   destinations. Telegram always requires every original, including Live still and
+   motion; never enqueue partial Telegram coverage or an oversized unsplit document
+   after split planning failed. Common inability to access an asset affects both;
+   database failure is a shared persistence stop, not provider format rejection.
+5. **Failure truth/cancellation.** Remove `try? recordSourceFailure` and ordinary
+   catch-all swallowing in the producer. Propagate ledger/persistence/invalid-contract
+   failures with safe codes so composition can stop/report a broken ledger. Persist
+   a recoverable/permanent source failure as appropriate for an actual source error,
+   then continue the next asset. Never call an enqueue/SQLite failure unsupported
+   original or permanently mark it format-rejected. Record Google errors only for
+   Google, Telegram only for Telegram; don't overwrite successful peer bindings with
+   an outer catch. Cancellation stops producer work and is not sourceMissing; preserve
+   outstanding obligations. Recipe decode errors retain their real category. Handle
+   errors after registration by releasing owned leases and using rollbackExport only
+   while its export token is active; no raw published-file deletion or silent cleanup.
+6. **Source logging/progress.** Implement real start/terminal/failure/cancellation
+   events for planning and preparer exports, iCloud download activity, measured hash/
+   split work and storage waits. Connect actual received bytes to `.progress`; unknown
+   byte totals remain nil, and iCloud fraction is not upload-byte progress. Coalesce
+   before asynchronous scheduling with one bounded latest-value consumer, about
+   2 Hz maximum, drain/terminate it at completion and propagate diagnostic persistence
+   errors. No Task per chunk, timers/closures retained after completion or per-tick
+   library enumeration. Ledger scan/lease/cleanup events can be reused; list exact
+   emitted coverage in the report instead of claiming instrumentation from interfaces.
+7. **Throwing layout/shared permit.** Remove fatalError-based StorageLayout.shared
+   and the zero-on-error availableDiskSpace convenience; inject a successfully
+   constructed layout from throwing composition. Classify known permission/space
+   failures accurately and retain unknown rather than guessing. Serialize manifest
+   publication/admission with other source preparations using the shared permit.
+   A cancelled queued permit waiter must not later start expensive work; cancellation
+   checks already added to scan/batch must remain. Keep Swift 6 Sendable/captured
+   immutable snapshot rules intact; don't use unchecked Sendable to mask mutable state.
+8. **Checks/handoff.** Compiler/typecheck/parse/docs/project/whitespace checks only,
+   no demo data, app/runtime/unit tests, cloud builds or Xcode/USB changes. Portable
+   typecheck must use the newly built core; iOS/Photos-dependent typecheck remains
+   unverified without an SDK. Report exact event coverage and remaining limitations,
+   commit/push coherent batches and stop for Architect review. P4 is not authorized.
+
+Architect verification: core Swift 6 build passed; portable eight-file Swift 6
+adapter typecheck passed; parsing all 30 app Swift files, project plist lint and
+whitespace checks passed. CLT linker warned about its absent Developer/Library/
+Frameworks search path but returned success. Commands/evidence are in handbook 3.

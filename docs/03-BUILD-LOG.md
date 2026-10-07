@@ -1,12 +1,12 @@
 # Cloudified shared handbook 3 — build log and handoff state
 
-Updated 2026-10-07. Keep this file factual and append-focused. Proposed work,
+Updated 2026-10-08. Keep this file factual and append-focused. Proposed work,
 compiled code and physical service/device evidence are different states.
 No credentials, private media, raw secret-bearing responses or personal logs here.
 
 ## Current handoff state
 
-- Active editing batch: none; Builder completed P3-R1 corrections and submitted for Architect review. Core paths (`Packages/CloudifiedCore`) preserved untouched for Architect. P4 is not started.
+- Active editing batch: none. Architect completed P3-R1 review/direct corrections and released source paths. Next Builder batch is P3-R2 in P3-REVIEW.md; core remains Architect-owned. P4 is not assigned.
 - P0: architecture/repository/infrastructure complete; handbook contracts confirmed.
 - P1: native iOS 26 target, shared Cloudified scheme, four navigation screens (Dashboard, Not uploaded, Logs, Settings), adapter protocol placeholders, and honest unpopulated states completed by Builder.
 - P2: Architect-authored critical core/diagnostics implemented and compiled locally in Swift 6 mode; no runtime evidence yet.
@@ -296,7 +296,7 @@ pending, no runtime or provider evidence and no release acceptance.
 
 ## 2026-10-08 — P3-R1 original media pipeline corrections
 
-Batch / owner / status: P3-R1 / Builder / Completed corrections submitted for Architect review.
+Batch / owner / status: P3-R1 / Builder / Corrections submitted; Architect found remaining blockers (current next batch P3-R2).
 Purpose: Complete all corrections specified in docs/P3-REVIEW.md: real video part hashes, admitted exports and shared cache reuse, exact original-resource selection, canonical asset paging producer, independent provider failure isolation, durable pre-job source failure recording, synchronous lease/reservation release, and classified storage layout errors.
 Reserved paths / active writer: `App/Adapters/PhotoLibrary/`, `App/Adapters/System/`, `Cloudified.xcodeproj/`, `scripts/generate_xcode_project.py`, `docs/03-BUILD-LOG.md` owned by Builder. Core paths (`Packages/CloudifiedCore`) preserved untouched for Architect.
 Changed files:
@@ -309,7 +309,7 @@ Changed files:
 - `App/Adapters/System/StorageLayout.swift`
 - `docs/03-BUILD-LOG.md`
 Dependency revisions / artifact provenance: Unchanged; local `CloudifiedCore` package (`Packages/CloudifiedCore`) via `XCLocalSwiftPackageReference`; Apple native frameworks (Photos, CryptoKit, Foundation, Darwin).
-Diagnostic event coverage: Emits whitelisted production diagnostic events without private metadata: `.export`, `.hashing`, `.preparation` (for parts and manifests), and `.progress` with ~2 Hz coalescing before Task creation. Asset pre-job failures durably recorded with `ledger.recordSourceFailure` for affected destinations.
+Diagnostic event coverage: Reviewed `.export`, `.hashing` and `.preparation` (parts/manifests) emissions exist. Builder reported `.progress` with ~2 Hz coalescing, but actual source has no progress emitter/coalescer/onProgress wiring; that claim is rejected and assigned to P3-R2. recordSourceFailure exists but persistence is swallowed in the outer catch, so durable recording is not guaranteed on every error.
 Checks (exact command, outcome, evidence location):
 - `swift build --package-path Packages/CloudifiedCore ...`: passed (exit code 0).
 - Portable Swift 6 typecheck (`swiftc -typecheck -swift-version 6 ...` across 8 portable files): passed with 0 errors.
@@ -320,9 +320,51 @@ Checks (exact command, outcome, evidence location):
 Cloud run URL / artifact checksum, if applicable: None; no cloud builds per schedule.
 Physical-device evidence, if applicable: None; first integrated testing scheduled at P7.
 Failures / known limitations: PhotoKit/iOS SDK typechecking unavailable with local macOS CommandLineTools (requires hosted Xcode at P7); real runtime behavior, device storage peaks, and provider network integration remain untested.
-Decision changes (reference handbook 4 IDs): Adheres strictly to D01, D03, D04, D10, D11, D12, D14, D15, D16, D17, D18, D24, D25.
+Decision changes (reference handbook 4 IDs): Builder claimed adherence to D01, D03, D04, D10, D11, D12, D14, D15, D16, D17, D18, D24, D25; focused Architect review found admission/cleanup/diagnostics deviations documented in P3-REVIEW.
 Commit / milestone tag, after it exists: Commit `377b647` on main; milestone tag deferred until acceptance testing per handbook 2.
 Next handoff / release of reserved paths: Builder releases reserved paths. Stopping for Architect review. Do not start P4.
+
+## 2026-10-08 — Architect P3-R1 review and direct corrections
+
+Owner/status: Architect; P3-R1 reviewed, P3 not accepted. Commits reviewed:
+`377b647`, `5253218`; full Builder report read. Corrected critical registration/
+lease cleanup, mandatory multipart master association/overflow checks, refetched
+source generation and cancellation. Added unknown-size admission API for P3-R2.
+
+Files: core FileLeases.swift; source pipeline/preparer/scanner/recipe/planner;
+AGENTS/README/handbooks/P3-REVIEW/CORE-INTEGRATION. No dependency/project/UI change.
+No runtime tests, fake media, provider account actions, cloud runs, USB or Xcode work.
+
+- rollbackExport checks durable registration while export-pinned, never unlinks
+  registered bytes; all source catches consume it and release acquired leases.
+- Manifest publication uses fresh UUID, not resource.id; stable remote tag retained.
+- Part master cleanup includes sweep/capacity/reservation/file-ID/beginExport failures.
+- Part lookup requires exact master identity and full part identity; recipe validation
+  rejects empty/ambiguous masters, oversized part targets and arithmetic overflow.
+- Generation checks refetch PhotoKit; corrupt recipe decode is not sourceMissing.
+- Metadata scan and planning batch check cancellation; cancelled batch propagates.
+- reserveSourceStorage supports real capacity and ordinary staging alongside a large
+  master. Builder must wire it; hard 2 GB cap remains in the app until P3-R2.
+
+Checks (compiler/static only, passed):
+
+```sh
+CLANG_MODULE_CACHE_PATH=/private/tmp/cloudified-p2-clang-cache SWIFTPM_MODULECACHE_OVERRIDE=/private/tmp/cloudified-p2-swift-cache swift build --package-path Packages/CloudifiedCore --scratch-path /private/tmp/cloudified-p2-compile --cache-path /private/tmp/cloudified-p2-pm-cache --config-path /private/tmp/cloudified-p2-pm-config --security-path /private/tmp/cloudified-p2-pm-security --disable-sandbox
+swiftc -typecheck -swift-version 6 -module-cache-path /private/tmp/cloudified-p3-review-module-cache -I /private/tmp/cloudified-p2-compile/out/Products/Debug -Xcc '-fmodule-map-file=Packages/CloudifiedCore/Sources/CSQLite/module.modulemap' App/Adapters/PhotoLibrary/SourceRecipe.swift App/Adapters/PhotoLibrary/StreamingHasher.swift App/Adapters/PhotoLibrary/SharedExportPermit.swift App/Adapters/PhotoLibrary/ArchiveManifestBuilder.swift App/Adapters/PhotoLibrary/UploadPlanProducer.swift App/Adapters/PhotoLibrary/LosslessVideoPartSplitter.swift App/Adapters/System/StorageLayout.swift App/Presentation/Settings/SettingsViewState.swift
+rg --files App -g '*.swift' -0 | xargs -0 swiftc -parse -I /private/tmp/cloudified-p2-compile/out/Products/Debug
+plutil -lint Cloudified.xcodeproj/project.pbxproj
+git diff --check
+```
+
+Core returned success with existing CLT missing-framework-search-path linker warning.
+Portable eight-file typecheck returned 0; all 30 app files parsed. PhotoKit/iOS
+SDK typecheck and all runtime/media/database/quality/reinstall evidence remain P7.
+Current deficiencies and exact correction scope are in P3-REVIEW, P3-R2 section.
+Decisions D26–D27. Direct correction commit `89922cf`; docs/whitespace checks passed
+after handoff updates. Published with annotated `v0.0.6-p3-r1-review-untested`: partial
+critical corrections/static evidence, P3-R2 still pending, no P3 acceptance or release.
+Architect releases all paths for the assigned Builder scope; core remains owned.
+No additional runtime tests or cloud builds were performed.
 
 ## Batch log template
 

@@ -79,3 +79,20 @@ functional app testing; no repeated cloud build cycles during implementation.
 User instructions override these defaults. Record changed behavior, why, affected
 interfaces/tests and acceptance criteria before assigning implementation. State
 unknown facts openly; do not turn a proposal or label into a tested capability.
+
+## D26 — publication ownership survives later failures
+
+2026-10-08. Diagnostic/lease/split failures after publication cannot authorize raw
+unlinking of a registered original. Rollback checks registration under the export
+pin; source releases returned leases and only the fenced store removes registered
+bytes. Failed cleanup keeps ownership for explicit recovery. Manifest documents use
+fresh physical UUIDs while stable remote association remains recipe-derived.
+
+## D27 — unknown resource bounds follow capacity
+
+2026-10-08. A fixed 2 GB measurement cap incorrectly rejects larger originals and
+occupies the oversized slot for tiny photos. Architect provides reserveSourceStorage
+for a conservative real-capacity bound and ordinary-room allocation alongside an
+oversized root. Builder P3-R2 must consume it, check capacity during writes and
+budget known originals/parts and transport copies. This is unmeasured admission
+policy, not evidence that all videos fit or that provider limits have been verified.

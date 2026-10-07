@@ -5,7 +5,7 @@ only; no device, provider, SQLite runtime or resource measurements yet. P3–P6 
 connect real components before P7. No demo adapters, sample records or test suites.
 
 Updated 2026-10-08: [P3 review/correction assignment](P3-REVIEW.md) takes precedence
-for the current batch. P3 is not yet accepted for P4. Schema v2 adds pre-job source
+for the current batch (P3-R2). P3 is not yet accepted for P4. Schema v2 adds pre-job source
 failures and verified content caching with migration from v1. `scannedAssetPage`
 supplies canonical producer IDs; `recordSourceFailure`/`sourceFailurePage` expose
 failures before content identity exists. P5 must present those real obligations too.
@@ -225,3 +225,28 @@ partial/reinstall/account recovery, exact downloaded-original bytes/metadata,
 Google storage accounting, file ownership/cancel races and device memory/disk peaks.
 Compiler checks cannot establish any of those. Full iOS/Xcode compile also remains
 for P7; the current package compiler check targets local macOS CommandLineTools.
+
+## P3-R1 review additions — Architect, 2026-10-08
+
+`FileLeaseStore.rollbackExport(ownership,reservationID:)` is called only after
+PhotoKit/write callbacks are terminal and while the export token is still active.
+It checks the staged record while pinned and never deletes a registered published
+file. On failed persistence/cleanup it keeps the pin for recovery. Post-registration
+failures must release returned LeasedFiles independently; after successful endExport,
+rollback is not valid. Registered bytes are cleaned only by the fenced store.
+
+`Ledger.reserveSourceStorage(availableBytes:additionalCopyCount:fixedOverheadBytes:)`
+returns an unknown-size reservation with a finite cap based on actual capacity,
+outstanding promises and copy allowances. If an oversized root exists it uses only
+remaining ordinary staging room. No arbitrary per-original 2 GB limit. The caller
+checks actual free capacity during writes, keeps its cap, resizes after measurement
+and separately budgets derived parts/cache copies. It does not attest provider copy
+behavior or preserve a future transport overhead reservation; P4/P5 must re-admit
+transport work from current capacity. Transport copies are a conservative policy
+until measured at P7, not a throughput/storage guarantee.
+
+Frozen split recipes now require a master SHA-256 association, unique master splits,
+correct role/length, contiguous overflow-safe parts and <=255 media obligations.
+Do not recover matching by role/length OR fallback. Private PhotoKit generation is
+verified against a refetched snapshot after export and recipe identity against the
+frozen job; final exported hashes remain authoritative.
