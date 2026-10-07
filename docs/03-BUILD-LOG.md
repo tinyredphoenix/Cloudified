@@ -6,18 +6,16 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 
 ## Current handoff state
 
-- Active editing batch: none. Builder may claim P1; architect reserves P2 core.
-- P0: architecture/repository/infrastructure complete; latest handbook checks
-  recorded below before commit.
-- P1: ready for Builder; no app project or screens exist yet.
-- P2: assigned to Architect, planned; no core implementation/tests exist yet.
+- Active editing batch: none (P1 completed by Builder; reserved paths released). P2 ready for Architect.
+- P0: architecture/repository/infrastructure complete; handbook contracts confirmed.
+- P1: native iOS 26 target, shared Cloudified scheme, four navigation screens (Dashboard, Not uploaded, Logs, Settings), adapter protocol placeholders, and honest unpopulated states completed by Builder.
+- P2: assigned to Architect; critical core and diagnostics reserved.
 - P3–P6: implementation handoffs, no intermediate app-test gates.
 - P7: first full integrated build/test; P8: debugging iterations/release.
 - No demo/mock/seeded data or simulated uploads are permitted.
 - Main project location: existing Mac checkout. USB drive untouched.
 - Full local Xcode: absent; Swift command-line compiler available.
-- GitHub: private `tinyredphoenix/Cloudified`, origin configured, main synced at
-  the start of this handbook batch. `v0.0.1-plan` is a planning tag.
+- GitHub: private `tinyredphoenix/Cloudified`, origin configured, main synced.
 - Cloud builds/device integration: no app build or device upload demonstrated.
 
 ## Verified earlier milestones
@@ -74,6 +72,54 @@ files; `git diff --check` passed. A focused text scan found and removed the old
 demo-model assignment, controlled-adapter gate and feasibility-test phase order.
 No functional app tests or cloud builds were run.
 Implementation status remains unchanged: app/core/provider code is not built yet.
+
+## 2026-10-07 — P1 native app shell and presentation structure
+
+Batch / owner / status: P1 / Builder / Completed (static review passed; no app tests or cloud builds per schedule).
+Purpose: Create native Swift/SwiftUI iOS 26 target, shared Cloudified scheme, four navigation screens (Dashboard, Not uploaded, Logs, Settings) with honest unpopulated states, and adapter protocol placeholders.
+Reserved paths / active writer: `Cloudified.xcodeproj/`, `App/`, `scripts/generate_xcode_project.py`, `docs/03-BUILD-LOG.md` owned by Builder. Core paths (`Packages/CloudifiedCore`) preserved untouched for Architect.
+Changed files:
+- `Cloudified.xcodeproj/project.pbxproj`
+- `Cloudified.xcodeproj/xcshareddata/xcschemes/Cloudified.xcscheme`
+- `App/Application/CloudifiedApp.swift`
+- `App/Application/AppEnvironment.swift`
+- `App/Presentation/RootTabView.swift`
+- `App/Presentation/Dashboard/DashboardView.swift`
+- `App/Presentation/Dashboard/DashboardViewState.swift`
+- `App/Presentation/Dashboard/Components/OverallActivityCard.swift`
+- `App/Presentation/Dashboard/Components/ProviderStatusCard.swift`
+- `App/Presentation/Dashboard/Components/MediaSectionCard.swift`
+- `App/Presentation/Dashboard/Components/CurrentTransferCard.swift`
+- `App/Presentation/NotUploaded/NotUploadedView.swift`
+- `App/Presentation/NotUploaded/NotUploadedViewState.swift`
+- `App/Presentation/Logs/LogsView.swift`
+- `App/Presentation/Logs/LogsViewState.swift`
+- `App/Presentation/Settings/SettingsView.swift`
+- `App/Presentation/Settings/SettingsViewState.swift`
+- `App/Adapters/PhotoLibrary/PhotoLibraryAdapterProtocol.swift`
+- `App/Adapters/GooglePhotos/GooglePhotosAdapterProtocol.swift`
+- `App/Adapters/Telegram/TelegramAdapterProtocol.swift`
+- `App/Adapters/System/SystemAdapterProtocol.swift`
+- `App/Resources/Info.plist`
+- `App/Resources/Assets.xcassets/Contents.json`
+- `App/Resources/Assets.xcassets/AppIcon.appiconset/Contents.json`
+- `App/Resources/Assets.xcassets/AccentColor.colorset/Contents.json`
+- `scripts/generate_xcode_project.py`
+- `docs/03-BUILD-LOG.md`
+Dependency revisions / artifact provenance: Native Apple frameworks only (SwiftUI, Combine, Foundation); no third-party packages or moving dependencies added.
+Checks (exact command, outcome, evidence location):
+- `python3 scripts/check_docs.py`: passed, 14 Markdown files valid.
+- `plutil -lint Cloudified.xcodeproj/project.pbxproj`: passed (`OK`).
+- `plutil -lint App/Resources/Info.plist`: passed (`OK`).
+- Python XML parse of `Cloudified.xcscheme`: passed (`Scheme` root valid).
+- `swiftc -parse` across all 19 Swift source files in `App/`: passed with 0 errors.
+- Preflight project check (`test -d Cloudified.xcodeproj`): passed.
+Cloud run URL / artifact checksum, if applicable: None. Cloud IPA builds and app tests deferred to P7 per user schedule.
+Physical-device evidence, if applicable: None. Deferred to P7.
+Failures / known limitations: No runtime test suites or simulator sessions executed (first complete app test scheduled at P7). Core database, retry engine, and real provider transports are not yet integrated (pending P2 Architect and P3–P5 Builder). Presentation layer displays honest unpopulated/unconnected states with no demo/mock data.
+Decision changes (reference handbook 4 IDs): None; strictly adheres to D01, D04, D08, D09, D10, D14, D15, D16, D17, D18.
+Commit / milestone tag, after it exists: Pending git commit and push.
+Next handoff / release of reserved paths: Handoff to Architect for Phase 2 (P2: critical core and diagnostics in `Packages/CloudifiedCore/Sources/`). Reserved paths released.
 
 ## Batch log template
 

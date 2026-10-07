@@ -1,0 +1,281 @@
+import Foundation
+
+/// Overall activity states for the backup engine, reflecting real operational stages.
+public enum OverallActivityState: Equatable, Sendable {
+    case notScanned
+    case idle
+    case scanning
+    case preparing
+    case checking
+    case uploading
+    case finalizing
+    case waiting(reason: String)
+    case paused
+    case complete
+    case needsAttention(reason: String)
+
+    public var title: String {
+        switch self {
+        case .notScanned:
+            return "Not scanned"
+        case .idle:
+            return "Idle"
+        case .scanning:
+            return "Scanning library"
+        case .preparing:
+            return "Preparing media"
+        case .checking:
+            return "Checking remote status"
+        case .uploading:
+            return "Uploading"
+        case .finalizing:
+            return "Finalizing"
+        case .waiting(let reason):
+            return "Waiting: \(reason)"
+        case .paused:
+            return "Paused"
+        case .complete:
+            return "Backup complete"
+        case .needsAttention(let reason):
+            return "Needs attention: \(reason)"
+        }
+    }
+
+    public var isTransferring: Bool {
+        switch self {
+        case .uploading, .finalizing:
+            return true
+        default:
+            return false
+        }
+    }
+}
+
+/// Status and counters for an individual upload destination.
+public struct ProviderCardState: Equatable, Sendable {
+    public let name: String
+    public var isEnabled: Bool
+    public var isConnected: Bool
+    public var accountIdentifier: String?
+    public var channelIdentifier: String?
+    public var currentActivity: String
+    public var savedCount: Int?
+    public var remainingCount: Int?
+    public var totalCount: Int?
+    public var failedCount: Int?
+    public var lastConfirmedDate: Date?
+
+    public init(
+        name: String,
+        isEnabled: Bool = true,
+        isConnected: Bool = false,
+        accountIdentifier: String? = nil,
+        channelIdentifier: String? = nil,
+        currentActivity: String = "Not connected",
+        savedCount: Int? = nil,
+        remainingCount: Int? = nil,
+        totalCount: Int? = nil,
+        failedCount: Int? = nil,
+        lastConfirmedDate: Date? = nil
+    ) {
+        self.name = name
+        self.isEnabled = isEnabled
+        self.isConnected = isConnected
+        self.accountIdentifier = accountIdentifier
+        self.channelIdentifier = channelIdentifier
+        self.currentActivity = currentActivity
+        self.savedCount = savedCount
+        self.remainingCount = remainingCount
+        self.totalCount = totalCount
+        self.failedCount = failedCount
+        self.lastConfirmedDate = lastConfirmedDate
+    }
+
+    public var connectionDescription: String {
+        guard isConnected else { return "Not connected" }
+        if let account = accountIdentifier {
+            if let channel = channelIdentifier {
+                return "\(account) → \(channel)"
+            }
+            return account
+        }
+        return "Connected"
+    }
+
+    public var remainingOutOfTotalText: String {
+        let remainingStr = remainingCount.map(String.init) ?? "--"
+        let totalStr = totalCount.map(String.init) ?? "--"
+        return "\(remainingStr) remaining out of \(totalStr)"
+    }
+
+    public var confirmedText: String {
+        let savedStr = savedCount.map(String.init) ?? "--"
+        let totalStr = totalCount.map(String.init) ?? "--"
+        return "\(savedStr) saved out of \(totalStr)"
+    }
+}
+
+/// Breakdown of counters and active operations for a distinct media type (Photos or Videos).
+public struct MediaSectionState: Equatable, Sendable {
+    public let title: String
+    public let subtitle: String
+    public var totalCount: Int?
+    public var googleSaved: Int?
+    public var googleRemaining: Int?
+    public var googleFailed: Int?
+    public var telegramSaved: Int?
+    public var telegramRemaining: Int?
+    public var telegramFailed: Int?
+    public var activeOperation: String?
+    public var byteProgress: String?
+
+    public init(
+        title: String,
+        subtitle: String,
+        totalCount: Int? = nil,
+        googleSaved: Int? = nil,
+        googleRemaining: Int? = nil,
+        googleFailed: Int? = nil,
+        telegramSaved: Int? = nil,
+        telegramRemaining: Int? = nil,
+        telegramFailed: Int? = nil,
+        activeOperation: String? = nil,
+        byteProgress: String? = nil
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.totalCount = totalCount
+        self.googleSaved = googleSaved
+        self.googleRemaining = googleRemaining
+        self.googleFailed = googleFailed
+        self.telegramSaved = telegramSaved
+        self.telegramRemaining = telegramRemaining
+        self.telegramFailed = telegramFailed
+        self.activeOperation = activeOperation
+        self.byteProgress = byteProgress
+    }
+}
+
+/// Precise information about the currently transferring file.
+public struct CurrentTransferState: Equatable, Sendable {
+    public let filename: String
+    public let mediaType: String
+    public let provider: String
+    public var bytesSent: Int64
+    public var totalBytes: Int64?
+    public var componentOrPart: String?
+    public var attemptNumber: Int
+    public let maxAttempts: Int
+
+    public init(
+        filename: String,
+        mediaType: String,
+        provider: String,
+        bytesSent: Int64 = 0,
+        totalBytes: Int64? = nil,
+        componentOrPart: String? = nil,
+        attemptNumber: Int = 1,
+        maxAttempts: Int = 3
+    ) {
+        self.filename = filename
+        self.mediaType = mediaType
+        self.provider = provider
+        self.bytesSent = bytesSent
+        self.totalBytes = totalBytes
+        self.componentOrPart = componentOrPart
+        self.attemptNumber = attemptNumber
+        self.maxAttempts = maxAttempts
+    }
+
+    public var fractionCompleted: Double? {
+        guard let total = totalBytes, total > 0 else { return nil }
+        return min(1.0, max(0.0, Double(bytesSent) / Double(total)))
+    }
+
+    public var percentageText: String {
+        if let fraction = fractionCompleted {
+            if fraction >= 1.0 {
+                return "Finalizing"
+            }
+            return String(format: "%.1f%%", fraction * 100.0)
+        }
+        return "--%"
+    }
+
+    public var byteProgressText: String {
+        let sentStr = ByteCountFormatter.string(fromByteCount: bytesSent, countStyle: .file)
+        if let total = totalBytes, total > 0 {
+            let totalStr = ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
+            return "\(sentStr) of \(totalStr)"
+        }
+        return sentStr
+    }
+
+    public var attemptText: String {
+        return "Attempt \(attemptNumber) of \(maxAttempts)"
+    }
+}
+
+/// Immutable snapshot representing the entire Dashboard presentation state.
+public struct DashboardViewState: Equatable, Sendable {
+    public var overallState: OverallActivityState
+    public var waitingOrErrorReason: String?
+    public var accessibleLibraryTotal: Int?
+    public var scanTimestamp: Date?
+    public var permissionScopeDescription: String
+    public var savedToBothCount: Int?
+
+    public var googleStatus: ProviderCardState
+    public var telegramStatus: ProviderCardState
+
+    public var photosSection: MediaSectionState
+    public var videosSection: MediaSectionState
+
+    public var currentTransfer: CurrentTransferState?
+
+    public var confirmedThisSessionCount: Int?
+    public var currentTransferSpeedBytesPerSec: Int64?
+    public var estimatedRemainingTimeSeconds: TimeInterval?
+
+    public init(
+        overallState: OverallActivityState = .notScanned,
+        waitingOrErrorReason: String? = nil,
+        accessibleLibraryTotal: Int? = nil,
+        scanTimestamp: Date? = nil,
+        permissionScopeDescription: String = "Not determined",
+        savedToBothCount: Int? = nil,
+        googleStatus: ProviderCardState = ProviderCardState(name: "Google Photos"),
+        telegramStatus: ProviderCardState = ProviderCardState(name: "Telegram"),
+        photosSection: MediaSectionState = MediaSectionState(
+            title: "Photos",
+            subtitle: "Live Photos are included; motion does not inflate video count"
+        ),
+        videosSection: MediaSectionState = MediaSectionState(
+            title: "Videos",
+            subtitle: "Full original quality; independent concurrent queue"
+        ),
+        currentTransfer: CurrentTransferState? = nil,
+        confirmedThisSessionCount: Int? = nil,
+        currentTransferSpeedBytesPerSec: Int64? = nil,
+        estimatedRemainingTimeSeconds: TimeInterval? = nil
+    ) {
+        self.overallState = overallState
+        self.waitingOrErrorReason = waitingOrErrorReason
+        self.accessibleLibraryTotal = accessibleLibraryTotal
+        self.scanTimestamp = scanTimestamp
+        self.permissionScopeDescription = permissionScopeDescription
+        self.savedToBothCount = savedToBothCount
+        self.googleStatus = googleStatus
+        self.telegramStatus = telegramStatus
+        self.photosSection = photosSection
+        self.videosSection = videosSection
+        self.currentTransfer = currentTransfer
+        self.confirmedThisSessionCount = confirmedThisSessionCount
+        self.currentTransferSpeedBytesPerSec = currentTransferSpeedBytesPerSec
+        self.estimatedRemainingTimeSeconds = estimatedRemainingTimeSeconds
+    }
+
+    public var canStartBackup: Bool {
+        return googleStatus.isConnected || telegramStatus.isConnected
+    }
+}
