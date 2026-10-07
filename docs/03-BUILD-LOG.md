@@ -25,6 +25,7 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 | `80abd82`, `v0.0.1-plan` | Architecture/specs, resource policy, manual workflow and packaging scaffold; no app target |
 | `0090164` | Recorded temporary GitHub server creation errors |
 | `2154262` | Private remote created; main and annotated planning tag verified remotely; setup blocker resolved |
+| `016e449` | P1 native iOS 26 target, shared Cloudified scheme, four navigation screens, adapter protocol placeholders, and honest unpopulated states |
 
 Earlier checks passed: local Markdown targets, shell syntax, workflow YAML parsing
 and the missing-project guard. GitHub setup did not dispatch a cloud build.
@@ -118,7 +119,7 @@ Cloud run URL / artifact checksum, if applicable: None. Cloud IPA builds and app
 Physical-device evidence, if applicable: None. Deferred to P7.
 Failures / known limitations: No runtime test suites or simulator sessions executed (first complete app test scheduled at P7). Core database, retry engine, and real provider transports are not yet integrated (pending P2 Architect and P3–P5 Builder). Presentation layer displays honest unpopulated/unconnected states with no demo/mock data.
 Decision changes (reference handbook 4 IDs): None; strictly adheres to D01, D04, D08, D09, D10, D14, D15, D16, D17, D18.
-Commit / milestone tag, after it exists: Pending git commit and push.
+Commit / milestone tag, after it exists: Commit `016e449` on main; milestone tag deferred until acceptance testing per handbook 2.
 Next handoff / release of reserved paths: Handoff to Architect for Phase 2 (P2: critical core and diagnostics in `Packages/CloudifiedCore/Sources/`). Reserved paths released.
 
 ## Batch log template
