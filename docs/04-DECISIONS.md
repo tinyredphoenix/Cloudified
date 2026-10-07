@@ -96,3 +96,32 @@ for a conservative real-capacity bound and ordinary-room allocation alongside an
 oversized root. Builder P3-R2 must consume it, check capacity during writes and
 budget known originals/parts and transport copies. This is unmeasured admission
 policy, not evidence that all videos fit or that provider limits have been verified.
+
+## D28 — canonical identities and reconstructable shared parts
+
+2026-10-08. PhotoKit enumeration selectors are private and may reorder; sort remote
+original/plan identities by role/content/descriptor. Deduplicate remote content
+obligations while preserving every original descriptor/name. Manifest-v2 explicitly
+binds each part to its full original SHA-256 and offset, including multiple parents
+that reuse one identical part/message. Planning/preparation share recipe expansion.
+No production release exists; archive policy becomes telegram-archive-v2 before the
+first app test. Media tag/caption version remains cloudified-v1. Reinstall/restoration
+requires P7 proof, not confidence from this static correction.
+
+## D29 — provider foundations before critical transport integration
+
+2026-10-08. Builder P4-A brings exact pinned dependencies, secure credential storage
+and native TDLib lifecycle/JSON primitives. Architect P4-B owns final upload acceptance,
+receipt, immutable mapping and absence/reconciliation integration. Sources were pinned
+by public git refs; licenses/transitive dependencies/artifact checksums remain to inspect.
+No heavy Mac/USB setup or intermediate cloud build; native assembly joins manual P7.
+
+## D30 — conservative capacity and metadata generation
+
+2026-10-08. Source admission uses ordinary available volume capacity, rather than
+important-usage estimates that may include reclaimable storage, to preserve the
+physical reserve. Unknown capacity fails explicitly. Private generation-v2 includes
+favorite/location metadata as well as existing asset attributes, so cached recipes
+cannot silently freeze earlier archive metadata. Remote media identities continue
+to depend on bytes; local generation identifiers remain private. Device storage
+peaks and metadata correctness still require P7 evidence.

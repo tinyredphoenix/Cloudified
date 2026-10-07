@@ -85,6 +85,8 @@ resource. Never interpret the soft target as permission to fill all free storage
 Maintain a safety reserve (initial proposal 512 MiB) and measured transport overhead.
 Use available-capacity APIs and real bytes written, not private PhotoKit `fileSize`
 KVC. Unknown resource sizes require progressive checks and cancellable export.
+Use conservative ordinary available capacity for this reserve; an important-usage
+estimate containing reclaimable space does not prove physical bytes are available.
 
 2026-10-08 clarification: one bounded <=1,900,000,000-byte derived part of a verified
 leased original can coexist with the oversized master. Ordinary staging still has

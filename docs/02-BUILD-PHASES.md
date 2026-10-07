@@ -13,9 +13,11 @@ simulator/device tests or cloud IPA builds. P7 is the first complete app build/t
 ## Current handoff
 
 P0, P1 shell and P2 critical core implementation are complete; P2 has local Swift 6
-compiler/static evidence only. Builder P3-R1 code is committed; architect review
-found remaining blockers and directly corrected critical paths. **Builder's next batch is P3-R2**, specified in [P3 review](P3-REVIEW.md).
-P4 is not yet assigned. P2 remains Architect-owned.
+compiler/static evidence only. Architect reviewed P3-R2 and directly completed
+critical source/identity/progress corrections. P3 is ready for the next implementation
+handoff; all runtime/device evidence remains P7. **Builder's next batch is P4-A**,
+specified in [provider foundations](P4-FOUNDATIONS.md). Architect owns P4-B's critical
+upload/acceptance/receipt/recovery integration and P2 core.
 Other phases remain planned and become executable after
 their prerequisites pass and the architect assigns the next numbered batch.
 Do not interpret the handbook as permission to implement all phases at once.

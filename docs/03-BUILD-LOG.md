@@ -6,11 +6,11 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 
 ## Current handoff state
 
-- Active editing batch: P3-R2 completed by Builder; submitted for Architect review. Core paths (`Packages/CloudifiedCore`) preserved untouched for Architect. P4 is not started.
+- Active editing batch: none after this handoff. Architect releases source/system/doc paths; source/Core remain read-only for Builder P4-A. Builder must claim its foundation paths before editing. Next Builder batch P4-A only; Architect owns P4-B.
 - P0: architecture/repository/infrastructure complete; handbook contracts confirmed.
 - P1: native iOS 26 target, shared Cloudified scheme, four navigation screens (Dashboard, Not uploaded, Logs, Settings), adapter protocol placeholders, and honest unpopulated states completed by Builder.
 - P2: Architect-authored critical core/diagnostics implemented and compiled locally in Swift 6 mode; no runtime evidence yet.
-- P3: Builder implementation committed; architect review found cancellation fencing, split-hash, canonical-ID, staging/admission, resource-matching and diagnostics blockers. Syntax parsing passed; that is not interface/typecheck or critical-review acceptance.
+- P3: Architect reviewed P3-R2 and directly completed coverage, staging, terminal progress, error and archive identity paths. Ready for P4-A implementation handoff with compiler/static evidence only; runtime/quality/reinstall evidence remains P7.
 - P4–P6: implementation handoffs, no intermediate app-test gates.
 - P7: first full integrated build/test; P8: debugging iterations/release.
 - No demo/mock/seeded data or simulated uploads are permitted.
@@ -31,6 +31,7 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 | `7d53faf` | P3 original media pipeline, cancellable export, streaming hashing, source-v1 recipe, lossless video parts, and Xcode package integration |
 | `89922cf`, `v0.0.6-p3-r1-review-untested` | Architect P3-R1 review, rollback export, generation verification, multipart association, and reserveSourceStorage |
 | `d0c00fe` | P3-R2 demand-driven admission, exact selectors, OSAllocatedUnfairLock progress coalescing, and provider isolation |
+| `accf787`, `v0.0.7-source-review-untested` | Architect source completion; static/compiler evidence, no iOS/runtime/quality/reinstall validation |
 
 Earlier checks passed: local Markdown targets, shell syntax, workflow YAML parsing
 and the missing-project guard. GitHub setup did not dispatch a cloud build.
@@ -393,7 +394,7 @@ Diagnostic event coverage:
 - `.export`: emitted upon successful PhotoKit resource export and promotion.
 - `.hashing`: emitted upon streaming SHA-256/SHA-1 calculation.
 - `.preparation`: emitted upon video split recipe generation and archive manifest preparation.
-- `.progress`: coalesced via `OSAllocatedUnfairLock` to ~2 Hz maximum frequency during resource export before write, terminated upon export completion with actual byte counts.
+- `.progress`: Builder emitted proposed bytes before write. Review found pending Task not joined on finish/failure and no preparer/iCloud coverage; Architect replaced this implementation below.
 - `recordSourceFailure`: recorded for specific affected provider destination IDs upon planning/preparation rejection or failure.
 Checks (exact command, outcome, evidence location):
 - Portable Swift 6 typecheck (`swiftc -typecheck -swift-version 6 -module-cache-path /private/tmp/cloudified-p3-review-module-cache -I /private/tmp/cloudified-p2-compile/out/Products/Debug -Xcc '-fmodule-map-file=Packages/CloudifiedCore/Sources/CSQLite/module.modulemap' App/Adapters/PhotoLibrary/SourceRecipe.swift App/Adapters/PhotoLibrary/StreamingHasher.swift App/Adapters/PhotoLibrary/SharedExportPermit.swift App/Adapters/PhotoLibrary/ArchiveManifestBuilder.swift App/Adapters/PhotoLibrary/UploadPlanProducer.swift App/Adapters/PhotoLibrary/LosslessVideoPartSplitter.swift App/Adapters/System/StorageLayout.swift App/Presentation/Settings/SettingsViewState.swift`): passed with 0 errors.
@@ -405,9 +406,79 @@ Checks (exact command, outcome, evidence location):
 Cloud run URL / artifact checksum, if applicable: None; no cloud builds per schedule.
 Physical-device evidence, if applicable: None; first integrated testing scheduled at P7.
 Failures / known limitations: PhotoKit runtime execution and actual device photo library access remain untested (scheduled for P7 integration). Real provider transports for Google Photos and Telegram are scheduled for P4.
-Decision changes (reference handbook 4 IDs): Builder adheres to D01, D03, D04, D10, D11, D12, D14, D15, D16, D17, D18, D24, D25, D26, D27.
+Decision changes (reference handbook 4 IDs): Builder claimed adherence to D01–D27; Architect found coverage, swallowed errors, source recipe guards and terminal progress regressions, documented below.
 Commit / milestone tag, after it exists: Commit `d0c00fe` on main; milestone tag deferred until acceptance testing per handbook 2.
 Next handoff / release of reserved paths: Builder releases reserved paths. Stopping for Architect review. Do not start P4.
+
+## 2026-10-08 — Architect completes P3-R2; P4-A foundation handoff
+
+Reviewed `d0c00fe` and `fc2c282`, including actual changed files and full Builder
+report. Directly completed the remaining critical source paths, rather than assigning
+another P3 correction round. P3 is ready for the implementation handoff; no runtime
+acceptance/quality claim. Core source and dependency binaries were not changed.
+
+Changes: pipeline (complete selected provider coverage, actual split failures/all
+oversized roles, demand/cancellation/persistence propagation, recipe/cache reuse,
+fenced idle sweep); preparer (restore throwing decode/frozen guards/cleanup,
+post-write progress/download/failure events and capacity rechecks); writer/exporter
+(post-write hook); permit (bounded, cancellation-removable FIFO); recipe/planner/
+manifest (canonical identities, duplicate-content sharing, manifest-v2 parent/offset
+bindings, strict Live and large-component coverage); scanner (generation includes
+archived favorite/location metadata); StorageLayout (truthful domain-aware error
+classifications and conservative capacity). Ten existing source/support files; no new app source
+or UI files and no project regeneration needed.
+
+Source event coverage: real preparation/export starts, terminal export/hash and
+split work, post-write source progress with nil/known totals, observed Photos resource
+download activity via network events, failure/cancellation, Core scan/lease/cleanup
+and durable scoped recordSourceFailure. One bounded progress consumer per export is
+closed AND awaited on every terminal path; no proposal bytes or late unsupervised
+progress Task. Missing Core persistence surfaces to future P5 composition/OSLog,
+not fabricated durable success. Full device event coverage remains P7 verification.
+
+Validation (all static/compiler only):
+- Eight-file portable Swift 6 typecheck passed using current compiled core.
+- Thirteen-file full source pipeline typecheck passed using the real local macOS
+  Photos SDK. macOS 27 originalFilename deprecation warnings remain; no errors.
+  Preconcurrency does not prove runtime safety or iOS SDK/link/device correctness.
+- All 30 app Swift files parsed; core code unchanged from prior compiled revision.
+- Documentation/project/whitespace and dependency pin syntax checks recorded below.
+
+Exact source typecheck command:
+
+```sh
+swiftc -typecheck -swift-version 6 -sdk "$(xcrun --show-sdk-path)" -module-cache-path /private/tmp/cloudified-p3-review-module-cache -I /private/tmp/cloudified-p2-compile/out/Products/Debug -Xcc '-fmodule-map-file=Packages/CloudifiedCore/Sources/CSQLite/module.modulemap' App/Adapters/PhotoLibrary/SourceRecipe.swift App/Adapters/PhotoLibrary/StreamingHasher.swift App/Adapters/PhotoLibrary/SharedExportPermit.swift App/Adapters/PhotoLibrary/PhotoResourceExporter.swift App/Adapters/PhotoLibrary/ArchiveManifestBuilder.swift App/Adapters/PhotoLibrary/UploadPlanProducer.swift App/Adapters/PhotoLibrary/LosslessVideoPartSplitter.swift App/Adapters/PhotoLibrary/PhotoKitScanner.swift App/Adapters/PhotoLibrary/PhotoLibraryOriginalPreparer.swift App/Adapters/PhotoLibrary/PhotoLibraryPipeline.swift App/Adapters/PhotoLibrary/PhotoLibraryAdapterProtocol.swift App/Presentation/Settings/SettingsViewState.swift App/Adapters/System/StorageLayout.swift
+```
+
+Portable command and parse command are the previously recorded eight-file command
+and `rg --files App -g '*.swift' -0 | xargs -0 swiftc -parse -I /private/tmp/cloudified-p2-compile/out/Products/Debug`; both rerun successfully after source edits.
+No runtime/unit/app/media/database/account tests, cloud dispatch, native artifact
+build, Xcode install or USB operation occurred. Public git ref queries only:
+`git ls-remote https://github.com/g8row/PhotosBackup.git HEAD` returned
+`3c88269e18b9d4515e97d846c5816bd836285c3e`;
+`git ls-remote https://github.com/tdlib/td.git HEAD` returned
+`42e6a5259551178d1dab54a22ad96d14bd906e20`. These are recorded source selections,
+not verified licenses, built native artifacts or working protocol claims.
+
+Next Builder assignment: P4-A in P4-FOUNDATIONS.md (pinned dependencies, native TDLib
+lifecycle/JSON and secure credential vault). Architect owns P4-B critical transport/
+receipt/reconciliation; P5/P6 not assigned. Future P5 must handle producer credits,
+actual startup inventory, current policy bindings and source/job failure presentation;
+P6 completes background/source-change/cache lifecycle. First complete app test P7.
+Decisions D28–D30. Source commit `accf787`; annotated source milestone
+`v0.0.7-source-review-untested` exists and accurately describes compiler-only,
+partial-app evidence. Source/system/doc paths are released for the next handoff;
+P4-A must claim only its allowed foundation paths.
+
+Final checks after the last source changes:
+- Full thirteen-file typecheck above: exit 0; diagnostics saved locally at
+  `/private/tmp/cloudified-p3-final-typecheck.txt` (macOS originalFilename warnings).
+- All 30 app Swift files parsed, exit 0, using the recorded rg/xargs command.
+- `python3 scripts/check_docs.py`: passed, 17 Markdown files/local targets.
+- `plutil -lint Cloudified.xcodeproj/project.pbxproj`: OK.
+- `git diff --check`: passed.
+- Python json.loads/re.fullmatch checked pins.json syntax and both 40-hex source
+  revisions; license/native artifact/functional evidence is explicitly outstanding.
 
 ## Batch log template
 

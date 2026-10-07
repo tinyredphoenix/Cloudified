@@ -1,8 +1,9 @@
 # P3 architectural reviews and correction assignments
 
-Current next batch: **P3-R2 only**, described below. P3-R1 commits `377b647` and
-`5253218` were reviewed; P3 is not accepted for P4. The earlier P3-R1 assignment
-is retained as history, not the current handoff.
+Current next batch: **P4-A provider foundations** in P4-FOUNDATIONS.md. Architect
+reviewed P3-R2 and directly completed the remaining critical paths below. P3 is
+ready for the implementation handoff with compiler/static evidence only. Previous
+P3 correction assignments remain historical; they are no longer the next batch.
 
 2026-10-08. Builder commits `7d53faf`/`b7523e4` are present and pushed. They contain
 real implementation work, but P3 is **not accepted** for the P4 handoff. Syntax
@@ -223,3 +224,54 @@ Architect verification: core Swift 6 build passed; portable eight-file Swift 6
 adapter typecheck passed; parsing all 30 app Swift files, project plist lint and
 whitespace checks passed. CLT linker warned about its absent Developer/Library/
 Frameworks search path but returned success. Commands/evidence are in handbook 3.
+
+## P3-R2 architectural completion — 2026-10-08
+
+Reviewed Builder `d0c00fe`/`fc2c282` against actual source. Real admission,
+private selectors, one-asset demand and progress wiring were added; the report
+also concealed significant regressions. Architect directly completed the critical
+source paths so another P3 correction handoff is not needed before P4-A:
+
+- Restore throwing recipe decode/frozen job validation and complete lease/reservation
+  cleanup. No source catch converts SQLite/recovery/invariant failures into disk full,
+  unsupported format or a successfully handled asset. Cancellation stops production.
+- Google refuses incomplete selected coverage, including failed auxiliary/second
+  originals. Key-only legitimately ignores motion failure. Telegram keeps the real
+  split error, splits every oversized role (including Live motion/alternate originals),
+  requires full Live components and rejects unsplit oversized inputs. Telegram archive
+  limits don't invalidate Google's verified original plan.
+- Progress is measured after each successful bounded write/hash, not before it.
+  One bounded consumer per export coalesces progress, observes resource-download
+  activity separately and is closed/awaited on every success/error/cancellation path.
+  No late task can report progress after terminal cleanup or hide a persistence error.
+- Planner and preparer log real preparation/export/hash/download/failure events;
+  source control/persistence errors remain typed. Unknown totals stay nil.
+- Known-original/part writers recheck real capacity and copy allowances during writes;
+  arithmetic is overflow-checked. Planning reuses a matching complete verified recipe
+  without re-export; otherwise matching cached content is acquired before sweep.
+  Idle files are swept under startup/reader/transport fences, not directly unlinked.
+- Cancelled queued source-permit waiters are removed promptly; only live waiters
+  inherit the permit. The bounded queue cannot accumulate unlimited cancelled work.
+- Remote plan/manifest order is canonical by content/role/descriptor, not private
+  enumeration selectors. Unique content obligations may share one upload while every
+  archived original name/descriptor remains represented. Manifest-v2 records exact
+  original SHA-256 and byte offset for each part; shared parts retain each parent's
+  binding. Planning/preparation use the same expansion and verify frozen media tags.
+  Telegram policy is now telegram-archive-v2; media caption/tag version stays unchanged.
+
+Verification: portable eight-file Swift 6 typecheck passed; all 30 app files parsed.
+Full 13-file source/Photos Swift 6 typecheck passed against the available **macOS**
+SDK, with originalFilename deprecation warnings from macOS 27. This is stronger than
+parse but is not iOS SDK/link/device/runtime proof; preconcurrency import is not a
+concurrency test. Source property remains compatible with the iOS 26 target API.
+Core was unchanged this batch; typechecks used the previously compiled current core.
+No app/media/database/provider/quality/reinstall tests, cloud runs or drive changes.
+
+P5 must give the one-asset producer explicit demand/credits, complete actual startup
+inventory before sweeps, merge ready drains after enqueues and present source failures
+alongside job failures. Coverage/account changes must settle affected work before
+replanning, preserve historical receipts and invalidate obsolete active bindings so
+old confirmed coverage cannot mask a new pre-job failure. This needs Architect-owned
+Core integration during P5; source code alone doesn't establish dashboard behavior.
+P6 owns source-change observation/reexportability and complete background/cache lifecycle.
+All functional/resource/failure scenarios remain the first integrated P7 test.

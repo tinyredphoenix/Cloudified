@@ -1,4 +1,4 @@
-# Setup status — 2026-10-07
+# Setup status — 2026-10-08
 
 Completed:
 
@@ -35,6 +35,9 @@ P2 includes the architect-authored core package, queue/receipt transactions,
 concurrent lanes, counters, leases and diagnostics. Local Swift 6 compilation is
 separate from a full Xcode/iOS build and does not prove runtime behavior.
 
-Remaining: P3 real original-media pipeline, P4 providers, P5 UI wiring and P6 system
-integration. No cloud build, simulator/device test or real upload has run. The first
+P3 original-media source implementation was reviewed and completed by Architect
+with local macOS Photos SDK typechecking; iOS/runtime behavior remains unverified.
+Next: Builder P4-A pinned dependency/native/credential foundations, then Architect
+P4-B critical transports, followed by P5 UI wiring and P6 system integration.
+No cloud build, simulator/device test or real upload has run. The first
 complete-app build/test remains P7. Verify Actions allowance before dispatch.

@@ -5,7 +5,8 @@ only; no device, provider, SQLite runtime or resource measurements yet. P3–P6 
 connect real components before P7. No demo adapters, sample records or test suites.
 
 Updated 2026-10-08: [P3 review/correction assignment](P3-REVIEW.md) takes precedence
-for the current batch (P3-R2). P3 is not yet accepted for P4. Schema v2 adds pre-job source
+for historical source corrections. P3-R2 was directly completed by Architect;
+next Builder batch is P4-A in P4-FOUNDATIONS.md, with runtime evidence deferred to P7. Schema v2 adds pre-job source
 failures and verified content caching with migration from v1. `scannedAssetPage`
 supplies canonical producer IDs; `recordSourceFailure`/`sourceFailurePage` expose
 failures before content identity exists. P5 must present those real obligations too.
@@ -21,7 +22,7 @@ SQLite; CryptoKit is Apple's framework. No third-party dependency was fetched.
 | --- | --- |
 | `Contracts.swift` | Immutable mappings, assets, plans, originals, receipts, failures and adapter interfaces |
 | `ContentIdentity.swift` | Versioned canonical resource/coverage hashes and Telegram caption tags |
-| `SQLite.swift` | Bound parameters, statement cleanup, FULL synchronous WAL, schema v1 |
+| `SQLite.swift` | Bound parameters, statement cleanup, FULL synchronous WAL, schema v2 with v1 migration |
 | `Ledger.swift` | Mappings, scan pages, source recipes, frozen jobs, aliases and bounded snapshot invalidation |
 | `QueueTransitions.swift` | Claims, reconciliation, persistent attempts, component confirmation, retries and deadlines |
 | `Snapshots.swift` | SQL aggregates, literal saved-to-both intersection, paginated failure rows |
@@ -250,3 +251,26 @@ correct role/length, contiguous overflow-safe parts and <=255 media obligations.
 Do not recover matching by role/length OR fallback. Private PhotoKit generation is
 verified against a refetched snapshot after export and recipe identity against the
 frozen job; final exported hashes remain authoritative.
+
+## P3-R2 completion / next integration — 2026-10-08
+
+One-asset planning requires startup inventory before source sweep and explicit
+P5 producer credits/drain requests. Matching complete recipes avoid routine exports;
+partial/new split planning acquires matching content before evicting idle files.
+Source progress is post-write and consumer terminal is awaited before cleanup.
+Error/cancellation/persistence paths are typed; don't blanket-catch them as format errors.
+
+Google selected-coverage completeness is separate from Telegram's full archive
+coverage. Telegram manifest-v2/telegram-archive-v2 adds parent original SHA-256 and
+byte offset for every part, preserves multiple parent bindings for a shared part,
+and canonicalizes external originals without private selectors. Media tags/caption
+version remain cloudified-v1. P4 recovery must distinguish archive schema/policy from
+media tag version; no blind migration/resend. Manifest preparation validates the
+same expanded frozen media obligations and receipts before generating a document.
+
+P4-A foundation scope is defined in P4-FOUNDATIONS; Architect owns P4-B transport/
+acceptance/reconciliation. Source dependency pins now exist in dependencies/pins.json,
+but are not license/build/runtime evidence. P5 also needs an explicit current-coverage
+binding change API so an old confirmed alias cannot mask failure to plan newly requested
+coverage. Settle that provider before policy changes; retain historical jobs/receipts.
+All iOS/background/cache/metadata/recovery/byte preservation evidence remains P7.
