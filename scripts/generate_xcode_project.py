@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate Cloudified.xcodeproj and shared Cloudified scheme."""
+"""Generate Cloudified.xcodeproj and shared Cloudified scheme with CloudifiedCore local package."""
 import hashlib
 import os
 from pathlib import Path
@@ -51,9 +51,20 @@ sources = [
     ("SettingsView.swift", "settings"),
     ("SettingsViewState.swift", "settings"),
     ("PhotoLibraryAdapterProtocol.swift", "photo_library"),
+    ("SourceRecipe.swift", "photo_library"),
+    ("StreamingHasher.swift", "photo_library"),
+    ("SharedExportPermit.swift", "photo_library"),
+    ("PhotoResourceExporter.swift", "photo_library"),
+    ("LosslessVideoPartSplitter.swift", "photo_library"),
+    ("ArchiveManifestBuilder.swift", "photo_library"),
+    ("UploadPlanProducer.swift", "photo_library"),
+    ("PhotoLibraryOriginalPreparer.swift", "photo_library"),
+    ("PhotoKitScanner.swift", "photo_library"),
+    ("PhotoLibraryPipeline.swift", "photo_library"),
     ("GooglePhotosAdapterProtocol.swift", "google_photos"),
     ("TelegramAdapterProtocol.swift", "telegram"),
-    ("SystemAdapterProtocol.swift", "system")
+    ("SystemAdapterProtocol.swift", "system"),
+    ("StorageLayout.swift", "system")
 ]
 
 # Resource files
@@ -66,6 +77,10 @@ resources = [
 proj_id = gid("Project_Cloudified")
 target_id = gid("Target_Cloudified")
 prod_ref_id = gid("Product_Cloudified_App")
+
+pkg_ref_id = gid("LocalPackage_CloudifiedCore")
+pkg_prod_id = gid("ProductDep_CloudifiedCore")
+pkg_buildfile_id = gid("BuildFile_CloudifiedCore_Frameworks")
 
 proj_cfg_list = gid("ProjConfigList")
 proj_cfg_dbg = gid("ProjConfigDebug")
@@ -92,6 +107,8 @@ for rname, _, _, in_phase in resources:
         fr_id = gid(f"FileRef_{rname}")
         build_file_lines.append(f"\t\t{bf_id} /* {rname} in Resources */ = {{isa = PBXBuildFile; fileRef = {fr_id} /* {rname} */; }};")
 
+build_file_lines.append(f"\t\t{pkg_buildfile_id} /* CloudifiedCore in Frameworks */ = {{isa = PBXBuildFile; productRef = {pkg_prod_id} /* CloudifiedCore */; }};")
+
 # Generate PBXFileReference entries
 file_ref_lines = [
     f"\t\t{prod_ref_id} /* Cloudified.app */ = {{isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Cloudified.app; sourceTree = BUILT_PRODUCTS_DIR; }};"
@@ -106,14 +123,12 @@ for rname, ftype, _, _ in resources:
 
 # Generate PBXGroup entries
 group_children = {gkey: [] for gkey, _, _, _ in groups}
-# Add subgroups
 for gkey, gname, parent_key, _ in groups:
     if parent_key:
         gid_val = gid(f"Group_{gkey}")
         name_str = f" /* {gname} */" if gname else ""
         group_children[parent_key].append(f"{gid_val}{name_str}")
 
-# Add files to groups
 for fname, gkey in sources:
     fr_id = gid(f"FileRef_{fname}")
     group_children[gkey].append(f"{fr_id} /* {fname} */")
@@ -156,13 +171,11 @@ for gkey, gname, parent_key, path in groups:
 \t\t\t{name_attr}{path_attr}sourceTree = "<group>";
 \t\t}};""")
 
-# Sources phase
 sources_phase_files = "\n".join(
     f"\t\t\t\t{gid(f'BuildFile_Source_{fname}')} /* {fname} in Sources */,"
     for fname, _ in sources
 )
 
-# Resources phase
 resources_phase_files = "\n".join(
     f"\t\t\t\t{gid(f'BuildFile_Resource_{rname}')} /* {rname} in Resources */,"
     for rname, _, _, in_phase in resources if in_phase
@@ -189,6 +202,7 @@ pbxproj_content = f"""// !$*UTF8*$!
 \t\t\tisa = PBXFrameworksBuildPhase;
 \t\t\tbuildActionMask = 2147483647;
 \t\t\tfiles = (
+\t\t\t\t{pkg_buildfile_id} /* CloudifiedCore in Frameworks */,
 \t\t\t);
 \t\t\trunOnlyForDeploymentPostprocessing = 0;
 \t\t}};
@@ -212,6 +226,9 @@ pbxproj_content = f"""// !$*UTF8*$!
 \t\t\tdependencies = (
 \t\t\t);
 \t\t\tname = Cloudified;
+\t\t\tpackageProductDependencies = (
+\t\t\t\t{pkg_prod_id} /* CloudifiedCore */,
+\t\t\t);
 \t\t\tproductName = Cloudified;
 \t\t\tproductReference = {prod_ref_id} /* Cloudified.app */;
 \t\t\tproductType = "com.apple.product-type.application";
@@ -239,6 +256,9 @@ pbxproj_content = f"""// !$*UTF8*$!
 \t\t\t\tBase,
 \t\t\t);
 \t\t\tmainGroup = {gid("Group_main")};
+\t\t\tpackageReferences = (
+\t\t\t\t{pkg_ref_id} /* XCLocalSwiftPackageReference "CloudifiedCore" */,
+\t\t\t);
 \t\t\tproductRefGroup = {gid("Group_products")} /* Products */;
 \t\t\tprojectDirPath = "";
 \t\t\tprojectRoot = "";
@@ -461,6 +481,21 @@ pbxproj_content = f"""// !$*UTF8*$!
 \t\t\tdefaultConfigurationName = Release;
 \t\t}};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+\t\t{pkg_ref_id} /* XCLocalSwiftPackageReference "CloudifiedCore" */ = {{
+\t\t\tisa = XCLocalSwiftPackageReference;
+\t\t\trelativePath = "Packages/CloudifiedCore";
+\t\t}};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+\t\t{pkg_prod_id} /* CloudifiedCore */ = {{
+\t\t\tisa = XCSwiftPackageProductDependency;
+\t\t\tpackage = {pkg_ref_id} /* XCLocalSwiftPackageReference "CloudifiedCore" */;
+\t\t\tproductName = CloudifiedCore;
+\t\t}};
+/* End XCSwiftPackageProductDependency section */
 
 \t}};
 \trootObject = {proj_id} /* Project object */;

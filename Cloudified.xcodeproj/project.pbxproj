@@ -23,10 +23,22 @@
 		B194B991052625F01EA4C539 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC4B09C61D3A3BE3D1761161 /* SettingsView.swift */; };
 		D23A58A5CB6A654B58E90AD7 /* SettingsViewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77D8C06D52185A565EC76EF8 /* SettingsViewState.swift */; };
 		5D43F9FD9A912799708A48E0 /* PhotoLibraryAdapterProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8637BE190C9FCAA37C4EFD8 /* PhotoLibraryAdapterProtocol.swift */; };
+		E1E2F6696AF143B0DD415059 /* SourceRecipe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05712AB9382E0C74446DE95B /* SourceRecipe.swift */; };
+		30FCA7AB86632FC26AE551A5 /* StreamingHasher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FA788BC6E0B606581E8FA37 /* StreamingHasher.swift */; };
+		99BB6D6B7D6DB80CE266A18A /* SharedExportPermit.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5FBF5CC1A6C8A0D0A65601F /* SharedExportPermit.swift */; };
+		BEDD6E960F1AD60CCC54DBFF /* PhotoResourceExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFDEB1819A1E62626181E1F4 /* PhotoResourceExporter.swift */; };
+		B82AD1A4741CAE54F6D8A0DB /* LosslessVideoPartSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71C13F9B05C5F8D42A178263 /* LosslessVideoPartSplitter.swift */; };
+		492095A478A2E1DD5742761B /* ArchiveManifestBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 859AC7932CC8FAC36F74C6FF /* ArchiveManifestBuilder.swift */; };
+		D2D8F58CE660E98EA6000ABB /* UploadPlanProducer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DFEE2B9D0C01D5745D28882 /* UploadPlanProducer.swift */; };
+		3B1053823E65810E9BB97C67 /* PhotoLibraryOriginalPreparer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9CB698CCC77BEE4D3BC67F1 /* PhotoLibraryOriginalPreparer.swift */; };
+		BE469E417A4C88F134428D09 /* PhotoKitScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF702D9F6E179878AE201A2C /* PhotoKitScanner.swift */; };
+		29155BF5E8ABBA49C6189436 /* PhotoLibraryPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81D7A8DC7F05AE4ABABB884 /* PhotoLibraryPipeline.swift */; };
 		C7D39F78BD260E9BF05217D6 /* GooglePhotosAdapterProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27C6864CFD3D4BBC0C024FA7 /* GooglePhotosAdapterProtocol.swift */; };
 		F9BAE2E48BE276E49C725E51 /* TelegramAdapterProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF8157169DE02D560614C208 /* TelegramAdapterProtocol.swift */; };
 		1FE291F70D30B73BB0A75824 /* SystemAdapterProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 650E59105124992406203C6B /* SystemAdapterProtocol.swift */; };
+		B56DB06CD8D86784B62E2BC3 /* StorageLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F483385D2C90581A2E58827 /* StorageLayout.swift */; };
 		2B10086B1296382916F96782 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 043A0A515D971904874F82FA /* Assets.xcassets */; };
+		22507305C3B5D543A01A33C6 /* CloudifiedCore in Frameworks */ = {isa = PBXBuildFile; productRef = 7EEA9240AAE7E5F7F794D659 /* CloudifiedCore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -47,9 +59,20 @@
 		FC4B09C61D3A3BE3D1761161 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		77D8C06D52185A565EC76EF8 /* SettingsViewState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewState.swift; sourceTree = "<group>"; };
 		D8637BE190C9FCAA37C4EFD8 /* PhotoLibraryAdapterProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLibraryAdapterProtocol.swift; sourceTree = "<group>"; };
+		05712AB9382E0C74446DE95B /* SourceRecipe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceRecipe.swift; sourceTree = "<group>"; };
+		8FA788BC6E0B606581E8FA37 /* StreamingHasher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingHasher.swift; sourceTree = "<group>"; };
+		D5FBF5CC1A6C8A0D0A65601F /* SharedExportPermit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedExportPermit.swift; sourceTree = "<group>"; };
+		FFDEB1819A1E62626181E1F4 /* PhotoResourceExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoResourceExporter.swift; sourceTree = "<group>"; };
+		71C13F9B05C5F8D42A178263 /* LosslessVideoPartSplitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LosslessVideoPartSplitter.swift; sourceTree = "<group>"; };
+		859AC7932CC8FAC36F74C6FF /* ArchiveManifestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveManifestBuilder.swift; sourceTree = "<group>"; };
+		8DFEE2B9D0C01D5745D28882 /* UploadPlanProducer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadPlanProducer.swift; sourceTree = "<group>"; };
+		C9CB698CCC77BEE4D3BC67F1 /* PhotoLibraryOriginalPreparer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLibraryOriginalPreparer.swift; sourceTree = "<group>"; };
+		FF702D9F6E179878AE201A2C /* PhotoKitScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoKitScanner.swift; sourceTree = "<group>"; };
+		D81D7A8DC7F05AE4ABABB884 /* PhotoLibraryPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLibraryPipeline.swift; sourceTree = "<group>"; };
 		27C6864CFD3D4BBC0C024FA7 /* GooglePhotosAdapterProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GooglePhotosAdapterProtocol.swift; sourceTree = "<group>"; };
 		CF8157169DE02D560614C208 /* TelegramAdapterProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelegramAdapterProtocol.swift; sourceTree = "<group>"; };
 		650E59105124992406203C6B /* SystemAdapterProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemAdapterProtocol.swift; sourceTree = "<group>"; };
+		0F483385D2C90581A2E58827 /* StorageLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageLayout.swift; sourceTree = "<group>"; };
 		043A0A515D971904874F82FA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		3A5604949319631C20B5BA49 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -59,6 +82,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				22507305C3B5D543A01A33C6 /* CloudifiedCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -159,6 +183,16 @@
 			isa = PBXGroup;
 			children = (
 				D8637BE190C9FCAA37C4EFD8 /* PhotoLibraryAdapterProtocol.swift */,
+				05712AB9382E0C74446DE95B /* SourceRecipe.swift */,
+				8FA788BC6E0B606581E8FA37 /* StreamingHasher.swift */,
+				D5FBF5CC1A6C8A0D0A65601F /* SharedExportPermit.swift */,
+				FFDEB1819A1E62626181E1F4 /* PhotoResourceExporter.swift */,
+				71C13F9B05C5F8D42A178263 /* LosslessVideoPartSplitter.swift */,
+				859AC7932CC8FAC36F74C6FF /* ArchiveManifestBuilder.swift */,
+				8DFEE2B9D0C01D5745D28882 /* UploadPlanProducer.swift */,
+				C9CB698CCC77BEE4D3BC67F1 /* PhotoLibraryOriginalPreparer.swift */,
+				FF702D9F6E179878AE201A2C /* PhotoKitScanner.swift */,
+				D81D7A8DC7F05AE4ABABB884 /* PhotoLibraryPipeline.swift */,
 			);
 			path = PhotoLibrary; sourceTree = "<group>";
 		};
@@ -180,6 +214,7 @@
 			isa = PBXGroup;
 			children = (
 				650E59105124992406203C6B /* SystemAdapterProtocol.swift */,
+				0F483385D2C90581A2E58827 /* StorageLayout.swift */,
 			);
 			path = System; sourceTree = "<group>";
 		};
@@ -215,6 +250,9 @@
 			dependencies = (
 			);
 			name = Cloudified;
+			packageProductDependencies = (
+				7EEA9240AAE7E5F7F794D659 /* CloudifiedCore */,
+			);
 			productName = Cloudified;
 			productReference = 3185C59B8A4EDF28C6B9ACB7 /* Cloudified.app */;
 			productType = "com.apple.product-type.application";
@@ -242,6 +280,9 @@
 				Base,
 			);
 			mainGroup = 3147A6BFFBBEC1D467270892;
+			packageReferences = (
+				C3C4AF9174E8A7EBA1B8D243 /* XCLocalSwiftPackageReference "CloudifiedCore" */,
+			);
 			productRefGroup = 8943DC046080D0141E293A14 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -283,9 +324,20 @@
 				B194B991052625F01EA4C539 /* SettingsView.swift in Sources */,
 				D23A58A5CB6A654B58E90AD7 /* SettingsViewState.swift in Sources */,
 				5D43F9FD9A912799708A48E0 /* PhotoLibraryAdapterProtocol.swift in Sources */,
+				E1E2F6696AF143B0DD415059 /* SourceRecipe.swift in Sources */,
+				30FCA7AB86632FC26AE551A5 /* StreamingHasher.swift in Sources */,
+				99BB6D6B7D6DB80CE266A18A /* SharedExportPermit.swift in Sources */,
+				BEDD6E960F1AD60CCC54DBFF /* PhotoResourceExporter.swift in Sources */,
+				B82AD1A4741CAE54F6D8A0DB /* LosslessVideoPartSplitter.swift in Sources */,
+				492095A478A2E1DD5742761B /* ArchiveManifestBuilder.swift in Sources */,
+				D2D8F58CE660E98EA6000ABB /* UploadPlanProducer.swift in Sources */,
+				3B1053823E65810E9BB97C67 /* PhotoLibraryOriginalPreparer.swift in Sources */,
+				BE469E417A4C88F134428D09 /* PhotoKitScanner.swift in Sources */,
+				29155BF5E8ABBA49C6189436 /* PhotoLibraryPipeline.swift in Sources */,
 				C7D39F78BD260E9BF05217D6 /* GooglePhotosAdapterProtocol.swift in Sources */,
 				F9BAE2E48BE276E49C725E51 /* TelegramAdapterProtocol.swift in Sources */,
 				1FE291F70D30B73BB0A75824 /* SystemAdapterProtocol.swift in Sources */,
+				B56DB06CD8D86784B62E2BC3 /* StorageLayout.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -482,6 +534,21 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		C3C4AF9174E8A7EBA1B8D243 /* XCLocalSwiftPackageReference "CloudifiedCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "Packages/CloudifiedCore";
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		7EEA9240AAE7E5F7F794D659 /* CloudifiedCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C3C4AF9174E8A7EBA1B8D243 /* XCLocalSwiftPackageReference "CloudifiedCore" */;
+			productName = CloudifiedCore;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 	};
 	rootObject = 4FF078829D20028A0EB8CA29 /* Project object */;

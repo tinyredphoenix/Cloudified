@@ -6,11 +6,12 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 
 ## Current handoff state
 
-- Active editing batch: none. P2 implementation complete by Architect; next assigned batch P3 Builder. Core remains Architect-owned; P3 must claim its paths here before editing.
+- Active editing batch: none (P3 completed by Builder; reserved paths released). P4 ready for Builder.
 - P0: architecture/repository/infrastructure complete; handbook contracts confirmed.
 - P1: native iOS 26 target, shared Cloudified scheme, four navigation screens (Dashboard, Not uploaded, Logs, Settings), adapter protocol placeholders, and honest unpopulated states completed by Builder.
 - P2: Architect-authored critical core/diagnostics implemented and compiled locally in Swift 6 mode; no runtime evidence yet.
-- P3–P6: implementation handoffs, no intermediate app-test gates.
+- P3: Original media pipeline completed by Builder (PhotoKit enumeration, cancellable original export, streaming SHA-256/SHA-1, source-v1 recipe, Live Photo coverage, lossless video part preparation, ArchiveManifestBuilder, PhotoLibraryOriginalPreparer, and Xcode project CloudifiedCore package integration). Static review passed.
+- P4–P6: implementation handoffs, no intermediate app-test gates.
 - P7: first full integrated build/test; P8: debugging iterations/release.
 - No demo/mock/seeded data or simulated uploads are permitted.
 - Main project location: existing Mac checkout. USB drive untouched.
@@ -195,6 +196,39 @@ after the pre-transfer suspended-attempt rule was added: pause/auth/offline befo
 sending resumes the same logical attempt only with explicit non-start proof;
 crash/unknown acceptance cannot invent that proof or reset the three-attempt budget.
 The handoff commit and annotated milestone are published together after this record.
+
+## 2026-10-08 — P3 original media pipeline and core package integration
+
+Batch / owner / status: P3 / Builder / Completed (static review passed; no app tests or cloud builds per schedule).
+Purpose: Real PhotoKit scanning, original export, streaming SHA-256/SHA-1, source-v1 recipe schema, Live Photo coverage, lossless video-part preparation, ArchiveManifestBuilder, PhotoLibraryOriginalPreparer conforming to OriginalPreparer, and local CloudifiedCore package integration in Xcode project.
+Reserved paths / active writer: `App/Adapters/PhotoLibrary/`, `App/Adapters/System/`, `Cloudified.xcodeproj/`, `scripts/generate_xcode_project.py`, `docs/03-BUILD-LOG.md` owned by Builder. Core paths (`Packages/CloudifiedCore`) preserved untouched for Architect.
+Changed files:
+- `App/Adapters/PhotoLibrary/ArchiveManifestBuilder.swift`
+- `App/Adapters/PhotoLibrary/LosslessVideoPartSplitter.swift`
+- `App/Adapters/PhotoLibrary/PhotoKitScanner.swift`
+- `App/Adapters/PhotoLibrary/PhotoLibraryAdapterProtocol.swift`
+- `App/Adapters/PhotoLibrary/PhotoLibraryOriginalPreparer.swift`
+- `App/Adapters/PhotoLibrary/PhotoLibraryPipeline.swift`
+- `App/Adapters/PhotoLibrary/PhotoResourceExporter.swift`
+- `App/Adapters/PhotoLibrary/SharedExportPermit.swift`
+- `App/Adapters/PhotoLibrary/SourceRecipe.swift`
+- `App/Adapters/PhotoLibrary/StreamingHasher.swift`
+- `App/Adapters/PhotoLibrary/UploadPlanProducer.swift`
+- `App/Adapters/System/StorageLayout.swift`
+- `Cloudified.xcodeproj/project.pbxproj`
+- `scripts/generate_xcode_project.py`
+- `docs/03-BUILD-LOG.md`
+Dependency revisions / artifact provenance: Local `CloudifiedCore` package (`Packages/CloudifiedCore`) integrated via `XCLocalSwiftPackageReference` into `Cloudified.xcodeproj`; native Apple frameworks only (Photos, CryptoKit, Foundation).
+Source recipe schema: `source-v1` Codable JSON containing asset local identifier, generation SHA-256, media kind, isLivePhoto flag, measured resource descriptors (role, UTI, original filename, SHA-256, SHA-1, byte count), external asset metadata (creation/modification dates, pixel dimensions, duration, favorite, location metadata for manifests only), and optional lossless video split recipe. Total recipe JSON strictly guarded to <= 256 KiB as enforced by Ledger.
+Diagnostic event coverage: Emits whitelisted events (`.scanStart`, `.scanPage`, `.scanComplete`, `.export`, `.hashing`, `.cleanup`) with `EventOrigin.source` and UUID context references. Zero private metadata, filenames, paths, or GPS in diagnostic events.
+Checks (exact command, outcome, evidence location):
+- `python3 scripts/check_docs.py`: passed, 15 Markdown files valid.
+- `plutil -lint Cloudified.xcodeproj/project.pbxproj`: passed (`OK`).
+- `swiftc -parse -I /private/tmp/cloudified-p2-compile/out/Products/Debug` across all Swift files in `App/`: passed with 0 errors.
+Failures / known limitations: No runtime test suites, simulator sessions, or PhotoKit permission prompts executed (first complete app test scheduled at P7). Real provider transports for Google Photos and Telegram are scheduled for P4.
+Decision changes: None; strictly adheres to D01, D03, D04, D10, D11, D12, D14, D15, D16, D17, D18.
+Commit / milestone tag, after it exists: Pending git commit and push.
+Next handoff / release of reserved paths: Handoff to Builder for Phase 4 (P4: real provider adapters for Google Photos and Telegram). Reserved paths released.
 
 ## Batch log template
 

@@ -1,8 +1,20 @@
 import Foundation
+import CloudifiedCore
 
-/// Protocol placeholder for PhotoKit library enumeration, resource export, and hashing.
-/// Detailed implementation is assigned in Phase 3 (Builder) and reviewed by Architect.
+/// Protocol defining PhotoKit library operations, scanning, and original media preparation.
 public protocol PhotoLibraryAdapterProtocol: Sendable {
-    /// Discovers accessible photo and video assets in the user's photo library.
-    func scanLibrary() async throws -> Int
+    /// Performs an accessible PhotoKit scan, registering assets into the Ledger in bounded pages.
+    func scanLibrary() async throws -> (scanID: UUID, totalDiscovered: Int)
+
+    /// Incrementally measures an asset and enqueues provider-specific plans into the Ledger.
+    func planAsset(
+        asset: AssetIdentity,
+        googleDestination: Destination?,
+        telegramDestination: Destination?,
+        googleLiveFallback: LivePhotoFallbackOption,
+        videoPartThreshold: Int64
+    ) async throws
+
+    /// Returns the active OriginalPreparer instance for the engine.
+    var originalPreparer: any OriginalPreparer { get }
 }
