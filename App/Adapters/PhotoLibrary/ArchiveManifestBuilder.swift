@@ -6,7 +6,7 @@ import CloudifiedCore
 /// The uploaded document also records confirmed message references and full
 /// original hashes/filenames/UTIs, so lossless parts can be reconstructed/verified.
 public enum ArchiveManifestBuilder {
-    public static let schemaVersion = "manifest-v1"
+    public static let schemaVersion = "manifest-v2"
     public struct ManifestResourceEntry: Codable, Sendable {
         public let role: ResourceRole
         public let tag: String
@@ -15,10 +15,14 @@ public enum ArchiveManifestBuilder {
         public let byteCount: Int64
         public let partIndex: Int?
         public let partCount: Int?
+        public let originalSha256: String?
+        public let offset: Int64?
         public init(role: ResourceRole, tag: String, sha256: String, sha1: String, byteCount: Int64,
-                    partIndex: Int? = nil, partCount: Int? = nil) {
+                    partIndex: Int? = nil, partCount: Int? = nil,
+                    originalSha256: String? = nil, offset: Int64? = nil) {
             self.role = role; self.tag = tag; self.sha256 = sha256; self.sha1 = sha1; self.byteCount = byteCount
             self.partIndex = partIndex; self.partCount = partCount
+            self.originalSha256 = originalSha256; self.offset = offset
         }
     }
     public struct ManifestReference: Codable, Sendable {
@@ -57,7 +61,9 @@ public enum ArchiveManifestBuilder {
     ) throws -> (data: Data, associationHash: String) {
         guard !originals.isEmpty, originals.count <= 32, resources.count <= 255 else { throw CoreError.invalidContract }
         let recipe = ArchiveRecipe(schema: schemaVersion, kind: kind, isLivePhoto: isLivePhoto,
-                                   metadata: metadata, originals: originals.map(ManifestOriginal.init), resources: resources)
+                                   metadata: metadata,
+                                   originals: UploadPlanProducer.canonicalOriginals(originals).map(ManifestOriginal.init),
+                                   resources: resources)
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         // Milliseconds since Unix epoch retain fractional external capture times;
         // metadata is private archive material, never diagnostic output.

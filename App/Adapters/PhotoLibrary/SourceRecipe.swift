@@ -136,6 +136,7 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
                   res.role != .manifest else {
                 throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected)
             }
+            guard (res.resourceType == nil) == (res.selectorIndex == nil) else { throw CoreError.invalidContract }
             if let st = res.resourceType {
                 guard st >= 0 else { throw SafeFailure(.invariant, domain: .photos, cause: .formatRejected) }
             }
@@ -153,7 +154,7 @@ public struct SourceRecipe: Codable, Equatable, Sendable {
 
         for split in videoSplits {
             guard split.targetPartSize > 0, split.totalByteCount > 0,
-                  !split.parts.isEmpty, split.parts.count <= 255,
+                  split.parts.count > 1, split.parts.count <= 255,
                   split.targetPartSize <= 1_900_000_000,
                   isHex(split.originalSha256, length: 64),
                   splitKeys.insert("\(split.role.rawValue):\(split.originalSha256)").inserted,

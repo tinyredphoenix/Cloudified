@@ -31,61 +31,80 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
         resource: ResourceRequirement,
         receipts: [RemoteReceipt]
     ) async throws -> [LeasedFile] {
-        // All preparations (including manifests) are serialized under the shared permit
-        return try await permit.withPermit {
-            // 1. Archive manifests are generated fresh from confirmed receipts; never return a stale cache
-            if resource.role == .manifest {
-                return [try await prepareManifest(job: job, resource: resource, receipts: receipts)]
-            }
-
-            // Retrieve private durable recipe
-            guard let recipeData = try await ledger.sourceRecipe(assetID: job.asset.id),
-                  let recipe = try? SourceRecipe.decode(from: recipeData) else {
-                throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing)
-            }
-
-            var leasedFiles: [LeasedFile] = []
-
-            do {
-                for original in resource.originals {
-                    // Try to acquire from verified cache first; only stagedUnavailable is a clean miss
-                    var leased: LeasedFile?
-                    do {
-                        leased = try await fileStore.acquireContent(original)
-                    } catch CoreError.stagedUnavailable {
-                        leased = nil
-                    }
-
-                    if let leased {
-                        leasedFiles.append(leased)
-                    } else if let partIndex = original.partIndex {
-                        let preparedPart = try await prepareVideoPart(
-                            job: job,
-                            resourceID: resource.id,
-                            original: original,
-                            partIndex: partIndex,
-                            recipe: recipe
-                        )
-                        leasedFiles.append(preparedPart)
-                    } else {
-                        let preparedOriginal = try await exportOriginalResource(
-                            job: job,
-                            resourceID: resource.id,
-                            original: original,
-                            recipe: recipe
-                        )
-                        leasedFiles.append(preparedOriginal)
-                    }
+        let context = EventContext(origin: .source, destinationID: job.destination.id,
+            jobID: job.id, assetID: job.asset.id, resourceID: resource.id)
+        do {
+            // All preparations (including manifests) are serialized under the shared permit
+            return try await permit.withPermit {
+                try await ledger.appendEvent(.preparation, context: context, decision: .proceed)
+                // 1. Archive manifests are generated fresh from confirmed receipts; never return a stale cache
+                if resource.role == .manifest {
+                    return [try await prepareManifest(job: job, resource: resource, receipts: receipts)]
                 }
-                return leasedFiles
-            } catch {
-                // Multi-input prepare failed: release every accumulated lease to prevent leaks
-                for leased in leasedFiles {
-                    try? await fileStore.release(leased)
+
+                // Retrieve private durable recipe
+                let recipe = try await loadRecipe(job)
+
+                var leasedFiles: [LeasedFile] = []
+
+                do {
+                    for original in resource.originals {
+                        // Try to acquire from verified cache first; only stagedUnavailable is a clean miss
+                        var leased: LeasedFile?
+                        do {
+                            leased = try await fileStore.acquireContent(original)
+                        } catch CoreError.stagedUnavailable {
+                            leased = nil
+                        }
+
+                        if let leased {
+                            leasedFiles.append(leased)
+                        } else if let partIndex = original.partIndex {
+                            let preparedPart = try await prepareVideoPart(
+                                job: job,
+                                resourceID: resource.id,
+                                original: original,
+                                partIndex: partIndex,
+                                recipe: recipe
+                            )
+                            leasedFiles.append(preparedPart)
+                        } else {
+                            let preparedOriginal = try await exportOriginalResource(
+                                job: job,
+                                resourceID: resource.id,
+                                original: original,
+                                recipe: recipe
+                            )
+                            leasedFiles.append(preparedOriginal)
+                        }
+                    }
+                    return leasedFiles
+                } catch {
+                    // Multi-input prepare failed: release every accumulated lease to prevent leaks
+                    var cleanupError: (any Error)?
+                    for leased in leasedFiles {
+                        do { try await fileStore.release(leased) } catch { cleanupError = error }
+                    }
+                    throw cleanupError ?? error
                 }
-                throw error
             }
+        } catch {
+            try await ledger.appendEvent(.failure, context: context, decision: .wait, severity: .error,
+                failure: SourceFailurePolicy.safe(error, domain: .photos))
+            throw error
         }
+    }
+
+    private func loadRecipe(_ job: JobRecord) async throws -> SourceRecipe {
+        guard let data = try await ledger.sourceRecipe(assetID: job.asset.id) else {
+            throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing)
+        }
+        let recipe = try SourceRecipe.decode(from: data)
+        guard recipe.assetLocalIdentifier == job.asset.localIdentifier,
+              recipe.generation == job.asset.generation, recipe.mediaKind == job.asset.kind else {
+            throw CoreError.invalidContract
+        }
+        return recipe
     }
 
     // MARK: - Manifest Preparation
@@ -95,25 +114,14 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
         resource: ResourceRequirement,
         receipts: [RemoteReceipt]
     ) async throws -> LeasedFile {
-        guard let recipeData = try await ledger.sourceRecipe(assetID: job.asset.id),
-              let recipe = try? SourceRecipe.decode(from: recipeData) else {
-            throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing)
-        }
+        let recipe = try await loadRecipe(job)
 
-        var entries: [ArchiveManifestBuilder.ManifestResourceEntry] = []
-        for req in job.plan.resources where req.role != .manifest {
-            for original in req.originals {
-                entries.append(.init(
-                    role: req.role,
-                    tag: req.tag,
-                    sha256: original.sha256,
-                    sha1: original.sha1,
-                    byteCount: original.byteCount,
-                    partIndex: original.partIndex,
-                    partCount: original.partCount
-                ))
-            }
-        }
+        let media = try UploadPlanProducer.telegramMedia(recipe: recipe)
+        let frozenMedia = job.plan.resources.filter { $0.role != .manifest }
+        guard media.requirements.map(\.tag) == frozenMedia.map(\.tag),
+              media.requirements.map(\.originals) == frozenMedia.map(\.originals),
+              media.requirements.map(\.role) == frozenMedia.map(\.role) else { throw CoreError.invalidContract }
+        let entries = media.entries
 
         let destinationReceipts = receipts.filter { $0.destinationID == job.destination.id }
         let requiredTags = Set(entries.map(\.tag))
@@ -138,7 +146,7 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
         let reservation = try await ledger.reserveStorage(
             bytes: Int64(manifestData.count),
             availableBytes: available,
-            transportOverhead: manifestOverhead
+            transportOverhead: manifestOverhead + Int64(manifestData.count)
         )
 
         // Manifest uses a fresh physical UUID per document; remote tag remains recipe-derived
@@ -147,7 +155,7 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
         do {
             ownership = try await fileStore.beginExport(fileID: documentID)
         } catch {
-            try? await ledger.releaseReservation(reservation.id)
+            try await ledger.releaseReservation(reservation.id)
             throw error
         }
 
@@ -189,7 +197,12 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
                 do { try await fileStore.rollbackExport(ownership, reservationID: reservation.id) }
                 catch { cleanupError = error }
             }
-            throw cleanupError ?? error
+            let terminalError = cleanupError ?? error
+            try await ledger.appendEvent(.failure,
+                context: EventContext(origin: .source, destinationID: job.destination.id, jobID: job.id,
+                    assetID: job.asset.id, resourceID: resource.id), decision: .wait, severity: .error,
+                failure: SourceFailurePolicy.safe(terminalError, domain: .fileSystem))
+            throw terminalError
         }
     }
 
@@ -229,6 +242,9 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
 
         let matched: PHAssetResource
         if candidates.count == 1 {
+            guard descriptor.selectorIndex == nil || descriptor.selectorIndex == 0 else {
+                throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .contentChanged)
+            }
             matched = candidates[0]
         } else if candidates.count > 1 {
             guard let idx = descriptor.selectorIndex, candidates.indices.contains(idx) else {
@@ -239,36 +255,44 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
             throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing)
         }
 
+        let fileID = try ContentIdentity.stagingFileID(for: original)
         let available = try storageLayout.availableCapacity()
-        let copyCount = 1
+        let copyCount = 2 // shared re-export may feed both independently active providers
         let fixedOverhead: Int64 = 67_108_864
-        let transportOverhead = fixedOverhead + original.byteCount * Int64(copyCount)
+        let transportOverhead = try SourceWriteAdmission.overhead(bytes: original.byteCount, copies: copyCount, fixed: fixedOverhead)
         let reservation = try await ledger.reserveStorage(
             bytes: original.byteCount,
             availableBytes: available,
             transportOverhead: transportOverhead
         )
 
-        let fileID = try ContentIdentity.stagingFileID(for: original)
         let ownership: ExportFileOwnership
         do {
             ownership = try await fileStore.beginExport(fileID: fileID)
         } catch {
-            try? await ledger.releaseReservation(reservation.id)
+            try await ledger.releaseReservation(reservation.id)
             throw error
         }
 
         var publishedLease: LeasedFile?
         var exportEnded = false
+        let context = EventContext(origin: .source, destinationID: job.destination.id,
+            jobID: job.id, assetID: job.asset.id, resourceID: resourceID)
+        let coalescer = SourceProgressCoalescer(ledger: ledger, context: context, expectedBytes: original.byteCount)
+        let started = ProcessInfo.processInfo.systemUptime
         do {
+            try await ledger.appendEvent(.export, context: context, decision: .proceed)
             let (sha256, sha1, bytesWritten) = try await exporter.exportResource(
                 matched,
                 to: ownership.partialURL,
+                onProgress: { coalescer.downloadProgress($0) },
                 beforeWrite: { written in
                     guard written <= original.byteCount else {
-                        throw SafeFailure(.invariant, domain: .photos, cause: .contentChanged)
+                        throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .contentChanged)
                     }
-                }
+                    try SourceWriteAdmission.check(written: written, cap: original.byteCount,
+                        additionalCopies: copyCount, fixedOverhead: fixedOverhead, layout: self.storageLayout)
+                }, afterWrite: { try coalescer.update(bytes: $0) }
             )
 
             // Verify generation after measurement against refetched snapshot
@@ -278,11 +302,13 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
             guard bytesWritten == original.byteCount,
                   sha256 == original.sha256,
                   sha1 == original.sha1 else {
-                throw SafeFailure(.invariant, domain: .photos, cause: .contentChanged)
+                throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .contentChanged)
             }
 
+            try await coalescer.finish(finalBytes: bytesWritten)
             try FileManager.default.moveItem(at: ownership.partialURL, to: ownership.publishedURL)
-
+            _ = try await ledger.reserveStorage(bytes: bytesWritten, availableBytes: storageLayout.availableCapacity(),
+                transportOverhead: transportOverhead, writtenBytes: bytesWritten, replacing: reservation.id)
             let leased = try await fileStore.registerPublished(
                 fileID: fileID,
                 byteCount: bytesWritten,
@@ -307,9 +333,12 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
                 bytes: bytesWritten
             )
 
+            try await ledger.appendEvent(.hashing, context: context, decision: .proceed,
+                duration: ProcessInfo.processInfo.systemUptime - started, bytes: bytesWritten)
             return leased
         } catch {
             var cleanupError: (any Error)?
+            do { try await coalescer.finish() } catch { cleanupError = error }
             if let leased = publishedLease {
                 do { try await fileStore.release(leased) } catch { cleanupError = error }
             }
@@ -317,7 +346,11 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
                 do { try await fileStore.rollbackExport(ownership, reservationID: reservation.id) }
                 catch { cleanupError = error }
             }
-            throw cleanupError ?? error
+            let terminalError = cleanupError ?? error
+            try await ledger.appendEvent(.failure, context: context, decision: .wait, severity: .error,
+                failure: SourceFailurePolicy.safe(terminalError, domain: .photos),
+                duration: ProcessInfo.processInfo.systemUptime - started)
+            throw terminalError
         }
     }
 
@@ -380,11 +413,15 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
             let exporting = try await fileStore.beginExport(fileID: partFileID)
             ownership = exporting
             let (sha256, sha1, bytesWritten) = try LosslessVideoPartSplitter.extractPart(
-                from: masterLease.url, descriptor: partDesc, to: exporting.partialURL
+                from: masterLease.url, descriptor: partDesc, to: exporting.partialURL,
+                beforeWrite: { written in
+                    try SourceWriteAdmission.check(written: written, cap: partDesc.byteCount,
+                        additionalCopies: 1, fixedOverhead: 67_108_864, layout: self.storageLayout)
+                }
             )
             guard bytesWritten == partDesc.byteCount,
                   sha256 == partDesc.sha256, sha1 == partDesc.sha1 else {
-                throw SafeFailure(.invariant, domain: .photos, cause: .contentChanged)
+                throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .contentChanged)
             }
             try FileManager.default.moveItem(at: exporting.partialURL, to: exporting.publishedURL)
             let leased = try await fileStore.registerPublished(

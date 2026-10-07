@@ -9,15 +9,18 @@ public final class StreamingFileWriter: @unchecked Sendable {
     private let lock = NSLock()
     private let fileHandle: FileHandle
     private let beforeWrite: (@Sendable (Int64) throws -> Void)?
+    private let afterWrite: (@Sendable (Int64) throws -> Void)?
     private var sha256Hasher = SHA256()
     private var sha1Hasher = Insecure.SHA1()
     private var totalBytesWritten: Int64 = 0
     private var isClosed = false
-    public init(fileURL: URL, beforeWrite: (@Sendable (Int64) throws -> Void)? = nil) throws {
+    public init(fileURL: URL, beforeWrite: (@Sendable (Int64) throws -> Void)? = nil,
+                afterWrite: (@Sendable (Int64) throws -> Void)? = nil) throws {
         let fd = fileURL.path.withCString { Darwin.open($0, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, mode_t(0o600)) }
         guard fd >= 0 else { throw Self.safePOSIX(errno) }
         self.fileHandle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
         self.beforeWrite = beforeWrite
+        self.afterWrite = afterWrite
     }
     public func write(chunk: Data) throws {
         lock.lock(); defer { lock.unlock() }
@@ -31,6 +34,8 @@ public final class StreamingFileWriter: @unchecked Sendable {
             do { try fileHandle.write(contentsOf: slice) } catch { throw Self.safe(error) }
             sha256Hasher.update(data: slice); sha1Hasher.update(data: slice)
             totalBytesWritten += Int64(slice.count); start = end
+            // Progress is measured only after the complete write/hash succeeds.
+            try afterWrite?(totalBytesWritten)
         }
     }
     public func finalize() throws -> (sha256: String, sha1: String, byteCount: Int64) {

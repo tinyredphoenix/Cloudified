@@ -3,412 +3,318 @@ import Foundation
 import os
 import CloudifiedCore
 
-/// End-to-end PhotoLibrary pipeline coordinator conforming to PhotoLibraryAdapterProtocol.
-/// Integrates scanning, demand-driven admitted planning, recipe persistence, and independent plan generation.
+/// Demand-driven planning; both providers use one verified source recipe and cache.
 public final class PhotoLibraryPipeline: PhotoLibraryAdapterProtocol, Sendable {
     private let ledger: Ledger
     private let fileStore: FileLeaseStore
     private let storageLayout: StorageLayout
     private let permit: SharedExportPermit
     private let exporter: PhotoResourceExporter
-    private let _originalPreparer: PhotoLibraryOriginalPreparer
+    private let preparer: PhotoLibraryOriginalPreparer
+    public var originalPreparer: any OriginalPreparer { preparer }
 
-    public var originalPreparer: any OriginalPreparer {
-        _originalPreparer
+    public init(ledger: Ledger, fileStore: FileLeaseStore, storageLayout: StorageLayout,
+                permit: SharedExportPermit = .shared, exporter: PhotoResourceExporter = .shared) {
+        self.ledger = ledger; self.fileStore = fileStore; self.storageLayout = storageLayout
+        self.permit = permit; self.exporter = exporter
+        preparer = PhotoLibraryOriginalPreparer(ledger: ledger, fileStore: fileStore,
+            storageLayout: storageLayout, permit: permit, exporter: exporter)
     }
-
-    public init(
-        ledger: Ledger,
-        fileStore: FileLeaseStore,
-        storageLayout: StorageLayout,
-        permit: SharedExportPermit = .shared,
-        exporter: PhotoResourceExporter = .shared
-    ) {
-        self.ledger = ledger
-        self.fileStore = fileStore
-        self.storageLayout = storageLayout
-        self.permit = permit
-        self.exporter = exporter
-        self._originalPreparer = PhotoLibraryOriginalPreparer(
-            ledger: ledger,
-            fileStore: fileStore,
-            storageLayout: storageLayout,
-            permit: permit,
-            exporter: exporter
-        )
-    }
-
-    /// Scans the entire accessible Photo Library, registering canonical AssetIdentity items into the Ledger.
     public func scanLibrary() async throws -> (scanID: UUID, totalDiscovered: Int) {
-        return try await PhotoKitScanner.scanAccessibleLibrary(ledger: ledger)
+        try await PhotoKitScanner.scanAccessibleLibrary(ledger: ledger)
     }
 
-    /// Incrementally measures an individual asset with admitted reservations, generates its source-v1 recipe,
-    /// builds independent provider plans, and enqueues them into the Ledger.
-    public func planAsset(
-        asset: AssetIdentity,
-        googleDestination: Destination? = nil,
-        telegramDestination: Destination? = nil,
-        googleLiveFallback: LivePhotoFallbackOption = .bothSeparately,
+    private struct Candidate: Sendable {
+        let resource: PHAssetResource
+        let selectorIndex: Int
+    }
+    private struct Measurement: Sendable {
+        var originals: [SourceResourceDescriptor] = []
+        var splits: [VideoSplitRecipe] = []
+        var failures: [(role: ResourceRole, error: SafeFailure)] = []
+        var telegramSplitFailure: SafeFailure?
+    }
+
+    public func planAsset(asset: AssetIdentity, googleDestination: Destination? = nil,
+        telegramDestination: Destination? = nil, googleLiveFallback: LivePhotoFallbackOption = .bothSeparately,
         videoPartThreshold: Int64 = LosslessVideoPartSplitter.defaultTargetPartSize
     ) async throws {
-        // Both empty destination arguments must cause no export/enqueue work
-        guard googleDestination != nil || telegramDestination != nil else {
-            return
+        let destinations = [googleDestination, telegramDestination].compactMap { $0 }
+        guard !destinations.isEmpty else { return }
+        guard (1...LosslessVideoPartSplitter.defaultTargetPartSize).contains(videoPartThreshold),
+              googleDestination?.provider != .telegram, telegramDestination?.provider != .google else {
+            throw CoreError.invalidContract
         }
-
         try Task.checkCancellation()
-
-        // Fetch PHAsset
-        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [asset.localIdentifier], options: nil)
-        guard let phAsset = fetchResult.firstObject else {
-            let err = SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing)
-            let dests = [googleDestination?.id, telegramDestination?.id].compactMap { $0 }
-            if !dests.isEmpty {
-                try await ledger.recordSourceFailure(assetID: asset.id, destinationIDs: dests, error: err, permanent: true)
-            }
-            throw err
-        }
-
-        // Verify generation before measurement against refetched snapshot
+        let phAsset: PHAsset
+        let candidates: [Candidate]
         do {
+            guard let fetched = PHAsset.fetchAssets(withLocalIdentifiers: [asset.localIdentifier], options: nil).firstObject else {
+                throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing)
+            }
             try PhotoKitScanner.verifyGeneration(asset)
-        } catch {
-            let safeErr = (error as? SafeFailure) ?? SafeFailure(.sourceUnavailable, domain: .photos, cause: .contentChanged)
-            let dests = [googleDestination?.id, telegramDestination?.id].compactMap { $0 }
-            if !dests.isEmpty {
-                try await ledger.recordSourceFailure(assetID: asset.id, destinationIDs: dests, error: safeErr, permanent: true)
+            phAsset = fetched
+            // Preserve PhotoKit enumeration order within an identical descriptor group.
+            // A refetch may change it; descriptor and byte verification still fence reuse.
+            var groups: [SourceSelectorKey: Int] = [:]
+            candidates = PHAssetResource.assetResources(for: fetched).compactMap { resource in
+                guard PhotoKitScanner.isOriginalResourceType(resource.type) else { return nil }
+                let key = SourceSelectorKey(type: resource.type.rawValue,
+                    filename: resource.originalFilename, uti: resource.uniformTypeIdentifier)
+                let index = groups[key, default: 0]; groups[key] = index + 1
+                return Candidate(resource: resource, selectorIndex: index)
+            }.sorted { lhs, rhs in
+                let a = lhs.resource, b = rhs.resource
+                return (a.type.rawValue, a.originalFilename, a.uniformTypeIdentifier, lhs.selectorIndex) <
+                    (b.type.rawValue, b.originalFilename, b.uniformTypeIdentifier, rhs.selectorIndex)
             }
-            throw safeErr
+            guard !candidates.isEmpty else { throw SafeFailure(.unsupportedOriginal, domain: .photos, cause: .formatRejected) }
+        } catch let failure as SafeFailure {
+            try await record(failure, asset: asset, destinations: destinations)
+            throw failure
         }
-
         let isLive = phAsset.mediaSubtypes.contains(.photoLive)
-        let allResources = PHAssetResource.assetResources(for: phAsset)
-        let originalResources = allResources.filter { PhotoKitScanner.isOriginalResourceType($0.type) }
-            .sorted { ($0.type.rawValue, $0.originalFilename, $0.uniformTypeIdentifier) <
-                ($1.type.rawValue, $1.originalFilename, $1.uniformTypeIdentifier) }
-
-        guard !originalResources.isEmpty else {
-            let err = SafeFailure(.unsupportedOriginal, domain: .photos, cause: .formatRejected)
-            let dests = [googleDestination?.id, telegramDestination?.id].compactMap { $0 }
-            if !dests.isEmpty {
-                try await ledger.recordSourceFailure(assetID: asset.id, destinationIDs: dests, error: err, permanent: true)
-            }
-            throw err
+        let location = phAsset.location.map {
+            SourceLocationMetadata(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude,
+                altitude: $0.altitude, timestamp: $0.timestamp)
         }
-
-        // Extract metadata
-        var locationMeta: SourceLocationMetadata?
-        if let loc = phAsset.location {
-            locationMeta = SourceLocationMetadata(
-                latitude: loc.coordinate.latitude,
-                longitude: loc.coordinate.longitude,
-                altitude: loc.altitude,
-                timestamp: loc.timestamp
-            )
-        }
-
-        let metadata = SourceAssetMetadata(
-            creationDate: phAsset.creationDate,
-            modificationDate: phAsset.modificationDate,
-            pixelWidth: phAsset.pixelWidth,
-            pixelHeight: phAsset.pixelHeight,
+        let metadata = SourceAssetMetadata(creationDate: phAsset.creationDate, modificationDate: phAsset.modificationDate,
+            pixelWidth: phAsset.pixelWidth, pixelHeight: phAsset.pixelHeight,
             durationSeconds: phAsset.duration > 0 ? phAsset.duration : nil,
-            isFavorite: phAsset.isFavorite,
-            location: locationMeta
-        )
-
-        struct PreparedResourcesOutput: Sendable {
-            var measuredDescriptors: [SourceResourceDescriptor] = []
-            var measuredSplits: [VideoSplitRecipe] = []
-            var failedResources: [(role: ResourceRole, error: SafeFailure)] = []
-            var telegramSplitFailed: Bool = false
-        }
-
-        struct CandidateEntry: @unchecked Sendable {
-            let resource: PHAssetResource
-            let selectorIndex: Int
-        }
-
-        // Group and index identical candidates by (type, originalFilename, uniformTypeIdentifier) to freeze selectors
-        var candidateCounts: [String: Int] = [:]
-        var tempSelectors: [CandidateEntry] = []
-        for res in originalResources {
-            let key = "\(res.type.rawValue):\(res.originalFilename):\(res.uniformTypeIdentifier)"
-            let idx = candidateCounts[key, default: 0]
-            candidateCounts[key] = idx + 1
-            tempSelectors.append(CandidateEntry(resource: res, selectorIndex: idx))
-        }
-        let resourceSelectors = tempSelectors
-
-        let output = try await permit.withPermit { () -> PreparedResourcesOutput in
-            var result = PreparedResourcesOutput()
-            for entry in resourceSelectors {
-                try Task.checkCancellation()
-                let res = entry.resource
-                let selectorIdx = entry.selectorIndex
-                guard let role = PhotoKitScanner.role(for: res.type) else { continue }
-
-                // Conservative copy count for enabled transports
-                let copyCount = (googleDestination != nil && telegramDestination != nil) ? 2 : 1
-                let fixedOverhead: Int64 = 67_108_864
-                let available: Int64
-                do {
-                    available = try storageLayout.availableCapacity()
-                } catch {
-                    let safeErr = (error as? SafeFailure) ?? SafeFailure(.sourceUnavailable, domain: .fileSystem, cause: .unknown)
-                    result.failedResources.append((role: role, error: safeErr))
-                    continue
-                }
-
-                let reservation: StorageReservation
-                do {
-                    reservation = try await ledger.reserveSourceStorage(
-                        availableBytes: available,
-                        additionalCopyCount: copyCount,
-                        fixedOverheadBytes: fixedOverhead
-                    )
-                } catch {
-                    let safeErr = (error as? SafeFailure) ?? SafeFailure(.diskFull, domain: .fileSystem, cause: .insufficientSpace)
-                    result.failedResources.append((role: role, error: safeErr))
-                    continue
-                }
-
-                let reservedCap = reservation.byteCount
-                let stagingID = UUID()
-                let ownership: ExportFileOwnership
-                do {
-                    ownership = try await fileStore.beginExport(fileID: stagingID)
-                } catch {
-                    try? await ledger.releaseReservation(reservation.id)
-                    let safeErr = (error as? SafeFailure) ?? SafeFailure(.transfer, domain: .fileSystem, cause: .unknown)
-                    result.failedResources.append((role: role, error: safeErr))
-                    continue
-                }
-
-                var publishedLease: LeasedFile?
-                var exportEnded = false
-                let coalescer = SourceProgressCoalescer(
-                    ledger: ledger,
-                    context: EventContext(origin: .source, assetID: asset.id)
-                )
-
-                do {
-                    let (sha256, sha1, bytesWritten) = try await exporter.exportResource(
-                        res,
-                        to: ownership.partialURL,
-                        beforeWrite: { [storageLayout] written in
-                            guard written <= reservedCap else {
-                                throw SafeFailure(.diskFull, domain: .fileSystem, cause: .insufficientSpace)
-                            }
-                            let freeSpace = try storageLayout.availableCapacity()
-                            guard freeSpace >= 536_870_912 else {
-                                throw SafeFailure(.diskFull, domain: .fileSystem, cause: .insufficientSpace)
-                            }
-                            try coalescer.update(bytes: written)
-                        }
-                    )
-
-                    // Verify generation after measurement
-                    try PhotoKitScanner.verifyGeneration(asset)
-
-                    // Atomically move partial to published path
-                    try FileManager.default.moveItem(at: ownership.partialURL, to: ownership.publishedURL)
-
-                    // Resize reservation to exact measured bytes with conservative overhead
-                    let currentAvailable = try storageLayout.availableCapacity()
-                    let actualTransportOverhead = fixedOverhead + bytesWritten * Int64(copyCount)
-                    let resized = try await ledger.reserveStorage(
-                        bytes: bytesWritten,
-                        availableBytes: currentAvailable,
-                        transportOverhead: actualTransportOverhead,
-                        writtenBytes: bytesWritten,
-                        replacing: reservation.id
-                    )
-
-                    let content = OriginalContent(sha256: sha256, sha1: sha1, byteCount: bytesWritten, role: role)
-                    let leased = try await fileStore.registerPublished(
-                        fileID: stagingID,
-                        byteCount: bytesWritten,
-                        reservationID: resized.id,
-                        reexportable: true,
-                        content: content
-                    )
-                    publishedLease = leased
-                    try await fileStore.endExport(ownership)
-                    exportEnded = true
-
-                    try await coalescer.finish(finalBytes: bytesWritten)
-
-                    // Emit export & hashing events
-                    try await ledger.appendEvent(
-                        .export,
-                        context: EventContext(origin: .source, assetID: asset.id),
-                        decision: .proceed,
-                        bytes: bytesWritten
-                    )
-                    try await ledger.appendEvent(
-                        .hashing,
-                        context: EventContext(origin: .source, assetID: asset.id),
-                        decision: .proceed,
-                        bytes: bytesWritten
-                    )
-
-                    // If Telegram is enabled and original is oversized video, compute real part hashes while holding lease
-                    if telegramDestination != nil && bytesWritten > videoPartThreshold && role == .video {
-                        do {
-                            let split = try LosslessVideoPartSplitter.planSplit(
-                                fileURL: leased.url,
-                                totalBytes: bytesWritten,
-                                role: role,
-                                originalSha256: sha256,
-                                targetPartSize: videoPartThreshold
-                            )
-                            result.measuredSplits.append(split)
-                            try await ledger.appendEvent(
-                                .preparation,
-                                context: EventContext(origin: .source, assetID: asset.id),
-                                decision: .proceed,
-                                bytes: bytesWritten
-                            )
-                        } catch {
-                            result.telegramSplitFailed = true
-                        }
-                    }
-
-                    // Release lease; file remains in cache with recoverable=1 for upload reuse/cleanup
-                    publishedLease = nil
-                    try await fileStore.release(leased)
-
-                    result.measuredDescriptors.append(SourceResourceDescriptor(
-                        role: role,
-                        uti: res.uniformTypeIdentifier,
-                        originalFilename: res.originalFilename,
-                        sha256: sha256,
-                        sha1: sha1,
-                        byteCount: bytesWritten,
-                        photoKitResourceDataUTI: res.uniformTypeIdentifier,
-                        resourceType: res.type.rawValue,
-                        selectorIndex: selectorIdx
-                    ))
-                } catch {
-                    var cleanupError: (any Error)?
-                    if let leased = publishedLease {
-                        do { try await fileStore.release(leased) } catch { cleanupError = error }
-                    }
-                    if !exportEnded {
-                        do { try await fileStore.rollbackExport(ownership, reservationID: reservation.id) }
-                        catch { cleanupError = error }
-                    }
-                    let safeErr = (error as? SafeFailure) ?? SafeFailure(.transfer, domain: .photos, cause: .unknown)
-                    result.failedResources.append((role: role, error: safeErr))
-                    if let cleanupError { throw cleanupError }
-                }
+            isFavorite: phAsset.isFavorite, location: location)
+        let previous: SourceRecipe?
+        if let data = try await ledger.sourceRecipe(assetID: asset.id) {
+            let decoded = try SourceRecipe.decode(from: data)
+            guard decoded.generation == asset.generation, decoded.assetLocalIdentifier == asset.localIdentifier,
+                  decoded.mediaKind == asset.kind, decoded.isLivePhoto == isLive else {
+                throw CoreError.invalidContract
             }
-            return result
-        }
-
-        let measuredDescriptors = output.measuredDescriptors
-        let measuredSplits = output.measuredSplits
-        let failedResources = output.failedResources
-        let telegramSplitFailed = output.telegramSplitFailed
-
-        // Build source recipe if at least one resource was successfully measured
-        let recipe: SourceRecipe?
-        if !measuredDescriptors.isEmpty {
-            recipe = try? SourceRecipe(
-                assetLocalIdentifier: asset.localIdentifier,
-                generation: asset.generation,
-                mediaKind: asset.kind,
-                isLivePhoto: isLive,
-                resources: measuredDescriptors,
-                metadata: metadata,
-                videoSplits: measuredSplits
-            )
-            if let recipe, let recipeData = try? recipe.encode() {
-                try await ledger.saveSourceRecipe(assetID: asset.id, json: recipeData)
-            }
+            previous = decoded
+        } else { previous = nil }
+        let copies = destinations.count
+        let measured: Measurement
+        if let previous, canReuse(previous, candidates: candidates,
+            needsTelegram: telegramDestination != nil, threshold: videoPartThreshold) {
+            measured = Measurement(originals: previous.resources, splits: previous.videoSplits)
+            try await ledger.appendEvent(.preparation, context: EventContext(origin: .source, assetID: asset.id), decision: .skip)
         } else {
-            recipe = nil
-        }
-
-        // Genuine independent provider plan evaluation and enqueue
-        var googleEnqueued = false
-        var telegramEnqueued = false
-
-        // Google Photos evaluation
-        if let googleDest = googleDestination {
-            do {
-                guard let recipe else {
-                    let err = failedResources.first?.error ?? SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing)
-                    throw err
-                }
-                // Check if Google's specific required coverage is satisfied
-                if isLive {
-                    let hasStill = recipe.resources.contains { $0.role == .still }
-                    let hasMotion = recipe.resources.contains { $0.role == .motion }
-                    switch googleLiveFallback {
-                    case .keyImageOnly:
-                        guard hasStill else { throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing) }
-                    case .motionVideoOnly:
-                        guard hasMotion else { throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing) }
-                    case .bothSeparately:
-                        guard hasStill && hasMotion else { throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing) }
+            measured = try await permit.withPermit {
+                var result = Measurement()
+                for candidate in candidates {
+                    try Task.checkCancellation()
+                    guard let role = PhotoKitScanner.role(for: candidate.resource.type) else { throw CoreError.invalidContract }
+                    if telegramDestination == nil && !Self.googleRequires(role, isLive: isLive, fallback: googleLiveFallback) {
+                        continue
                     }
+                    let leased: LeasedFile
+                    let descriptor: SourceResourceDescriptor
+                    do {
+                        // Startup inventory must have completed. Idle files are re-exportable;
+                        // readers/transport holds are protected by the store's deletion fence.
+                        let known = previous?.resources.first { Self.matches($0, candidate: candidate) }
+                        (descriptor, leased) = try await measure(candidate, asset: asset, copyCount: copies, known: known)
+                    } catch {
+                        try SourceFailurePolicy.propagateControl(error)
+                        result.failures.append((role, SourceFailurePolicy.safe(error, domain: .photos)))
+                        continue
+                    }
+                    // Never let a Telegram-only split error erase this verified Google input.
+                    result.originals.append(descriptor)
+                    do {
+                        if telegramDestination != nil, descriptor.byteCount > videoPartThreshold {
+                            try await ledger.appendEvent(.preparation,
+                                context: EventContext(origin: .source, destinationID: telegramDestination?.id, assetID: asset.id),
+                                decision: .proceed)
+                            do {
+                                let split = try LosslessVideoPartSplitter.planSplit(fileURL: leased.url,
+                                    totalBytes: descriptor.byteCount, role: role, originalSha256: descriptor.sha256,
+                                    targetPartSize: videoPartThreshold)
+                                if !result.splits.contains(where: { $0.originalSha256 == split.originalSha256 && $0.role == split.role }) {
+                                    result.splits.append(split)
+                                }
+                            } catch {
+                                let failure = SourceFailurePolicy.safe(error, domain: .fileSystem)
+                                try await ledger.appendEvent(.failure,
+                                    context: EventContext(origin: .source, destinationID: telegramDestination?.id, assetID: asset.id),
+                                    decision: .wait, severity: .error, failure: failure)
+                                try SourceFailurePolicy.propagateControl(error)
+                                result.telegramSplitFailure = result.telegramSplitFailure ?? failure
+                            }
+                            if result.telegramSplitFailure == nil {
+                                try await ledger.appendEvent(.preparation, context: EventContext(origin: .source, assetID: asset.id),
+                                    decision: .proceed, bytes: descriptor.byteCount)
+                            }
+                        }
+                    } catch {
+                        // Release on every split/cancellation/diagnostic failure.
+                        do { try await fileStore.release(leased) } catch { throw error }
+                        throw error
+                    }
+                    try await fileStore.release(leased)
                 }
-                let googlePlan = try UploadPlanProducer.buildGooglePlan(
-                    recipe: recipe,
-                    livePhotoFallback: googleLiveFallback
-                )
-                try await ledger.enqueue(assetID: asset.id, destinationID: googleDest.id, plan: googlePlan)
-                googleEnqueued = true
-            } catch let err as CoreError {
-                throw err
-            } catch {
-                let failure = (error as? SafeFailure) ?? SafeFailure(.unsupportedOriginal, domain: .photos, cause: .formatRejected)
-                try await ledger.recordSourceFailure(
-                    assetID: asset.id,
-                    destinationIDs: [googleDest.id],
-                    error: failure,
-                    permanent: failure.category == .unsupportedOriginal || failure.cause == .sourceMissing
-                )
+                return result
             }
         }
-
-        // Telegram evaluation
-        if let telegramDest = telegramDestination {
+        guard !measured.originals.isEmpty else {
+            let failure = measured.failures.first?.error ?? SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing)
+            try await record(failure, asset: asset, destinations: destinations)
+            throw failure
+        }
+        // Plain recipe is sufficient for Google even when Telegram exceeds part/manifest limits.
+        var recipe = try SourceRecipe(assetLocalIdentifier: asset.localIdentifier, generation: asset.generation,
+            mediaKind: asset.kind, isLivePhoto: isLive, resources: measured.originals, metadata: metadata)
+        var telegramFailure = measured.failures.first?.error ?? measured.telegramSplitFailure
+        if telegramDestination != nil, telegramFailure == nil {
+            if isLive && !(measured.originals.contains { $0.role == .still } && measured.originals.contains { $0.role == .motion }) {
+                telegramFailure = SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing)
+            } else {
+                do {
+                    recipe = try SourceRecipe(assetLocalIdentifier: asset.localIdentifier, generation: asset.generation,
+                        mediaKind: asset.kind, isLivePhoto: isLive, resources: measured.originals,
+                        metadata: metadata, videoSplits: measured.splits)
+                } catch {
+                    // Base recipe already validated; this additional coverage exceeds
+                    // the archive recipe contract, not Google's original-byte plan.
+                    telegramFailure = SafeFailure(.unsupportedOriginal, domain: .photos, cause: .formatRejected)
+                }
+            }
+        }
+        try await ledger.saveSourceRecipe(assetID: asset.id, json: recipe.encode())
+        var enqueued = false
+        var firstFailure: SafeFailure?
+        if let destination = googleDestination {
             do {
-                guard let recipe, !telegramSplitFailed else {
-                    let err = failedResources.first?.error ?? SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing)
-                    throw err
-                }
-                // Telegram strictly requires every original resource
-                guard recipe.resources.count == originalResources.count else {
-                    throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing)
-                }
-                let telegramPlan = try UploadPlanProducer.buildTelegramPlan(recipe: recipe)
-                try await ledger.enqueue(assetID: asset.id, destinationID: telegramDest.id, plan: telegramPlan)
-                telegramEnqueued = true
-            } catch let err as CoreError {
-                throw err
+                if let failure = measured.failures.first(where: {
+                    Self.googleRequires($0.role, isLive: isLive, fallback: googleLiveFallback)
+                })?.error { throw failure }
+                let plan = try UploadPlanProducer.buildGooglePlan(recipe: recipe, livePhotoFallback: googleLiveFallback)
+                try await ledger.enqueue(assetID: asset.id, destinationID: destination.id, plan: plan)
+                enqueued = true
             } catch {
-                let failure = (error as? SafeFailure) ?? SafeFailure(.unsupportedOriginal, domain: .photos, cause: .formatRejected)
-                try await ledger.recordSourceFailure(
-                    assetID: asset.id,
-                    destinationIDs: [telegramDest.id],
-                    error: failure,
-                    permanent: failure.category == .unsupportedOriginal || failure.cause == .sourceMissing
-                )
+                try SourceFailurePolicy.propagateControl(error)
+                let failure = SourceFailurePolicy.safe(error, domain: .photos)
+                firstFailure = failure
+                try await record(failure, asset: asset, destinations: [destination])
             }
         }
-
-        if !googleEnqueued && !telegramEnqueued {
-            let primaryErr = failedResources.first?.error ?? SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing)
-            throw primaryErr
+        if let destination = telegramDestination {
+            do {
+                if let telegramFailure { throw telegramFailure }
+                guard measured.originals.count == candidates.count else { throw CoreError.invalidContract }
+                let plan = try UploadPlanProducer.buildTelegramPlan(recipe: recipe)
+                try await ledger.enqueue(assetID: asset.id, destinationID: destination.id, plan: plan)
+                enqueued = true
+            } catch {
+                try SourceFailurePolicy.propagateControl(error)
+                let failure = SourceFailurePolicy.safe(error, domain: .photos)
+                firstFailure = firstFailure ?? failure
+                try await record(failure, asset: asset, destinations: [destination])
+            }
         }
+        if !enqueued { throw firstFailure ?? CoreError.invalidContract }
     }
 
-    // MARK: - Bounded Planning Producer (usable by P5)
+    private static func googleRequires(_ role: ResourceRole, isLive: Bool, fallback: LivePhotoFallbackOption) -> Bool {
+        guard isLive else { return true }
+        switch fallback {
+        case .keyImageOnly: return role != .motion
+        case .motionVideoOnly: return role == .motion
+        case .bothSeparately: return true
+        }
+    }
+    private func record(_ failure: SafeFailure, asset: AssetIdentity, destinations: [Destination]) async throws {
+        try await ledger.recordSourceFailure(assetID: asset.id, destinationIDs: destinations.map(\.id), error: failure,
+            permanent: failure.category == .unsupportedOriginal || failure.cause == .sourceMissing)
+    }
+
+    private static func matches(_ descriptor: SourceResourceDescriptor, candidate: Candidate) -> Bool {
+        descriptor.role == PhotoKitScanner.role(for: candidate.resource.type) &&
+        descriptor.resourceType == candidate.resource.type.rawValue &&
+        descriptor.selectorIndex == candidate.selectorIndex &&
+        descriptor.uti == candidate.resource.uniformTypeIdentifier &&
+        descriptor.originalFilename == candidate.resource.originalFilename
+    }
+    private func canReuse(_ recipe: SourceRecipe, candidates: [Candidate], needsTelegram: Bool, threshold: Int64) -> Bool {
+        guard recipe.resources.count == candidates.count,
+              candidates.allSatisfy({ candidate in recipe.resources.contains { Self.matches($0, candidate: candidate) } }) else { return false }
+        return !needsTelegram || recipe.resources.filter { $0.byteCount > threshold }.allSatisfy { original in
+            recipe.videoSplits.contains { $0.originalSha256 == original.sha256 && $0.role == original.role &&
+                $0.totalByteCount == original.byteCount && $0.targetPartSize == threshold }
+        }
+    }
+    private func measure(_ candidate: Candidate, asset: AssetIdentity, copyCount: Int,
+                         known: SourceResourceDescriptor?) async throws -> (SourceResourceDescriptor, LeasedFile) {
+        guard let role = PhotoKitScanner.role(for: candidate.resource.type) else { throw CoreError.invalidContract }
+        guard !candidate.resource.uniformTypeIdentifier.isEmpty, !candidate.resource.originalFilename.isEmpty else {
+            throw SafeFailure(.unsupportedOriginal, domain: .photos, cause: .formatRejected)
+        }
+        if let known {
+            let cached: LeasedFile?
+            do { cached = try await fileStore.acquireContent(known.originalContent) }
+            catch CoreError.stagedUnavailable { cached = nil }
+            if let cached {
+                do { _ = try await fileStore.sweep(limit: 100) }
+                catch { try await fileStore.release(cached); throw error }
+                return (known, cached)
+            }
+        }
+        _ = try await fileStore.sweep(limit: 100)
+        let fixed: Int64 = 67_108_864
+        let reservation = try await ledger.reserveSourceStorage(availableBytes: storageLayout.availableCapacity(),
+            additionalCopyCount: copyCount, fixedOverheadBytes: fixed)
+        let ownership: ExportFileOwnership
+        do { ownership = try await fileStore.beginExport(fileID: UUID()) }
+        catch { try await ledger.releaseReservation(reservation.id); throw error }
+        let context = EventContext(origin: .source, assetID: asset.id, resourceID: ownership.fileID)
+        let coalescer = SourceProgressCoalescer(ledger: ledger, context: context)
+        var leased: LeasedFile?
+        var exportEnded = false
+        let started = ProcessInfo.processInfo.systemUptime
+        do {
+            try await ledger.appendEvent(.export, context: context, decision: .proceed)
+            let hashes = try await exporter.exportResource(candidate.resource, to: ownership.partialURL,
+                onProgress: { coalescer.downloadProgress($0) },
+                beforeWrite: { written in
+                    try SourceWriteAdmission.check(written: written, cap: reservation.byteCount,
+                        additionalCopies: copyCount, fixedOverhead: fixed, layout: self.storageLayout)
+                }, afterWrite: { try coalescer.update(bytes: $0) })
+            try PhotoKitScanner.verifyGeneration(asset)
+            guard hashes.byteCount > 0 else { throw SafeFailure(.unsupportedOriginal, domain: .photos, cause: .formatRejected) }
+            if let known {
+                guard known.sha256 == hashes.sha256, known.sha1 == hashes.sha1, known.byteCount == hashes.byteCount else {
+                    throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .contentChanged)
+                }
+            }
+            try await coalescer.finish(finalBytes: hashes.byteCount)
+            try FileManager.default.moveItem(at: ownership.partialURL, to: ownership.publishedURL)
+            let resized = try await ledger.reserveStorage(bytes: hashes.byteCount, availableBytes: storageLayout.availableCapacity(),
+                transportOverhead: try SourceWriteAdmission.overhead(bytes: hashes.byteCount, copies: copyCount, fixed: fixed),
+                writtenBytes: hashes.byteCount, replacing: reservation.id)
+            let content = OriginalContent(sha256: hashes.sha256, sha1: hashes.sha1, byteCount: hashes.byteCount, role: role)
+            let published = try await fileStore.registerPublished(fileID: ownership.fileID, byteCount: hashes.byteCount,
+                reservationID: resized.id, reexportable: true, content: content)
+            leased = published
+            try await fileStore.endExport(ownership); exportEnded = true
+            try await ledger.appendEvent(.export, context: context, decision: .proceed,
+                duration: ProcessInfo.processInfo.systemUptime - started, bytes: hashes.byteCount)
+            try await ledger.appendEvent(.hashing, context: context, decision: .proceed, bytes: hashes.byteCount)
+            return (SourceResourceDescriptor(role: role, uti: candidate.resource.uniformTypeIdentifier,
+                originalFilename: candidate.resource.originalFilename, sha256: hashes.sha256, sha1: hashes.sha1,
+                byteCount: hashes.byteCount, resourceType: candidate.resource.type.rawValue, selectorIndex: candidate.selectorIndex), published)
+        } catch {
+            var cleanupError: (any Error)?
+            do { try await coalescer.finish() } catch { cleanupError = error }
+            if let leased { do { try await fileStore.release(leased) } catch { cleanupError = error } }
+            if !exportEnded {
+                do { try await fileStore.rollbackExport(ownership, reservationID: reservation.id) } catch { cleanupError = error }
+            }
+            let terminalError = cleanupError ?? error
+            let failure = SourceFailurePolicy.safe(terminalError, domain: .photos)
+            try await ledger.appendEvent(.failure, context: context, decision: .wait, severity: .error, failure: failure,
+                duration: ProcessInfo.processInfo.systemUptime - started)
+            throw terminalError
+        }
+    }
 
     public struct PlanBatchResult: Sendable {
         public let nextCursor: Int64
@@ -416,157 +322,147 @@ public final class PhotoLibraryPipeline: PhotoLibraryAdapterProtocol, Sendable {
         public let failedCount: Int
         public let hasMore: Bool
     }
-
-    /// Plans at most ONE asset per demand, returning immediately so P5 can merge a ready drain.
-    /// Asset-level failures are recorded to Ledger without aborting the producer.
-    public func planNextAsset(
-        scanID: UUID,
-        afterCursor: Int64 = 0,
-        googleDestination: Destination? = nil,
-        telegramDestination: Destination? = nil,
-        googleLiveFallback: LivePhotoFallbackOption = .bothSeparately,
+    public func planNextAsset(scanID: UUID, afterCursor: Int64 = 0, googleDestination: Destination? = nil,
+        telegramDestination: Destination? = nil, googleLiveFallback: LivePhotoFallbackOption = .bothSeparately,
         videoPartThreshold: Int64 = LosslessVideoPartSplitter.defaultTargetPartSize
     ) async throws -> PlanBatchResult {
         guard googleDestination != nil || telegramDestination != nil else {
             return PlanBatchResult(nextCursor: afterCursor, plannedCount: 0, failedCount: 0, hasMore: false)
         }
-
-        let page = try await ledger.scannedAssetPage(scanID: scanID, afterCursor: afterCursor, limit: 1)
-        guard let row = page.first else {
-            return PlanBatchResult(nextCursor: afterCursor, plannedCount: 0, failedCount: 0, hasMore: false)
-        }
-
         try Task.checkCancellation()
-
-        var planned = 0
-        var failed = 0
-
+        let page = try await ledger.scannedAssetPage(scanID: scanID, afterCursor: afterCursor, limit: 1)
+        guard let row = page.first else { return PlanBatchResult(nextCursor: afterCursor, plannedCount: 0, failedCount: 0, hasMore: false) }
+        var failed = false
         do {
-            try await planAsset(
-                asset: row.asset,
-                googleDestination: googleDestination,
-                telegramDestination: telegramDestination,
-                googleLiveFallback: googleLiveFallback,
-                videoPartThreshold: videoPartThreshold
-            )
-            planned = 1
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch let err as CoreError {
-            throw err
+            try await planAsset(asset: row.asset, googleDestination: googleDestination, telegramDestination: telegramDestination,
+                googleLiveFallback: googleLiveFallback, videoPartThreshold: videoPartThreshold)
         } catch {
-            failed = 1
+            try SourceFailurePolicy.propagateControl(error)
+            guard error is SafeFailure else { throw error }
+            failed = true // source/provider error has already been durably recorded
         }
-
         let more = try await !ledger.scannedAssetPage(scanID: scanID, afterCursor: row.cursor, limit: 1).isEmpty
-
-        return PlanBatchResult(
-            nextCursor: row.cursor,
-            plannedCount: planned,
-            failedCount: failed,
-            hasMore: more
-        )
+        return PlanBatchResult(nextCursor: row.cursor, plannedCount: failed ? 0 : 1, failedCount: failed ? 1 : 0, hasMore: more)
     }
-
-    /// Bounded planning producer fulfilling PhotoLibraryAdapterProtocol requirement.
-    public func planScannedBatch(
-        scanID: UUID,
-        afterCursor: Int64 = 0,
-        limit: Int = 1,
-        googleDestination: Destination? = nil,
-        telegramDestination: Destination? = nil,
+    public func planScannedBatch(scanID: UUID, afterCursor: Int64 = 0, limit: Int = 1,
+        googleDestination: Destination? = nil, telegramDestination: Destination? = nil,
         googleLiveFallback: LivePhotoFallbackOption = .bothSeparately,
         videoPartThreshold: Int64 = LosslessVideoPartSplitter.defaultTargetPartSize
     ) async throws -> PlanBatchResult {
-        return try await planNextAsset(
-            scanID: scanID,
-            afterCursor: afterCursor,
-            googleDestination: googleDestination,
-            telegramDestination: telegramDestination,
-            googleLiveFallback: googleLiveFallback,
-            videoPartThreshold: videoPartThreshold
-        )
+        guard limit == 1 else { throw CoreError.invalidContract }
+        return try await planNextAsset(scanID: scanID, afterCursor: afterCursor, googleDestination: googleDestination,
+            telegramDestination: telegramDestination, googleLiveFallback: googleLiveFallback, videoPartThreshold: videoPartThreshold)
     }
 }
 
-/// Coalesces progress events to ~2 Hz with bounded asynchronous execution and error propagation.
+private struct SourceSelectorKey: Hashable { let type: Int; let filename: String; let uti: String }
+
+enum SourceFailurePolicy {
+    static func propagateControl(_ error: any Error) throws {
+        if error is CancellationError || error is CoreError { throw error }
+        if let failure = error as? SafeFailure, failure.category == .invariant { throw failure }
+    }
+    static func safe(_ error: any Error, domain: ErrorDomain) -> SafeFailure {
+        if let failure = error as? SafeFailure { return failure }
+        if error is CancellationError { return SafeFailure(.sourceUnavailable, domain: .photos, cause: .interrupted) }
+        if case .persistence(let code) = error as? CoreError {
+            return SafeFailure(.invariant, domain: .sqlite, code: Int(code), cause: .persistenceFailed)
+        }
+        if error is CoreError { return SafeFailure(.invariant, domain: .core, cause: .invalidContract) }
+        return SafeFailure(.transfer, domain: domain, code: (error as NSError).code, cause: .unknown)
+    }
+}
+
+enum SourceWriteAdmission {
+    static func overhead(bytes: Int64, copies: Int, fixed: Int64) throws -> Int64 {
+        guard bytes >= 0, (0...2).contains(copies), fixed >= 0,
+              copies == 0 || bytes <= (Int64.max - fixed) / Int64(copies) else { throw CoreError.invalidContract }
+        return fixed + bytes * Int64(copies)
+    }
+    static func check(written: Int64, cap: Int64, additionalCopies: Int, fixedOverhead: Int64, layout: StorageLayout) throws {
+        guard written >= 0, written <= cap else { throw SafeFailure(.diskFull, domain: .fileSystem, cause: .insufficientSpace) }
+        let available = try layout.availableCapacity()
+        let overhead = try overhead(bytes: written, copies: additionalCopies, fixed: fixedOverhead)
+        // The writer calls BEFORE a <=1 MiB slice; leave room for that write,
+        // measured-copy allowance and the safety margin without overflow.
+        let safety: Int64 = 536_870_912
+        guard available >= safety, overhead <= available - safety,
+              1_048_576 <= available - safety - overhead else {
+            throw SafeFailure(.diskFull, domain: .fileSystem, cause: .insufficientSpace)
+        }
+    }
+}
+
+/// One bounded consumer per export; measured bytes come from afterWrite, never a
+/// proposed write or iCloud fraction. All terminal paths close AND await the task.
 final class SourceProgressCoalescer: Sendable {
     private struct State: Sendable {
-        var lastEmittedTime: TimeInterval = 0
-        var latestBytes: Int64 = 0
-        var isScheduled: Bool = false
-        var isTerminated: Bool = false
+        var bytes: Int64 = 0
+        var downloadObserved = false
+        var successfulExport = false
+        var closed = false
         var persistenceError: (any Error)?
     }
-
-    private let stateLock = OSAllocatedUnfairLock(initialState: State())
-    private let ledger: Ledger
-    private let context: EventContext
-    private let expectedBytes: Int64?
-
+    private let state: OSAllocatedUnfairLock<State>
+    private let continuation: AsyncStream<Void>.Continuation
+    private let consumer: Task<Void, any Error>
     init(ledger: Ledger, context: EventContext, expectedBytes: Int64? = nil) {
-        self.ledger = ledger
-        self.context = context
-        self.expectedBytes = expectedBytes
-    }
-
-    func update(bytes: Int64) throws {
-        let shouldSchedule: Bool = try stateLock.withLock { state in
-            if let err = state.persistenceError {
-                throw err
-            }
-            guard !state.isTerminated else { return false }
-            state.latestBytes = bytes
-            let now = ProcessInfo.processInfo.systemUptime
-            if now - state.lastEmittedTime >= 0.5 && !state.isScheduled {
-                state.lastEmittedTime = now
-                state.isScheduled = true
-                return true
-            }
-            return false
-        }
-
-        if shouldSchedule {
-            Task { [weak self] in
-                guard let self else { return }
-                let bytesToSend: Int64 = self.stateLock.withLock { $0.latestBytes }
-                do {
-                    try await self.ledger.appendEvent(
-                        .progress,
-                        context: self.context,
-                        decision: .proceed,
-                        bytes: bytesToSend,
-                        expectedBytes: self.expectedBytes
-                    )
-                } catch {
-                    self.stateLock.withLock { state in
-                        state.persistenceError = error
+        let state = OSAllocatedUnfairLock(initialState: State())
+        let pair = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        self.state = state; continuation = pair.continuation
+        consumer = Task {
+            var lastBytes: Int64 = -1
+            var downloadLogged = false
+            var lastTime: TimeInterval = 0
+            do {
+                for await _ in pair.stream {
+                    let remaining = 0.5 - (ProcessInfo.processInfo.systemUptime - lastTime)
+                    if remaining > 0 { try await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000)) }
+                    let sample = state.withLock { ($0.bytes, $0.downloadObserved) }
+                    if sample.1 && !downloadLogged {
+                        try await ledger.appendEvent(.network, context: context, decision: .wait)
+                        downloadLogged = true
                     }
+                    if sample.0 != lastBytes {
+                        try await ledger.appendEvent(.progress, context: context, decision: .proceed,
+                            bytes: sample.0, expectedBytes: expectedBytes)
+                        lastBytes = sample.0
+                    }
+                    lastTime = ProcessInfo.processInfo.systemUptime
                 }
-                self.stateLock.withLock { state in
-                    state.isScheduled = false
+                if downloadLogged {
+                    let succeeded = state.withLock { $0.successfulExport }
+                    try await ledger.appendEvent(.network, context: context, decision: succeeded ? .proceed : .wait)
                 }
+            } catch {
+                state.withLock { $0.persistenceError = error; $0.closed = true }
+                pair.continuation.finish()
+                throw error
             }
         }
     }
-
-    func finish(finalBytes: Int64) async throws {
-        let shouldEmit = try stateLock.withLock { state -> Bool in
-            if let err = state.persistenceError {
-                throw err
-            }
-            state.isTerminated = true
-            return finalBytes > 0
+    func update(bytes: Int64) throws {
+        guard bytes >= 0 else { throw CoreError.invalidContract }
+        let accepted = try state.withLock { value -> Bool in
+            if let error = value.persistenceError { throw error }
+            guard !value.closed else { return false }
+            guard bytes >= value.bytes else { throw CoreError.invalidContract }
+            value.bytes = bytes; return true
         }
-
-        if shouldEmit {
-            try await ledger.appendEvent(
-                .progress,
-                context: context,
-                decision: .proceed,
-                bytes: finalBytes,
-                expectedBytes: expectedBytes
-            )
+        if accepted { continuation.yield(()) }
+    }
+    func downloadProgress(_ fraction: Double) {
+        guard fraction.isFinite, (0...1).contains(fraction) else { return }
+        let accepted = state.withLock { value -> Bool in
+            guard !value.closed else { return false }
+            value.downloadObserved = true; return true
         }
+        if accepted { continuation.yield(()) }
+    }
+    func finish(finalBytes: Int64? = nil) async throws {
+        if let finalBytes { try update(bytes: finalBytes) }
+        state.withLock { $0.closed = true; if finalBytes != nil { $0.successfulExport = true } }
+        continuation.finish()
+        try await consumer.value
     }
 }

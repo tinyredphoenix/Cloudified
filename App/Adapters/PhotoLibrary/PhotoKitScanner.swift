@@ -20,7 +20,7 @@ public enum PhotoKitScanner {
 
     /// Computes a canonical deterministic generation hash for a local PHAsset.
     public static func computeGeneration(for asset: PHAsset) -> String {
-        var descriptor = "\(asset.localIdentifier):\(asset.pixelWidth)x\(asset.pixelHeight):\(asset.mediaType.rawValue)"
+        var descriptor = "source-generation-v2:\(asset.localIdentifier):\(asset.pixelWidth)x\(asset.pixelHeight):\(asset.mediaType.rawValue)"
         if let creation = asset.creationDate {
             descriptor += ":c=\(creation.timeIntervalSince1970)"
         }
@@ -31,6 +31,10 @@ public enum PhotoKitScanner {
             descriptor += ":d=\(asset.duration)"
         }
         descriptor += ":s=\(asset.mediaSubtypes.rawValue)"
+        descriptor += ":f=\(asset.isFavorite)"
+        if let location = asset.location {
+            descriptor += ":l=\(location.coordinate.latitude),\(location.coordinate.longitude),\(location.altitude),\(location.timestamp.timeIntervalSince1970)"
+        }
 
         let hash = SHA256.hash(data: Data(descriptor.utf8))
         return hash.map { String(format: "%02x", $0) }.joined()

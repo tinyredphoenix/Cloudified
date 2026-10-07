@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import CloudifiedCore
 
 /// Safe Foundation storage-layout coordinator for app-owned Application Support directories.
@@ -30,9 +31,7 @@ public final class StorageLayout: Sendable {
         do {
             try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
         } catch {
-            let code = (error as NSError).code
-            let cause: KnownCause = (code == NSFileWriteNoPermissionError || code == EACCES || code == EPERM) ? .permissionDenied : .unknown
-            throw SafeFailure(.accessDenied, domain: .fileSystem, code: code, cause: cause)
+            throw Self.classify(error)
         }
 
         var mutableURL = url
@@ -41,8 +40,7 @@ public final class StorageLayout: Sendable {
         do {
             try mutableURL.setResourceValues(resourceValues)
         } catch {
-            let code = (error as NSError).code
-            throw SafeFailure(.transfer, domain: .fileSystem, code: code, cause: .unknown)
+            throw Self.classify(error)
         }
 
         #if os(iOS)
@@ -52,25 +50,20 @@ public final class StorageLayout: Sendable {
                 ofItemAtPath: url.path
             )
         } catch {
-            let code = (error as NSError).code
-            let cause: KnownCause = (code == NSFileWriteNoPermissionError || code == EACCES || code == EPERM) ? .permissionDenied : .unknown
-            throw SafeFailure(.accessDenied, domain: .fileSystem, code: code, cause: cause)
+            throw Self.classify(error)
         }
         #endif
     }
 
-    /// Queries real available volume capacity in bytes using Apple's important usage capacity key.
+    /// Conservative available volume bytes; a purgeable/important-usage estimate
+    /// cannot substitute for the physical reserve required by source admission.
     /// Throws classified SafeFailure instead of returning 0 or manufacturing false disk full.
     public func availableCapacity() throws -> Int64 {
         let keys: Set<URLResourceKey> = [
-            .volumeAvailableCapacityForImportantUsageKey,
             .volumeAvailableCapacityKey
         ]
         do {
             let values = try rootDirectory.resourceValues(forKeys: keys)
-            if let important = values.volumeAvailableCapacityForImportantUsage, important >= 0 {
-                return important
-            }
             if let standard = values.volumeAvailableCapacity, standard >= 0 {
                 return Int64(standard)
             }
@@ -84,11 +77,22 @@ public final class StorageLayout: Sendable {
                 return freeSize
             }
         } catch {
-            let code = (error as NSError).code
-            let cause: KnownCause = (code == NSFileReadNoPermissionError || code == EACCES || code == EPERM) ? .permissionDenied : .unknown
-            throw SafeFailure(.accessDenied, domain: .fileSystem, code: code, cause: cause)
+            throw Self.classify(error)
         }
 
         throw SafeFailure(.sourceUnavailable, domain: .fileSystem, cause: .unknown)
+    }
+
+    private static func classify(_ error: any Error) -> SafeFailure {
+        let value = error as NSError
+        if (value.domain == NSPOSIXErrorDomain && (value.code == Int(ENOSPC) || value.code == Int(EDQUOT))) ||
+            (value.domain == NSCocoaErrorDomain && value.code == NSFileWriteOutOfSpaceError) {
+            return SafeFailure(.diskFull, domain: .fileSystem, code: value.code, cause: .insufficientSpace)
+        }
+        if (value.domain == NSPOSIXErrorDomain && (value.code == Int(EACCES) || value.code == Int(EPERM))) ||
+            (value.domain == NSCocoaErrorDomain && (value.code == NSFileReadNoPermissionError || value.code == NSFileWriteNoPermissionError)) {
+            return SafeFailure(.accessDenied, domain: .fileSystem, code: value.code, cause: .permissionDenied)
+        }
+        return SafeFailure(.transfer, domain: .fileSystem, code: value.code, cause: .unknown)
     }
 }

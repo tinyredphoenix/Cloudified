@@ -1,45 +1,37 @@
 import Foundation
 import CloudifiedCore
 
-/// Process-wide serialization gate for PhotoKit original exports.
-/// Enforces that only one original export/hash operation is active at any time
-/// across both metadata planning and OriginalPreparer tasks.
+/// One source operation across planning and both workers. Cancelled queued work
+/// removes its continuation immediately; ownership transfers only to live waiters.
 public actor SharedExportPermit {
     public static let shared = SharedExportPermit()
-
+    private struct Waiter { let id: UUID; let continuation: CheckedContinuation<Void, any Error> }
     private var held = false
-    private var waiters: [CheckedContinuation<Void, Never>] = []
-
+    private var waiters: [Waiter] = []
     public init() {}
-
-    /// Acquires the single export permit, suspending until available.
-    /// A cancelled waiter passes the permit to the next waiter and throws.
-    public func acquire() async throws {
+    private func acquire() async throws {
         try Task.checkCancellation()
-        if !held {
-            held = true
-            return
+        if !held { held = true; return }
+        guard waiters.count < 16 else { throw CoreError.invalidContract }
+        let id = UUID()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+                if Task.isCancelled { continuation.resume(throwing: CancellationError()) }
+                else { waiters.append(Waiter(id: id, continuation: continuation)) }
+            }
+        } onCancel: {
+            Task { await self.cancelWaiter(id) } // one cancellation notification, never per media chunk
         }
-        await withCheckedContinuation { continuation in
-            waiters.append(continuation)
-        }
-        if Task.isCancelled {
-            release()
-            throw CancellationError()
-        }
+        if Task.isCancelled { release(); throw CancellationError() }
     }
-
-    /// Releases the permit to the next waiting export task in FIFO order.
-    public func release() {
-        if waiters.isEmpty {
-            held = false
-        } else {
-            let next = waiters.removeFirst()
-            next.resume()
-        }
+    private func cancelWaiter(_ id: UUID) {
+        guard let index = waiters.firstIndex(where: { $0.id == id }) else { return }
+        waiters.remove(at: index).continuation.resume(throwing: CancellationError())
     }
-
-    /// Executes a scoped asynchronous operation under the export permit.
+    private func release() {
+        if waiters.isEmpty { held = false }
+        else { waiters.removeFirst().continuation.resume() }
+    }
     public func withPermit<T: Sendable>(_ operation: @Sendable () async throws -> T) async throws -> T {
         try await acquire()
         defer { release() }

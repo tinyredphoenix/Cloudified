@@ -8,9 +8,11 @@ public final class PhotoResourceExporter: Sendable {
     public init() {}
     public func exportResource(_ resource: PHAssetResource, to destinationURL: URL,
         onProgress: (@Sendable (Double) -> Void)? = nil,
-        beforeWrite: (@Sendable (Int64) throws -> Void)? = nil
+        beforeWrite: (@Sendable (Int64) throws -> Void)? = nil,
+        afterWrite: (@Sendable (Int64) throws -> Void)? = nil
     ) async throws -> (sha256: String, sha1: String, byteCount: Int64) {
-        let request = ExportRequest(writer: try StreamingFileWriter(fileURL: destinationURL, beforeWrite: beforeWrite))
+        let request = ExportRequest(writer: try StreamingFileWriter(fileURL: destinationURL,
+            beforeWrite: beforeWrite, afterWrite: afterWrite))
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 guard request.begin(continuation) else { return }
