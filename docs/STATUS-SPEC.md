@@ -4,6 +4,11 @@ Discussion specification, 2026-10-07. Numbers below are illustrative, not actual
 
 ## Screen example
 
+Dashboard is the main/first screen and includes an overall activity label. Explicit
+states: Uploading, Preparing, Checking, Finalizing, Waiting, Paused, Complete and
+Needs attention. Show the provider-specific reason alongside its state; a waiting
+Google lane and uploading Telegram lane can coexist.
+
 Accessible library: 3,000 assets · 2,600 photos (including Live Photos) · 400 videos.
 Scope: All accessible photos. Permission: Full access. Last scan: timestamp.
 
@@ -16,6 +21,11 @@ Scope: All accessible photos. Permission: Full access. Last scan: timestamp.
 | Blocked, included in remaining | 15 | 2 |
 | Current operation | Finalizing IMG_0123.HEIC | Sending IMG_0124.MOV |
 | Current file | Bytes sent; awaiting confirmation | 38 MB / 60 MB |
+
+Display literal `700 remaining out of 3,000` for Google and `300 remaining out of
+3,000` for Telegram in this example, alongside confirmed counts. Show active-file
+bytes/percentage, component/part and attempt; overall progress uses confirmed
+assets. This is a specification example, not a claim about current app behavior.
 
 Separate detail: Live Photo coverage, already-present assets, bytes transferred,
 waiting for Wi-Fi/iCloud, retry time, and last confirmed upload. Main controls:
@@ -33,7 +43,7 @@ saved/remaining/not-uploaded counters, active operation and byte progress. Both
 media types are included by default. Live Photos belong to Photos; their paired
 motion component must not inflate the standalone Videos count.
 
-Top-level navigation: Backup, Not uploaded, Logs, Settings. Keep the interface
+Top-level navigation: Dashboard, Not uploaded, Logs, Settings. Keep the interface
 small and native. Do not add a browsing grid or media-detail viewer.
 
 ## Not uploaded and errors
@@ -102,6 +112,9 @@ small and native. Do not add a browsing grid or media-detail viewer.
   from SQLite. Throttle byte/UI updates while persisting important transitions.
 - System continued-processing progress uses the same snapshot and confirmed
   destination obligations. Additions discovered later go into the next batch.
+- Both enabled destinations run concurrently from Back Up. They may transfer
+  different assets; neither waits for all uploads to the other to finish. UI
+  byte progress/status is independent for each provider, including partial success.
 
 ## Live Photo coverage
 

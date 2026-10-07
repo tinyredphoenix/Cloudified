@@ -11,6 +11,8 @@ Detailed evidence: [RESEARCH.md](RESEARCH.md). Counting/UI contract:
 [RELIABILITY-SPEC.md](RELIABILITY-SPEC.md).
 Runtime/cleanup contract: [RUNTIME-SPEC.md](RUNTIME-SPEC.md). Build placement:
 [BUILD-SETUP.md](BUILD-SETUP.md).
+Current shared handoff and phase ownership: [handbook 1](01-ARCHITECTURE.md) and
+[handbook 2](02-BUILD-PHASES.md). The architect directly implements critical P2.
 
 ## Agreed purpose
 
@@ -78,6 +80,8 @@ independent Google and Telegram jobs -> durable confirmed receipts.
   must not change the meaning of a transfer already in progress.
 - One upload per destination initially; both destinations may progress together.
   One provider's failure must not block the other or trigger its re-upload.
+  Both enabled lanes start in the same batch; do not drain Google's whole library
+  before starting Telegram. Prove concurrency with controlled adapter barriers.
 - Track pending, preparing, sending, finalizing, confirmed, retryable failure,
   and unknown outcome per destination. Persist checkpoints at network boundaries.
 - Unknown outcomes must be reconciled remotely before retrying. Promise duplicate
@@ -142,7 +146,9 @@ separately. Do not promise complete restoration of Apple's edit history or libra
 ## Minimal UI
 
 - Setup: Google connection, Telegram connection/private channel, Photos access.
-- Main: distinct Google and Telegram panels with saved/remaining counts, photos
+- Overall Dashboard is the first screen: Uploading/Preparing/Checking/Finalizing/
+  Waiting/Paused/Complete/Needs attention, with precise provider-specific reasons.
+- Distinct Google and Telegram panels with `X remaining out of Y`, confirmed counts, photos
   and videos remaining, blocked items, current stage, and transfer progress.
   Live Photos count as one photo asset; their component progress is secondary.
   Counts come from the durable ledger, not network callbacks or UI-only counters.
@@ -164,7 +170,9 @@ remain a separate decision, not an assumed requirement.
 
 ## Verification and division of work
 
-Builder executes small numbered batches and records changed files, check commands,
+Architect directly authors the critical P2 queue/receipt/recovery/concurrency/cleanup
+engine and important protocol corrections. Builder executes the other assigned
+small numbered batches and records changed files, check commands,
 results, screenshots/recordings, and unresolved issues. Architect reviews summaries
 first; directly reads protocol/auth, persistence, resource extraction, retry/recovery,
 background lifecycle, and packaging changes. Do not simultaneously edit shared files.

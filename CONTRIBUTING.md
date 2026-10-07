@@ -12,10 +12,10 @@
 6. Commit the verified batch; push main and any annotated milestone tags. Never
    amend published milestones or tag an unverified feature as working.
 
-First application batch: pin Google/TDLib dependencies, create the iOS target/shared
-scheme, validate original resource export and provider authentication, then prove
-the new integration's behavior on the signed iPhone. Until a real project exists,
-the cloud iOS build intentionally fails at its lightweight preflight.
+First Builder application batch is P1 in docs/02-BUILD-PHASES.md: target/shared
+scheme and clearly labeled demo dashboard/screens. Critical P2 engine is directly
+authored by the Architect. Provider pinning/integration belongs to later assigned
+batches. Until a real project exists, cloud build stops at lightweight preflight.
 
 UI is purpose-built for upload status, failures, logs and account settings. Do not
 copy reference app screens or add a gallery. No expensive UI-inspiration research

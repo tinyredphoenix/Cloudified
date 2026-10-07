@@ -24,7 +24,19 @@ to avoid installing the full Xcode suite on this Mac.
 The connected ExFAT drive is left unchanged. No formatting, partition changes or
 existing-file cleanup is part of this setup. See [build setup](docs/BUILD-SETUP.md).
 
-## Implementation contracts
+## Start here — shared four-file handbook
+
+1. [Structure, purpose, files and dashboard](docs/01-ARCHITECTURE.md)
+2. [Build phases, ownership and Builder's first batch](docs/02-BUILD-PHASES.md)
+3. [Build log, evidence and current handoff](docs/03-BUILD-LOG.md)
+4. [Decisions and their reasons](docs/04-DECISIONS.md)
+
+Builder may start P1 app shell. Architect directly implements P2 critical core.
+Application phases are assigned in batches; the handbook is not authorization to
+implement every phase at once. Both Google and Telegram execute concurrently once
+the real engine/adapters are connected.
+
+## Detailed contracts — read only for the assigned batch
 
 - [Architecture and integration plan](docs/PLAN-DRAFT.md)
 - [Original quality, accounts, retry and recovery](docs/RELIABILITY-SPEC.md)

@@ -4,12 +4,21 @@ Implement only the batch the user/architect has authorized. Read README.md and t
 contracts relevant to that batch; do not reread every file for routine changes.
 The root docs are planning contracts, not evidence of working app features.
 
+Start with docs/01-ARCHITECTURE.md and docs/02-BUILD-PHASES.md. Use
+docs/03-BUILD-LOG.md for active ownership/evidence and docs/04-DECISIONS.md for why.
+Builder is authorized for P1 app shell. Architect directly authors P2 critical
+core and critical protocol corrections. Coordinate ownership before overlapping work.
+
 - Swift/SwiftUI native iOS 26. Original quality only. Both photos and videos.
 - Reuse the pinned PhotosBackup implementation for Google; TDLib for Telegram.
   Reference projects supply implementation, not UI inspiration.
 - Preserve independent providers, three total automatic attempts per asset/provider,
   accurate ledger-backed counts, and reinstall reconciliation before absent-content
   uploads. No blind resends after unknown outcomes.
+- Both enabled providers execute concurrently in the same backup batch; never
+  upload the entire library to Google before starting Telegram. Dashboard is the
+  main screen, with overall activity, separate remaining/total/confirmed counts,
+  Photos/Videos sections and honest current-file byte progress.
 - Memory/storage/cleanup rules in docs/RUNTIME-SPEC.md are required.
 - Small error-list thumbnails only; no gallery or full-screen media viewer.
 - Source stays in this checkout. No large local Xcode/SDK download by default.
@@ -26,5 +35,6 @@ The root docs are planning contracts, not evidence of working app features.
 - Make small commits at coherent batches. Annotated milestone tags must accurately
   describe evidence: plan tags are not app releases. Push history and tags to origin.
 
-No app implementation is authorized merely by opening these instructions. The
-current batch establishes architecture, repository and build infrastructure.
+Opening these instructions does not authorize every phase. Current Builder handoff
+is P1 only as specified in handbook 2. P2 core paths are reserved for the Architect;
+later application phases need their prerequisites and an assigned batch.
