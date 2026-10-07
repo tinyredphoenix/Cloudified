@@ -26,6 +26,10 @@ than repeatedly reconsider the user's chosen storage services.
 | D17 | No demo/mock/seeded app data | User explicitly requires genuine state; unknown/unconnected UI stays honest |
 | D18 | First app test after complete P1–P6 integration | User wants the first test to contain every feature; intermediate test gates are superseded |
 | D19 | Persistent production diagnostics implemented with P2 | First complete test can be debugged by provider/job/attempt/stage, without retrofitting logs |
+| D20 | Versioned canonical content identities; current asset-to-plan bindings | Reinstall IDs cannot change resource tags; duplicate aliases share work; policy changes retain history without inflating current totals |
+| D21 | Durable transport holds plus runtime cleanup fences | Protect file ownership across crash and actor reentrancy; one provider's unresolved transfers cannot gate the other's recovery |
+| D22 | Ready drains and explicit producer wakeups | Both workers start before either is awaited; one timer handles future deadlines; diagnostic invalidations cannot trigger empty-run loops |
+| D23 | Rotating diagnostics separate from durable evidence | Ten MiB is diagnostic payload budget; critical transitions/receipts/attempts/failures and first-test summaries remain reviewable |
 
 ## Version 1 defaults
 

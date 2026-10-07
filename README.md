@@ -6,8 +6,9 @@ reinstall recovery. No gallery, editing or playback.
 
 ## Project status
 
-Architecture and build infrastructure only. No application target or working IPA
-exists yet. PhotosBackup supplies the chosen Google implementation reference;
+P1 native app shell and P2 critical core are implemented. The core has compiler
+evidence; the full iOS app, real adapters and device behavior remain unverified.
+No working IPA exists yet. PhotosBackup supplies the chosen Google implementation reference;
 TDLib supplies Telegram's native transport. Reference projects inform implementation
 only; the interface is designed independently for this app's upload/status tasks.
 Local history and the planning tag are synced to the private
@@ -31,7 +32,9 @@ existing-file cleanup is part of this setup. See [build setup](docs/BUILD-SETUP.
 3. [Build log, evidence and current handoff](docs/03-BUILD-LOG.md)
 4. [Decisions and their reasons](docs/04-DECISIONS.md)
 
-Builder may start P1 app shell. Architect directly implements P2 critical core.
+Builder completed P1; Architect directly implemented P2 critical core.
+Builder's next assigned batch is P3 original media pipeline; see handbook 2 and
+the [core integration contract](docs/CORE-INTEGRATION.md).
 Application phases are assigned in batches; the handbook is not authorization to
 implement every phase at once. Both Google and Telegram execute concurrently once
 the real engine/adapters are connected.

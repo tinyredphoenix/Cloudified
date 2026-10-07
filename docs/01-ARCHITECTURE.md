@@ -43,6 +43,10 @@ Keep core independent of SwiftUI/PhotoKit presentation for clear ownership and
 direct code review. No controlled/demo adapters in the app. Build all features
 first; the first real app test is P7. Do not invent a large provider-plugin framework.
 
+P1 shell and P2 core are implemented, with static/compiler evidence only. The
+[core integration contract](CORE-INTEGRATION.md) maps actual files/public APIs and
+defines the P3 source-producer, P4 adapter and P5/P6 composition responsibilities.
+
 ## Runtime flow: concurrent destinations
 
 ```mermaid

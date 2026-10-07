@@ -12,8 +12,9 @@ simulator/device tests or cloud IPA builds. P7 is the first complete app build/t
 
 ## Current handoff
 
-P0 is complete. **Builder may start P1 now.** P2 belongs to the architect and is
-not implemented yet. Other phases remain planned and become executable after
+P0, P1 shell and P2 critical core implementation are complete; P2 has local Swift 6
+compiler/static evidence only. **Builder may start P3 now.** P2 remains Architect-owned.
+Other phases remain planned and become executable after
 their prerequisites pass and the architect assigns the next numbered batch.
 Do not interpret the handbook as permission to implement all phases at once.
 
@@ -72,7 +73,57 @@ Tasks:
    P1 log, commit/push and hand off by ownership; do not request an intermediate
    device/simulator test. Do not describe untested behavior as working.
 
+## P3 — exact next instruction for Builder
+
+Implement P3 only in this checkout. Read README, AGENTS, this section,
+CORE-INTEGRATION.md and the source/resource contracts in RUNTIME-SPEC.md and
+RELIABILITY-SPEC.md. Inspect core public contracts; do not reread every UI file.
+Claim ownership in handbook 3 before editing. Allowed: `App/Adapters/PhotoLibrary/`,
+one Foundation storage-layout helper under `App/Adapters/System/`, the Xcode
+project/shared package reference and generator, and the P3 build-log section.
+Do not edit Architect-owned core files or provider/auth/UI orchestration paths.
+
+1. Add the local CloudifiedCore package product to the app project and deterministic
+   project generator. Implement real PhotoKit interfaces against its public types.
+2. Enumerate photos/videos and access scope in <=200-item pages, using canonical
+   IDs returned by Ledger. Complete the metadata scan before incremental content
+   planning; do not export/hash the entire library before upload-ready work exists.
+3. Build a source-v1 Codable recipe and one shared export permit for planning and
+   prepare. Use cancellable PhotoKit original-resource callbacks, streamed disk
+   writes and SHA-256/SHA-1, with terminal callback fencing and bounded buffers.
+   Verify actual lengths/hashes; no private fileSize KVC or whole-media Data.
+4. Preserve original formats/embedded metadata and accessible external metadata.
+   Enumerate all required original resources deliberately, including Live Photo
+   still/motion and RAW/JPEG combinations where applicable. Use current Apple
+   primary documentation to distinguish originals from adjusted render resources.
+   Unsupported originals remain explicit; no conversion or silent omission.
+5. Generate provider-specific frozen coverage plans using ContentIdentity. Support
+   Google still/video original obligations and frozen Live Photo fallback choices;
+   do not assert unverified native pairing. Telegram requires every original/part
+   plus association/metadata manifest. Define deterministic lossless part recipes
+   and incremental part extraction; P4 will validate actual transport limits.
+6. Use admission/reservations, ExportFileOwnership, atomic publication and acquired
+   LeasedFiles exactly as CORE-INTEGRATION specifies. Cache only bounded staging,
+   reuse shared verified files and re-export unchanged originals after cleanup.
+   Preserve identity on retries; if the source changes, report that mismatch.
+7. Persist private source recipes through Ledger, not a second retry database.
+   Instrument real scan/export/iCloud/hash/source/space/cancel events. Do not log
+   filenames, GPS, PhotoKit IDs, paths or raw errors in diagnostic fields.
+8. No demo data, mocks, unit/app tests, cloud IPA dispatch, full local Xcode install
+   or drive changes. Necessary syntax/compiler/project checks only. Local CLT has
+   no iOS SDK: record any unavailable iOS typecheck instead of claiming a compile.
+9. Update handbook 3 with paths, source recipe schema, event coverage, static checks,
+   limitations and commit. Make coherent commits and push main. Stop after P3;
+   report interface needs to Architect. P4–P6 and first full app test remain later.
+
+Do not start a second queue or replace the core. Presentation still stays genuinely
+unconnected until P5 wiring; do not expose partially functioning backup controls.
+
 ## P2 — architect's direct implementation scope
+
+Implemented in the local package. Public APIs, integration obligations and limits:
+[core integration contract](CORE-INTEGRATION.md). Compiler success is not runtime
+acceptance. The P7 scenarios below remain untested.
 
 Core public contracts include immutable destination/asset/resource/job identities,
 confirmed receipts, classified failures, per-provider runtime state, dashboard

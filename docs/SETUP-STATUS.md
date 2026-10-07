@@ -30,6 +30,11 @@ git push origin --tags
 Do not recreate the repository or rewrite published history/tags. No cloud build
 was dispatched during repository setup; the workflow remains manual.
 
-Not implemented yet: iOS app target, shared Xcode scheme, provider integration,
-runtime cleanup and physical-device acceptance tests. The manual build workflow
-deliberately stops before its macOS job until a real app project is present.
+P1 now includes the native iOS target, shared scheme and four unconnected screens.
+P2 includes the architect-authored core package, queue/receipt transactions,
+concurrent lanes, counters, leases and diagnostics. Local Swift 6 compilation is
+separate from a full Xcode/iOS build and does not prove runtime behavior.
+
+Remaining: P3 real original-media pipeline, P4 providers, P5 UI wiring and P6 system
+integration. No cloud build, simulator/device test or real upload has run. The first
+complete-app build/test remains P7. Verify Actions allowance before dispatch.
