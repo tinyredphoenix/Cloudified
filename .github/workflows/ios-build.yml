@@ -1,0 +1,55 @@
+name: Manual iOS build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudified-ios-build
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Check documents
+        run: python3 scripts/check_docs.py
+      - name: Require implemented project
+        run: |
+          if [ ! -d Cloudified.xcodeproj ]; then
+            echo '::error::The app project is not implemented yet. No macOS build will start.'
+            exit 1
+          fi
+
+  build:
+    needs: preflight
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Require pinned Xcode
+        run: test -d "$DEVELOPER_DIR"
+      - name: Build unsigned device IPA
+        run: bash scripts/build_unsigned_ipa.sh
+      - name: Keep build evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Cloudified-build-${{ github.run_id }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: |
+            build/Cloudified-unsigned.ipa
+            build/Cloudified-unsigned.ipa.sha256
+            build/xcodebuild.log
+            build/Build.xcresult

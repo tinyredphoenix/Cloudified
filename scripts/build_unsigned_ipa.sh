@@ -1,0 +1,47 @@
+#!/bin/bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+output_root="${CLOUDIFIED_BUILD_ROOT:-$repo_root/build}"
+project_path="$repo_root/Cloudified.xcodeproj"
+
+if [[ ! -d "$project_path" ]]; then
+  echo 'Cloudified.xcodeproj is not implemented yet. This milestone contains planning and build infrastructure.' >&2
+  exit 2
+fi
+if [[ "$(uname -s)" != Darwin ]]; then
+  echo 'Building an iOS application requires macOS with full Xcode.' >&2
+  exit 2
+fi
+if [[ -e "$output_root/IPA" || -e "$output_root/Build.xcresult" ]]; then
+  echo 'Use a fresh build output directory; existing evidence will not be overwritten.' >&2
+  exit 2
+fi
+
+mkdir -p "$output_root"
+xcodebuild -version
+xcodebuild -showsdks
+xcodebuild \
+  -project "$project_path" \
+  -scheme Cloudified \
+  -configuration Release \
+  -destination 'generic/platform=iOS' \
+  -derivedDataPath "$output_root/DerivedData" \
+  -resultBundlePath "$output_root/Build.xcresult" \
+  CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO \
+  build 2>&1 | tee "$output_root/xcodebuild.log"
+
+app_path="$output_root/DerivedData/Build/Products/Release-iphoneos/Cloudified.app"
+if [[ ! -d "$app_path" ]]; then
+  echo 'Build did not produce the expected Cloudified.app.' >&2
+  exit 3
+fi
+mkdir -p "$output_root/IPA/Payload"
+ditto "$app_path" "$output_root/IPA/Payload/Cloudified.app"
+ditto -c -k --keepParent "$output_root/IPA/Payload" "$output_root/Cloudified-unsigned.ipa"
+(
+  cd "$output_root"
+  shasum -a 256 Cloudified-unsigned.ipa > Cloudified-unsigned.ipa.sha256
+)
+echo 'Unsigned IPA prepared. Local SideStore signing and device validation are still required.'
