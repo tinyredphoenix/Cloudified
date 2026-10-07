@@ -37,6 +37,7 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 | `accf787`, `v0.0.7-source-review-untested` | Architect source completion; static/compiler evidence, no iOS/runtime/quality/reinstall validation |
 | `11c24ad`, `99f7451`, `v0.0.8-p4-review-untested` | Architect key/memory/license corrections and public build-cache infrastructure; P4-A requires R1, no native/iOS/runtime acceptance |
 | `9e6fe9e` | P4-A pinned provider dependencies, native TDLib bridge/session, Keychain vault, and safe diagnostics |
+| `6e3a624` | P4-A-R1 genuine native linkage, receiver ownership, deadlines, Sendable JSON, and pinned schemas |
 
 Earlier checks passed: local Markdown targets, shell syntax, workflow YAML parsing
 and the missing-project guard. GitHub setup did not dispatch a cloud build.
@@ -669,7 +670,7 @@ Failures / known limitations:
 Decision changes (reference handbook 4 IDs):
 - Follows D29 (provider foundations before critical transport integration) and D31 (public standard runners, validated caches, no fake symbols).
 
-Commit / milestone tag, after it exists: Pending commit.
+Commit / milestone tag, after it exists: Commit `6e3a624` on main; milestone tag deferred to acceptance testing per handbook 2.
 Next handoff / release of reserved paths: Handoff to Architect for P4-B. All claimed Builder paths released.
 
 ## Batch log template
