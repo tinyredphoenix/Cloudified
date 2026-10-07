@@ -1,0 +1,132 @@
+import Foundation
+import CSQLite
+
+enum SQLValue { case text(String), integer(Int64), real(Double), blob(Data), null }
+struct SQLRow {
+    let values: [String: SQLValue]
+    func string(_ key: String) throws -> String {
+        guard case .text(let value) = values[key] else { throw CoreError.invalidContract }; return value
+    }
+    func int(_ key: String) -> Int64 { if case .integer(let value) = values[key] { return value }; return 0 }
+    func double(_ key: String) -> Double? {
+        if case .real(let value) = values[key] { return value }
+        if case .integer(let value) = values[key] { return Double(value) }; return nil
+    }
+    func data(_ key: String) throws -> Data {
+        guard case .blob(let value) = values[key] else { throw CoreError.invalidContract }; return value
+    }
+}
+
+/// Actor-confined by Ledger. No escaping handles/statements, raw SQL errors or paths
+/// in diagnostics. FULL synchronous WAL commits before observers can read receipts.
+final class SQLite {
+    private var handle: OpaquePointer?
+    init(url: URL) throws {
+        let code = sqlite3_open_v2(url.path, &handle, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nil)
+        guard code == SQLITE_OK else { sqlite3_close(handle); handle = nil; throw CoreError.persistence(code) }
+        sqlite3_busy_timeout(handle, 3_000)
+        do {
+            try execute("PRAGMA foreign_keys=ON")
+            try execute("PRAGMA journal_mode=WAL")
+            try execute("PRAGMA synchronous=FULL")
+        } catch { sqlite3_close(handle); handle = nil; throw error }
+    }
+    deinit { sqlite3_close(handle) }
+    var lastID: Int64 { sqlite3_last_insert_rowid(handle) }
+    var changes: Int { Int(sqlite3_changes(handle)) }
+    func execute(_ sql: String, _ values: [SQLValue] = []) throws { _ = try rows(sql, values) }
+    func rows(_ sql: String, _ values: [SQLValue] = []) throws -> [SQLRow] {
+        var statement: OpaquePointer?
+        let prepared = sqlite3_prepare_v2(handle, sql, -1, &statement, nil)
+        guard prepared == SQLITE_OK else { throw CoreError.persistence(prepared) }
+        defer { sqlite3_finalize(statement) }
+        let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+        for (offset, value) in values.enumerated() {
+            let index = Int32(offset + 1)
+            let result: Int32
+            switch value {
+            case .text(let text): result = text.withCString { sqlite3_bind_text(statement, index, $0, -1, transient) }
+            case .integer(let number): result = sqlite3_bind_int64(statement, index, number)
+            case .real(let number): result = sqlite3_bind_double(statement, index, number)
+            case .blob(let data):
+                if data.isEmpty { result = sqlite3_bind_zeroblob(statement, index, 0) }
+                else { result = data.withUnsafeBytes { sqlite3_bind_blob(statement, index, $0.baseAddress, Int32($0.count), transient) } }
+            case .null: result = sqlite3_bind_null(statement, index)
+            }
+            guard result == SQLITE_OK else { throw CoreError.persistence(result) }
+        }
+        var result: [SQLRow] = []
+        while true {
+            let code = sqlite3_step(statement)
+            if code == SQLITE_DONE { break }
+            guard code == SQLITE_ROW else { throw CoreError.persistence(code) }
+            var columns: [String: SQLValue] = [:]
+            for index in 0..<sqlite3_column_count(statement) {
+                let key = String(cString: sqlite3_column_name(statement, index))
+                switch sqlite3_column_type(statement, index) {
+                case SQLITE_INTEGER: columns[key] = .integer(sqlite3_column_int64(statement, index))
+                case SQLITE_FLOAT: columns[key] = .real(sqlite3_column_double(statement, index))
+                case SQLITE_TEXT: columns[key] = .text(String(cString: sqlite3_column_text(statement, index)))
+                case SQLITE_BLOB:
+                    let count = Int(sqlite3_column_bytes(statement, index))
+                    columns[key] = .blob(count == 0 ? Data() : Data(bytes: sqlite3_column_blob(statement, index)!, count: count))
+                default: columns[key] = .null
+                }
+            }
+            result.append(SQLRow(values: columns))
+        }
+        return result
+    }
+    func transaction<T>(_ body: () throws -> T) throws -> T {
+        try execute("BEGIN IMMEDIATE")
+        do { let result = try body(); try execute("COMMIT"); return result }
+        catch { try? execute("ROLLBACK"); throw error }
+    }
+    func encode<T: Encodable>(_ value: T) throws -> SQLValue { .blob(try JSONEncoder().encode(value)) }
+    func decode<T: Decodable>(_ type: T.Type, _ row: SQLRow, _ column: String) throws -> T {
+        try JSONDecoder().decode(type, from: row.data(column))
+    }
+}
+
+extension UUID { var sql: SQLValue { .text(uuidString) } }
+extension Date { var sql: SQLValue { .real(timeIntervalSince1970) } }
+
+enum Schema {
+    static func install(_ db: SQLite) throws {
+        let version = try db.rows("PRAGMA user_version").first?.int("user_version") ?? 0
+        guard version <= 1 else { throw CoreError.invalidContract }
+        guard version == 0 else { return }
+        try db.transaction {
+            for statement in statements { try db.execute(statement) }
+            try db.execute("PRAGMA user_version=1")
+        }
+    }
+    static let statements = [
+        "CREATE TABLE destinations(id TEXT PRIMARY KEY, provider TEXT NOT NULL, fingerprint TEXT NOT NULL, body BLOB NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, selected INTEGER NOT NULL DEFAULT 0, recovered INTEGER NOT NULL DEFAULT 0, blocked BLOB, resume_at REAL, UNIQUE(provider,fingerprint))",
+        "CREATE UNIQUE INDEX selected_provider ON destinations(provider) WHERE selected=1",
+        "CREATE TABLE scans(id TEXT PRIMARY KEY, complete INTEGER NOT NULL DEFAULT 0, created REAL NOT NULL)",
+        "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+        "CREATE TABLE assets(id TEXT PRIMARY KEY, local_id TEXT NOT NULL, generation TEXT NOT NULL, kind TEXT NOT NULL, body BLOB NOT NULL, scan_id TEXT NOT NULL REFERENCES scans(id), UNIQUE(local_id,generation))",
+        "CREATE INDEX assets_scan ON assets(scan_id,kind)",
+        "CREATE TABLE source_recipes(asset_id TEXT PRIMARY KEY REFERENCES assets(id), body BLOB NOT NULL)",
+        "CREATE TABLE jobs(seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, destination_id TEXT NOT NULL REFERENCES destinations(id), asset_id TEXT NOT NULL REFERENCES assets(id), coverage TEXT NOT NULL, plan BLOB NOT NULL, state TEXT NOT NULL, cycle TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0 CHECK(attempts BETWEEN 0 AND 3), retry_at REAL, failure BLOB, last_confirmed REAL, UNIQUE(destination_id,coverage))",
+        "CREATE INDEX ready_jobs ON jobs(destination_id,state,retry_at,seq)",
+        "CREATE TABLE aliases(job_id TEXT NOT NULL REFERENCES jobs(id), asset_id TEXT NOT NULL REFERENCES assets(id), destination_id TEXT NOT NULL REFERENCES destinations(id), PRIMARY KEY(job_id,asset_id), UNIQUE(asset_id,destination_id))",
+        "CREATE INDEX aliases_asset ON aliases(asset_id)",
+        "CREATE TABLE obligations(job_id TEXT NOT NULL REFERENCES jobs(id), resource_id TEXT NOT NULL, tag TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'unknown' CHECK(status IN ('unknown','absent','sending','confirmed')), PRIMARY KEY(job_id,resource_id), UNIQUE(job_id,tag))",
+        "CREATE TABLE receipts(destination_id TEXT NOT NULL REFERENCES destinations(id), tag TEXT NOT NULL, kind TEXT NOT NULL, body BLOB NOT NULL, confirmed_at REAL NOT NULL, PRIMARY KEY(destination_id,tag))",
+        "CREATE TABLE attempts(job_id TEXT NOT NULL REFERENCES jobs(id), cycle TEXT NOT NULL, number INTEGER NOT NULL, started REAL NOT NULL, ended REAL, suspended INTEGER NOT NULL DEFAULT 0, failure BLOB, PRIMARY KEY(job_id,cycle,number))",
+        "CREATE TABLE failures(seq INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL REFERENCES jobs(id), cycle TEXT NOT NULL, attempt INTEGER NOT NULL, occurred REAL NOT NULL, body BLOB NOT NULL)",
+        "CREATE TABLE runs(id TEXT PRIMARY KEY, started REAL NOT NULL, ended REAL, version TEXT NOT NULL, revision TEXT NOT NULL, outcome TEXT)",
+        "CREATE TABLE events(seq INTEGER PRIMARY KEY AUTOINCREMENT, occurred REAL NOT NULL, origin TEXT NOT NULL, severity TEXT NOT NULL, run_id TEXT, critical INTEGER NOT NULL, size INTEGER NOT NULL, body BLOB NOT NULL)",
+        "CREATE INDEX events_filter ON events(origin,severity,seq)",
+        "CREATE INDEX rotating_events ON events(seq) WHERE critical=0",
+        "CREATE TABLE log_budget(id INTEGER PRIMARY KEY CHECK(id=1), byte_used INTEGER NOT NULL DEFAULT 0, pruned INTEGER NOT NULL DEFAULT 0, first_pruned REAL)",
+        "INSERT INTO log_budget(id) VALUES(1)",
+        "CREATE TABLE staged(id TEXT PRIMARY KEY, relative_path TEXT NOT NULL UNIQUE, bytes INTEGER NOT NULL, oversized INTEGER NOT NULL DEFAULT 0, recoverable INTEGER NOT NULL DEFAULT 0, deleting INTEGER NOT NULL DEFAULT 0)",
+        "CREATE TABLE transfers(id TEXT PRIMARY KEY, destination_id TEXT NOT NULL REFERENCES destinations(id), job_id TEXT NOT NULL REFERENCES jobs(id), resource_id TEXT NOT NULL)",
+        "CREATE TABLE holds(transfer_id TEXT NOT NULL REFERENCES transfers(id), file_id TEXT NOT NULL REFERENCES staged(id), destination_id TEXT NOT NULL REFERENCES destinations(id), job_id TEXT NOT NULL REFERENCES jobs(id), PRIMARY KEY(transfer_id,file_id))",
+        "CREATE TABLE reservations(id TEXT PRIMARY KEY, bytes INTEGER NOT NULL, oversized INTEGER NOT NULL CHECK(oversized IN (0,1)))",
+        "CREATE UNIQUE INDEX one_oversized ON reservations(oversized) WHERE oversized=1"
+    ]
+}
