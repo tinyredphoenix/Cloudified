@@ -34,6 +34,7 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 | `89922cf`, `v0.0.6-p3-r1-review-untested` | Architect P3-R1 review, rollback export, generation verification, multipart association, and reserveSourceStorage |
 | `d0c00fe` | P3-R2 demand-driven admission, exact selectors, OSAllocatedUnfairLock progress coalescing, and provider isolation |
 | `accf787`, `v0.0.7-source-review-untested` | Architect source completion; static/compiler evidence, no iOS/runtime/quality/reinstall validation |
+| `9e6fe9e` | P4-A pinned provider dependencies, native TDLib bridge/session, Keychain vault, and safe diagnostics |
 
 Earlier checks passed: local Markdown targets, shell syntax, workflow YAML parsing
 and the missing-project guard. GitHub setup did not dispatch a cloud build.
@@ -549,6 +550,7 @@ Failures / known limitations:
 - TDLib static library assembly (`libtdjson.a`) via CMake requires a complete iOS SDK / CMake toolchain run in CI or cloud runner; local shim gracefully provides link safety until full assembly is executed.
 - No cloud IPA build dispatched; SideStore/device testing deferred to P7.
 
+Commit / milestone tag, after it exists: Commit `9e6fe9e` on main; milestone tag deferred until acceptance testing per handbook 2.
 Next handoff / release of reserved paths: Handoff to Architect for Phase 4-B (`docs/CORE-INTEGRATION.md` and upload/receipt/reconciliation integration). All claimed Builder paths released.
 
 ## Batch log template
