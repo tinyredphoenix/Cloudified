@@ -4,6 +4,11 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 output_root="${CLOUDIFIED_BUILD_ROOT:-$repo_root/build}"
 project_path="$repo_root/Cloudified.xcodeproj"
+build_number="${CLOUDIFIED_BUILD_NUMBER:-${GITHUB_RUN_NUMBER:-1}}"
+if [[ ! "$build_number" =~ ^[1-9][0-9]*$ ]]; then
+  echo 'Build number must be a positive integer.' >&2
+  exit 2
+fi
 
 if [[ ! -d "$project_path" ]]; then
   echo 'Cloudified.xcodeproj is not implemented yet. This milestone contains planning and build infrastructure.' >&2
@@ -40,6 +45,7 @@ xcodebuild \
   -resultBundlePath "$output_root/Build.xcresult" \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
+  "CURRENT_PROJECT_VERSION=$build_number" \
   "CLOUDIFIED_NATIVE_ROOT=$output_root/tdlib" \
   "CLOUDIFIED_REVISION=$(git -C "$repo_root" rev-parse HEAD)" \
   build 2>&1 | tee "$output_root/xcodebuild.log"

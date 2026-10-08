@@ -6,14 +6,16 @@ reinstall recovery. No gallery, editing or playback.
 
 ## Project status
 
-P1 native app shell and P2 critical core are implemented. The core and real provider adapter sources have compiler
-evidence; the full iOS app, provider service/device behavior remain unverified.
-No working IPA exists yet. PhotosBackup supplies the chosen Google implementation reference;
+P1–P6 source integration and the P7 unsigned iOS build have compiler/package
+evidence. The [first successful cloud build](https://github.com/tinyredphoenix/Cloudified/actions/runs/37778211603)
+does not establish provider service or device behavior.
+PhotosBackup supplies the chosen Google implementation reference;
 TDLib supplies Telegram's native transport. Reference projects inform implementation
 only; the interface is designed independently for this app's upload/status tasks.
 Local history and milestone tags are synced to the public
 [GitHub repository](https://github.com/tinyredphoenix/Cloudified).
-See [actual setup status](docs/SETUP-STATUS.md).
+See [actual setup status](docs/SETUP-STATUS.md) and
+[SideStore distribution](docs/DISTRIBUTION.md).
 
 ## Stack and build location
 
@@ -38,8 +40,9 @@ Architect completed [P4-B provider integration](docs/P4-B-INTEGRATION.md) with
 source/compiler evidence only. Builder submitted P5; [Architect review](docs/P5-REVIEW.md)
 found recovery, command ownership and presentation gaps. Architect directly implemented
 P5-R1 corrections and critical P6 under the user's subsequent authorization.
-See [integration/evidence](docs/P5-P6-INTEGRATION.md). **Next is P7**, the first full
-iOS/native/app/device verification. Source/compiler evidence does not establish
+See [integration/evidence](docs/P5-P6-INTEGRATION.md). P7 packaging has succeeded;
+SideStore installation and real dual-provider device verification are next.
+Source/compiler evidence does not establish
 service behavior, original quality, quota treatment, reinstall safety or an accepted IPA.
 P3 has source/compiler evidence only; see [review history](docs/P3-REVIEW.md), handbook 2 and
 the [core integration contract](docs/CORE-INTEGRATION.md).
@@ -75,3 +78,8 @@ caches; see [cache contracts](docs/BUILD-CACHE.md). Keep the free cache limit, s
 artifact retention and P7 build schedule; verify visibility/storage before dispatch.
 
 Git milestone `v0.0.1-plan` denotes architecture/infrastructure, not an app release.
+
+The [Cloudified SideStore source](https://raw.githubusercontent.com/tinyredphoenix/Cloudified-Source/main/source.json)
+lists permanent unsigned IPA releases after successful manual builds. SideStore
+signs the selected IPA with your certificate. Build failures appear in the
+[source build history](https://github.com/tinyredphoenix/Cloudified-Source/blob/main/builds.json).
