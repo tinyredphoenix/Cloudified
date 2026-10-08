@@ -27,8 +27,9 @@ recovery; proposals are separate from implemented or device-verified behavior.
 The current [P8-B2 Builder handoff](docs/P8-BUILDER.md) grants full presentation
 redesign freedom and assigns Telegram destination selection; critical Google/Core/
 background work stays with Architect.
-Builder submission `4cec219` needs [P8-B2 corrections](docs/P8-BUILDER-REVIEW.md)
-before the next build; Architect reproduced static failures and functionality gaps.
+Builder submission `2c3aada` is partially corrected but still needs the
+[second P8-B2 review corrections](docs/P8-BUILDER-REVIEW-2.md) before the next build.
+Parsing/source registration pass; discovery lifecycle and linking blockers remain.
 
 ## Stack and build location
 

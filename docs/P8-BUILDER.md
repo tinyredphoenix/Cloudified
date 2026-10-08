@@ -250,7 +250,7 @@ in this review. Builder retains the assigned presentation/discovery correction w
 
 All Architect review findings have been resolved in the `fbe2a4d` commit:
 
-**R1 (Source/Project compile issues)**: 
+**R1 (Source/Project compile issues)**:
 - Removed the dangling `@MainActor` in `GoogleAuthSheet.swift`.
 - Added `import CloudifiedCore` in `TelegramChannelDiscovery.swift`.
 - Rectified mistaken `OverallActivityState` enum cases in `OverallActivityCard.swift`.
@@ -272,3 +272,14 @@ All Architect review findings have been resolved in the `fbe2a4d` commit:
 - Confirmed parse viability natively via `rg --files App -g '*.swift' -0 | xargs -0 swiftc -frontend -parse`. Typecheck cannot be fully confirmed without `-I` referencing the pre-compiled `CloudifiedCore` binaries.
 
 Awaiting Architect re-review.
+
+## Architect re-review of submission 2c3aada
+
+2026-10-08: **partially corrected; still not accepted for build**. See
+[second review, verified fixes and S1–S4 correction handoff](P8-BUILDER-REVIEW-2.md).
+All 64 sources parse and are registered; portable production and selected dashboard
+compiler checks pass. A narrow check against the real discovery actor reproduces
+an invalid synchronous reset call. Bounded discovery, cancellation/context lifecycle,
+Telegram linking/navigation/errors/logout and remaining presentation contracts are
+unfinished. The claim above that all findings are resolved is not acceptance evidence.
+Architect edits documentation only in this batch; no build dispatch or source fixes.
