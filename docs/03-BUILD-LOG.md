@@ -6,7 +6,7 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 
 ## Current handoff state
 
-- Current handoff: Architect completed authorized P5-R1 and critical P6 source integration; final evidence/handbook update below. No active Builder assignment or concurrent writer. Next phase is P7 full integrated packaging/verification, requiring its explicit handoff and allowance check before manual cloud dispatch. No app/account/runtime tests or cloud build were run in this assignment.
+- Current handoff: Builder started authorized P7 full integrated packaging/verification. Verified public visibility, standard runner and free cache allowance. Preparing manual cloud dispatch. Core/provider/native internals remain Architect-owned.
 - P0: architecture/repository/infrastructure complete; handbook contracts confirmed.
 - P1: native iOS 26 target, shared Cloudified scheme, four navigation screens (Dashboard, Not uploaded, Logs, Settings), adapter protocol placeholders, and honest unpopulated states completed by Builder.
 - P2: Architect-authored critical core/diagnostics implemented and compiled locally in Swift 6 mode; no runtime evidence yet.
@@ -1159,3 +1159,21 @@ Preserve current source/pins and cache gates. Verify public standard runner and
 free cache/storage allowance before manual dispatch. Diagnose full-build and real
 service/device failures from safe run/attempt/log evidence, then P8 focused fixes.
 Do not claim no duplicates/unlimited quota/background reliability from compilation.
+
+## 2026-10-08 — P7 integrated build and packaging
+
+Batch / owner / status: P7 / Builder / In progress
+Purpose: Full integrated packaging and verification: manual cloud dispatch of ios-build.yml on public standard runner, native TDLib assembly/validation gates, Xcode iOS 26 Release build, and unsigned IPA generation with third-party licenses and build evidence per user schedule.
+Reserved paths / active writer: `.github/workflows/`, `scripts/`, `Cloudified.xcodeproj/`, `docs/03-BUILD-LOG.md` owned by Builder. Core/provider/native internals remain Architect-owned.
+Changed files: (in progress)
+Dependency revisions / artifact provenance: Unchanged; local CloudifiedCore package (`Packages/CloudifiedCore`), CTDLib package (`Packages/CTDLib`), pinned TDLib (`42e6a5259551178d1dab54a22ad96d14bd906e20`) and OpenSSL (`45e844fa2a14ec92d146bd8f5778ac130b6625fb`).
+Checks (exact command, outcome, evidence location):
+- Verified public visibility: `tinyredphoenix/Cloudified` is public; public standard runners (`ubuntu-24.04` and `macos-26`) are free and consume 0 private minutes.
+- Verified free cache allowance: 0 caches present (0 of 10 GB repository cache allowance).
+- Local preflight static check suite: `python3 scripts/check_docs.py` (passed, 26 files), `plutil -lint project.pbxproj App/Resources/Info.plist` (both OK), `git diff --check` (passed), `swiftc -frontend -parse` on all 58 app Swift files (passed), 48-source portable Swift 6 typecheck (passed, exit 0).
+Cloud run URL / artifact checksum, if applicable: Pending manual dispatch.
+Physical-device evidence, if applicable: None (physical-device testing follows build).
+Failures / known limitations: Work in progress.
+Decision changes (reference handbook 4 IDs): Builder adheres to D01–D38.
+Commit / milestone tag, after it exists: Pending completion.
+Next handoff / release of reserved paths: Active editing by Builder.
