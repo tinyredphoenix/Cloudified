@@ -157,12 +157,13 @@ public struct SettingsView: View {
                 // Section 4: Network & Battery Policy
                 Section(
                     header: Text("Network & Power Policy"),
-                    footer: Text("Wi-Fi only prevents cellular data consumption. The upload batch automatically pauses when disconnected from Wi-Fi.")
+                    footer: Text("Wi-Fi enforcement will be available after lifecycle integration. The saved preference is not yet enforced.")
                 ) {
                     Toggle("Wi-Fi Only", isOn: Binding(
                         get: { environment.settingsState.isWiFiOnlyEnabled },
                         set: { environment.setWiFiOnly($0) }
                     ))
+                    .disabled(true)
                 }
 
                 // Section 5: Architecture & Version Information
@@ -170,7 +171,6 @@ public struct SettingsView: View {
                     labeledRow(label: "Version", value: "1.0.0 (Build 1)")
                     labeledRow(label: "Platform", value: "iOS 26 Native (Swift 6 / SwiftUI)")
                     labeledRow(label: "Quality Mode", value: "Original Quality Only")
-                    labeledRow(label: "Demo/Mock Mode", value: "Disabled (Production Only)")
                     labeledRow(label: "State Ledger", value: "Durable SQLite")
                 }
             }

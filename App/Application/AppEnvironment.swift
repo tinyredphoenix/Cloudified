@@ -1,8 +1,13 @@
-import SwiftUI
+import Foundation
 import Combine
 import CloudifiedCore
 import Photos
 import os
+
+/// Navigation state stays independent of the SwiftUI rendering layer.
+public enum AppTab: Hashable, Sendable {
+    case dashboard, notUploaded, logs, settings
+}
 
 /// Presentation coordinator and environment for the Cloudified application.
 /// Composition root integrating StorageLayout, Ledger, FileLeaseStore, PhotoLibraryPipeline,
@@ -92,7 +97,7 @@ public final class AppEnvironment: ObservableObject {
             )
             ledgerInit = led
 
-            let files = FileLeaseStore(root: layout.stagingURL, ledger: led)
+            let files = try FileLeaseStore(root: layout.stagingURL, ledger: led)
             fileStoreInit = files
 
             let pipeline = PhotoLibraryPipeline(ledger: led, fileStore: files, storageLayout: layout)
@@ -115,11 +120,7 @@ public final class AppEnvironment: ObservableObject {
                         expectedBytes: expectedBytes
                     )
                 } catch {
-                    os_log(.fault, "Diagnostic persistence failed: %{public}@", error.localizedDescription)
-                    Task { @MainActor in
-                        // Record in memory safely so persistence failures are visible
-                        print("CRITICAL: Diagnostic event persistence failed: \(error.localizedDescription)")
-                    }
+                    os_log(.fault, "Diagnostic persistence failed: %{public}@", ProviderSupport.safe(error, domain: .core).description)
                     throw error
                 }
             }
@@ -132,8 +133,8 @@ public final class AppEnvironment: ObservableObject {
             tClientInit = tClient
             tAdapterInit = TelegramProviderAdapter(client: tClient, ledger: led, files: files)
         } catch {
-            os_log(.fault, "Core initialization failed: %{public}@", error.localizedDescription)
-            self.dashboardState.waitingOrErrorReason = "Initialization failed: \(error.localizedDescription)"
+            os_log(.fault, "Core initialization failed: %{public}@", ProviderSupport.safe(error, domain: .core).description)
+            self.dashboardState.waitingOrErrorReason = "Initialization failed: \(ProviderSupport.safe(error, domain: .core).description)"
             self.dashboardState.overallState = .needsAttention(reason: "Storage layout error")
         }
 
@@ -222,7 +223,7 @@ public final class AppEnvironment: ObservableObject {
 
         // 3. Gated startup file inventory: completed ONLY after BOTH providers reconcile
         if googleRecovered && telegramRecovered {
-            files.completeStartupInventory()
+            await files.completeStartupInventory()
             startupInventoryCompleted = true
         } else {
             startupInventoryCompleted = false
@@ -239,9 +240,10 @@ public final class AppEnvironment: ObservableObject {
     private func updateSettingsFromStored() async {
         guard let ledger = ledger else { return }
         do {
+            let providers = try await ledger.snapshot().providers
             if let gDest = try await ledger.selectedDestination(.google) {
                 settingsState.isGoogleConnected = true
-                settingsState.isGoogleEnabled = gDest.enabled
+                settingsState.isGoogleEnabled = providers.first { $0.destinationID == gDest.id }?.enabled ?? false
                 if let cred = try? credentialStore.loadGoogleCredential(forProfile: "primary") {
                     settingsState.googleAccountEmail = cred.email
                 }
@@ -252,7 +254,7 @@ public final class AppEnvironment: ObservableObject {
 
             if let tDest = try await ledger.selectedDestination(.telegram) {
                 settingsState.isTelegramConnected = true
-                settingsState.isTelegramEnabled = tDest.enabled
+                settingsState.isTelegramEnabled = providers.first { $0.destinationID == tDest.id }?.enabled ?? false
                 if let client = tdlibClient {
                     let auth = await client.authorizationState
                     updateTelegramAuthStep(from: auth)
@@ -276,7 +278,7 @@ public final class AppEnvironment: ObservableObject {
                 }
             }
         } catch {
-            os_log(.error, "Failed loading stored settings: %{public}@", error.localizedDescription)
+            os_log(.error, "Failed loading stored settings: %{public}@", ProviderSupport.safe(error, domain: .core).description)
         }
     }
 
@@ -324,10 +326,10 @@ public final class AppEnvironment: ObservableObject {
                 let stream = try await ledger.observeChanges()
                 for await _ in stream {
                     guard let self else { break }
-                    await self.scheduleThrottledRefresh()
+                    self.scheduleThrottledRefresh()
                 }
             } catch {
-                os_log(.error, "Ledger change stream failed: %{public}@", error.localizedDescription)
+                os_log(.error, "Ledger change stream failed: %{public}@", ProviderSupport.safe(error, domain: .core).description)
             }
         }
 
@@ -335,7 +337,7 @@ public final class AppEnvironment: ObservableObject {
         telegramStatusTask = Task { [weak self] in
             guard let self else { return }
             for await _ in tAdapter.statusEvents {
-                await self.scheduleThrottledRefresh()
+                self.scheduleThrottledRefresh()
             }
         }
 
@@ -615,7 +617,11 @@ public final class AppEnvironment: ObservableObject {
                     self.isScanning = false
                     self.scheduleThrottledRefresh()
                 } else {
-                    currentScanID = self.activeScanID ?? UUID()
+                    guard let scan = try await ledger.currentLibraryScan(), scan.complete else {
+                        throw CoreError.invalidTransition
+                    }
+                    currentScanID = scan.id
+                    self.activeScanID = scan.id
                 }
 
                 // 3. Collect enabled adapters (both run concurrently in ONE runReadyBatch)
@@ -676,8 +682,8 @@ public final class AppEnvironment: ObservableObject {
                 self.scheduleThrottledRefresh()
             } catch {
                 if !(error is CancellationError) {
-                    os_log(.error, "Backup error: %{public}@", error.localizedDescription)
-                    self.dashboardState.overallState = .needsAttention(reason: error.localizedDescription)
+                    os_log(.error, "Backup error: %{public}@", ProviderSupport.safe(error, domain: .core).description)
+                    self.dashboardState.overallState = .needsAttention(reason: ProviderSupport.safe(error, domain: .core).description)
                 }
             }
         }
@@ -688,12 +694,15 @@ public final class AppEnvironment: ObservableObject {
             guard let self, let engine = self.backupEngine else { return }
             do {
                 try await engine.pause()
-                self.backupExecutionTask?.cancel()
-                self.backupExecutionTask = nil
+                let execution = self.backupExecutionTask
+                execution?.cancel()
+                // Keep the handle until its own defer runs. Cancellation does not
+                // imply a reader has stopped or permit a replacement producer.
+                await execution?.value
                 self.dashboardState.overallState = .paused
                 self.scheduleThrottledRefresh()
             } catch {
-                os_log(.error, "Pause error: %{public}@", error.localizedDescription)
+                os_log(.error, "Pause error: %{public}@", ProviderSupport.safe(error, domain: .core).description)
             }
         }
     }
@@ -707,7 +716,7 @@ public final class AppEnvironment: ObservableObject {
                 self.scheduleThrottledRefresh()
                 self.requestBackup()
             } catch {
-                os_log(.error, "Resume error: %{public}@", error.localizedDescription)
+                os_log(.error, "Resume error: %{public}@", ProviderSupport.safe(error, domain: .core).description)
             }
         }
     }
@@ -726,7 +735,7 @@ public final class AppEnvironment: ObservableObject {
                     self.requestBackup()
                 }
             } catch {
-                os_log(.error, "Explicit retry error: %{public}@", error.localizedDescription)
+                os_log(.error, "Explicit retry error: %{public}@", ProviderSupport.safe(error, domain: .core).description)
             }
         }
     }
@@ -734,36 +743,41 @@ public final class AppEnvironment: ObservableObject {
     // MARK: - Destination Settings & Linking
 
     public func setGoogleEnabled(_ enabled: Bool) {
-        settingsState.isGoogleEnabled = enabled
         Task { [weak self] in
             guard let self, let ledger = self.ledger, let engine = self.backupEngine else { return }
-            if let dest = try await ledger.selectedDestination(.google) {
-                try await engine.setEnabled(destinationID: dest.id, enabled: enabled)
-                self.scheduleThrottledRefresh()
+            do {
+                if let dest = try await ledger.selectedDestination(.google) {
+                    try await engine.setEnabled(destinationID: dest.id, enabled: enabled)
+                    self.settingsState.isGoogleEnabled = enabled
+                }
+            } catch {
+                self.settingsState.googleAuthErrorMessage = self.mapSafeFailureCause(ProviderSupport.safe(error, domain: .google))
             }
+            self.scheduleThrottledRefresh()
         }
     }
 
     public func setTelegramEnabled(_ enabled: Bool) {
-        settingsState.isTelegramEnabled = enabled
         Task { [weak self] in
             guard let self, let ledger = self.ledger, let engine = self.backupEngine else { return }
-            if let dest = try await ledger.selectedDestination(.telegram) {
-                try await engine.setEnabled(destinationID: dest.id, enabled: enabled)
-                self.scheduleThrottledRefresh()
+            do {
+                if let dest = try await ledger.selectedDestination(.telegram) {
+                    try await engine.setEnabled(destinationID: dest.id, enabled: enabled)
+                    self.settingsState.isTelegramEnabled = enabled
+                }
+            } catch {
+                self.settingsState.telegramAuthErrorMessage = self.mapSafeFailureCause(ProviderSupport.safe(error, domain: .tdlib))
             }
+            self.scheduleThrottledRefresh()
         }
     }
 
     public func setWiFiOnly(_ enabled: Bool) {
         settingsState.isWiFiOnlyEnabled = enabled
         UserDefaults.standard.set(enabled, forKey: "CloudifiedWiFiOnly")
-        Task { [weak self] in
-            guard let self, let engine = self.backupEngine else { return }
-            // P6 system gate hook: cleared when allowed network is available
-            try? await engine.setSystemGate(nil)
-            self.scheduleThrottledRefresh()
-        }
+        // P6 owns actual network eligibility. A preference edit cannot clear
+        // another system gate or invent an allowed network path.
+        scheduleThrottledRefresh()
     }
 
     /// Updates Live Photo policy: settles provider, invalidates current coverage, resets cursor, replans.
@@ -793,7 +807,7 @@ public final class AppEnvironment: ObservableObject {
                 }
                 self.scheduleThrottledRefresh()
             } catch {
-                os_log(.error, "Live photo coverage update error: %{public}@", error.localizedDescription)
+                os_log(.error, "Live photo coverage update error: %{public}@", ProviderSupport.safe(error, domain: .core).description)
             }
         }
     }
@@ -815,7 +829,7 @@ public final class AppEnvironment: ObservableObject {
             settingsState.googleAccountEmail = cred.email
             scheduleThrottledRefresh()
         } catch {
-            let safe = (error as? SafeFailure) ?? GooglePhotosClientSession.classify(error)
+            let safe = ProviderSupport.safe(error, domain: .google)
             settingsState.googleAuthErrorMessage = mapSafeFailureCause(safe)
             throw safe
         }
@@ -1090,7 +1104,6 @@ public final class AppEnvironment: ObservableObject {
         case .google: originStr = "Google Photos"
         case .telegram: originStr = "Telegram"
         case .source: originStr = "PhotoKit Source"
-        case .core: originStr = "Core Engine"
         case .system: originStr = "System"
         }
 

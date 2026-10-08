@@ -30,6 +30,29 @@ public struct LedgerSnapshot: Sendable {
     public let savedToBoth: Int?
     public let providers: [ProviderSnapshot]
 }
+/// Persisted scan identity; the coordinator must never invent an ID on resume.
+public struct CurrentLibraryScan: Sendable {
+    public let id: UUID
+    public let complete: Bool
+}
+/// Recovery inventory includes deselected mappings with retained readers.
+/// UI counters still use selected mappings exclusively.
+public struct DestinationInventoryRow: Sendable {
+    public let destination: Destination
+    public let selected: Bool
+    public let enabled: Bool
+    public let recoveryComplete: Bool
+    public let retainedTransferCount: Int
+}
+public struct AttemptHistoryRow: Sendable {
+    public let cursor: Int64
+    public let cycleID: UUID
+    public let number: Int
+    public let startedAt: Date
+    public let endedAt: Date?
+    public let suspended: Bool
+    public let failure: SafeFailure?
+}
 public struct FailureRow: Sendable {
     public let cursor: Int64
     public let job: JobRecord
@@ -51,6 +74,38 @@ public struct SourceFailureRow: Sendable {
     public let occurredAt: Date
 }
 extension Ledger {
+    public func attemptHistoryPage(jobID: UUID, beforeCursor: Int64? = nil, limit: Int = 50) throws -> [AttemptHistoryRow] {
+        guard (1...100).contains(limit) else { throw CoreError.invalidContract }
+        return try db.rows("SELECT rowid AS cursor,* FROM attempts WHERE job_id=? AND rowid<? ORDER BY rowid DESC LIMIT ?",
+            [jobID.sql, .integer(beforeCursor ?? Int64.max), .integer(Int64(limit))]).map { row in
+            guard let cycle = UUID(uuidString: try row.string("cycle")), let started = row.double("started") else { throw CoreError.invalidContract }
+            let failure: SafeFailure?
+            if case .blob = row.values["failure"] { failure = try db.decode(SafeFailure.self, row, "failure") } else { failure = nil }
+            return AttemptHistoryRow(cursor: row.int("cursor"), cycleID: cycle, number: Int(row.int("number")),
+                startedAt: Date(timeIntervalSince1970: started), endedAt: row.double("ended").map(Date.init(timeIntervalSince1970:)),
+                suspended: row.int("suspended") == 1, failure: failure)
+        }
+    }
+    public func currentLibraryScan() throws -> CurrentLibraryScan? {
+        guard let row = try db.rows("SELECT s.id,s.complete FROM scans s JOIN meta m ON m.value=s.id WHERE m.key='scan'").first else { return nil }
+        guard let id = UUID(uuidString: try row.string("id")) else { throw CoreError.invalidContract }
+        return CurrentLibraryScan(id: id, complete: row.int("complete") == 1)
+    }
+    /// Bounded keyset enumeration for cleanup/credential-change preflight.
+    /// Missing credentials and deselection do not prove native input ownership ended.
+    public func destinationInventoryPage(afterID: UUID? = nil, limit: Int = 50) throws -> [DestinationInventoryRow] {
+        guard (1...100).contains(limit) else { throw CoreError.invalidContract }
+        return try db.rows("""
+            SELECT d.*,(SELECT COUNT(*) FROM transfers t WHERE t.destination_id=d.id) AS retained
+            FROM destinations d WHERE d.id>?
+            AND (d.selected=1 OR EXISTS(SELECT 1 FROM transfers t WHERE t.destination_id=d.id))
+            ORDER BY d.id LIMIT ?
+            """, [.text(afterID?.uuidString ?? ""), .integer(Int64(limit))]).map {
+            DestinationInventoryRow(destination: try db.decode(Destination.self, $0, "body"),
+                selected: $0.int("selected") == 1, enabled: $0.int("enabled") == 1,
+                recoveryComplete: $0.int("recovered") == 1, retainedTransferCount: Int($0.int("retained")))
+        }
+    }
     /// Export/planning may fail before content hashes exist, so no valid upload job
     /// can yet be built. Keep that obligation visible; do not invent a fake hash/job.
     public func recordSourceFailure(assetID: UUID, destinationIDs: [UUID], error: SafeFailure, permanent: Bool) throws {
@@ -133,7 +188,7 @@ extension Ledger {
     public func failurePage(beforeCursor: Int64? = nil, provider: Provider? = nil, kind: MediaKind? = nil,
                             limit: Int = 50) throws -> [FailureRow] {
         guard (1...100).contains(limit) else { throw CoreError.invalidContract }
-        var clauses = ["x.rowid<?", "d.selected=1", "j.state IN ('failed','waiting','reconciling')", "a.scan_id=(SELECT value FROM meta WHERE key='scan')"]
+        var clauses = ["x.rowid<?", "d.selected=1", "j.state IN ('failed','waiting','reconciling','delayed')", "a.scan_id=(SELECT value FROM meta WHERE key='scan')"]
         var args: [SQLValue] = [.integer(beforeCursor ?? Int64.max)]
         if let provider { clauses.append("d.provider=?"); args.append(.text(provider.rawValue)) }
         if let kind { clauses.append("a.kind=?"); args.append(.text(kind.rawValue)) }

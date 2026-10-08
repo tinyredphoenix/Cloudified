@@ -25,13 +25,17 @@ public enum KnownCause: String, Codable, Sendable {
 
 /// Whitelisted values only. Never put raw response text, credentials, account names,
 /// filenames, local paths, GPS, phone numbers or opaque receipts in diagnostic fields.
-public struct SafeFailure: Error, Codable, Equatable, Sendable {
+public struct SafeFailure: Error, Codable, Equatable, Sendable, CustomStringConvertible {
     public let category: FailureCategory
     public let domain: ErrorDomain
     public let code: Int?
     public let cause: KnownCause
     public init(_ category: FailureCategory, domain: ErrorDomain, code: Int? = nil, cause: KnownCause = .unknown) {
         self.category = category; self.domain = domain; self.code = code; self.cause = cause
+    }
+    /// Only closed enums and a numeric code; never raw NSError/userInfo prose.
+    public var description: String {
+        "\(category.rawValue)/\(domain.rawValue)/\(cause.rawValue)" + (code.map { " (\($0))" } ?? "")
     }
 }
 

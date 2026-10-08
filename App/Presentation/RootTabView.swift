@@ -1,13 +1,5 @@
 import SwiftUI
 
-/// Top-level application tabs.
-public enum AppTab: Hashable, Sendable {
-    case dashboard
-    case notUploaded
-    case logs
-    case settings
-}
-
 public struct RootTabView: View {
     @ObservedObject public var environment: AppEnvironment
 

@@ -287,3 +287,24 @@ P5 must disable/settle before invalidateCurrentCoverage and freeze/replan change
 coverage; old current aliases cannot stand in for the new policy. P6 must inventory
 OS/native readers before background injection/cleanup. These are source/compiler
 handoffs; every service/native/device/resource claim still needs P7 evidence.
+
+## P5 review query additions (Architect, 2026-10-08)
+
+- `Ledger.currentLibraryScan()` returns the actual persisted ID and completion
+  state, or nil. Never replace a recovered scan ID with a new UUID.
+- `destinationInventoryPage(afterID:limit:)` keyset-pages selected mappings **and
+  deselected mappings with retained transfers**. Advance by the last destination
+  ID; limit 1...100. Rows contain actual enabled/selected/recovered state and hold
+  count. Follow each retained mapping with bounded `retainedTransfers` and its
+  verified `providerBinding`; missing credentials cannot complete ownership
+  inventory. This query does not itself establish recovery or terminal ownership.
+- `attemptHistoryPage(jobID:beforeCursor:limit:)` pages actual attempts across
+  explicit retry cycles, newest first; use its last row cursor. Rows include
+  actual cycle/number/start/end/suspension/safe failure. No invented attempts for
+  source failures or retained native work.
+- `failurePage` also includes delayed jobs, so scheduled retries remain visible.
+- `SafeFailure.description` formats only closed enums and the numeric code. Raw
+  NSError prose/userInfo stays outside diagnostics and exported UI error text.
+
+These are read/query/formatting additions, not proof of any runtime behavior.
+P5-R1 must integrate the inventory/history APIs before P6 cleanup wiring.
