@@ -7,6 +7,9 @@ public struct OverallActivityCard: View {
     public let savedToBoth: Int?
     public let permissionScope: String
     public let scanDate: Date?
+    public let canPause: Bool
+    public let canResume: Bool
+    public let canStart: Bool
     public let onBackUp: () -> Void
     public let onPause: () -> Void
     public let onResume: () -> Void
@@ -18,10 +21,14 @@ public struct OverallActivityCard: View {
         savedToBoth: Int? = nil,
         permissionScope: String = "Not determined",
         scanDate: Date? = nil,
+        canPause: Bool = false,
+        canResume: Bool = false,
+        canStart: Bool = false,
         onBackUp: @escaping () -> Void = {},
         onPause: @escaping () -> Void = {},
         onResume: @escaping () -> Void = {}
     ) {
+        self.canPause = canPause; self.canResume = canResume; self.canStart = canStart
         self.state = state
         self.waitingReason = waitingReason
         self.libraryTotal = libraryTotal
@@ -125,8 +132,9 @@ public struct OverallActivityCard: View {
                         .padding(.vertical, 10)
                 }
                 .buttonStyle(.borderedProminent)
+                .disabled(!canStart)
 
-                if state == .uploading || state == .preparing || state == .checking {
+                if canPause {
                     Button(action: onPause) {
                         Label("Pause", systemImage: "pause.fill")
                             .font(.subheadline.bold())
@@ -134,7 +142,7 @@ public struct OverallActivityCard: View {
                             .padding(.vertical, 10)
                     }
                     .buttonStyle(.bordered)
-                } else if state == .paused {
+                } else if canResume {
                     Button(action: onResume) {
                         Label("Resume", systemImage: "play.fill")
                             .font(.subheadline.bold())

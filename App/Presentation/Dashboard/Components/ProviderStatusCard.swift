@@ -103,6 +103,11 @@ public struct ProviderStatusCard: View {
                 }
             }
 
+            HStack {
+                Text("Failed: \(state.failedCount.map(String.init) ?? "—")")
+                Spacer()
+                Text("Waiting: \(state.waitingCount.map(String.init) ?? "—")")
+            }.font(.caption).foregroundStyle(.secondary)
             // Last confirmed upload date
             if let lastConfirmed = state.lastConfirmedDate {
                 HStack(spacing: 4) {

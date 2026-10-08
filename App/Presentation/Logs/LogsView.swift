@@ -4,6 +4,7 @@ public struct LogsView: View {
     @ObservedObject public var environment: AppEnvironment
     @State private var exportedFileURL: URL? = nil
     @State private var isExporting = false
+    @State private var exportTask: Task<Void, Never>?
     @State private var exportErrorMessage: String? = nil
 
     public init(environment: AppEnvironment) {
@@ -19,10 +20,15 @@ public struct LogsView: View {
                     .background(Color(.secondarySystemBackground))
 
                 // Log entries list or empty state
-                if environment.logsState.filteredEntries.isEmpty {
+                if environment.logsState.filteredEntries.isEmpty && environment.logsState.fallbackEntries.isEmpty {
                     emptyStateView
                 } else {
                     List {
+                        if !environment.logsState.fallbackEntries.isEmpty {
+                            Section("Persistence failures — memory only; excluded from export") {
+                                ForEach(environment.logsState.fallbackEntries) { LogRow(entry: $0) }
+                            }
+                        }
                         ForEach(environment.logsState.filteredEntries) { entry in
                             LogRow(entry: entry)
                         }
@@ -30,18 +36,38 @@ public struct LogsView: View {
                     .listStyle(.plain)
                 }
             }
+            .safeAreaInset(edge: .bottom) {
+                VStack {
+                    if let error = environment.logsState.pageError { Text(error).font(.caption).foregroundStyle(.red) }
+                    if environment.logsState.isLoading { ProgressView() }
+                    Text("Routine events pruned: \(environment.logsState.prunedEventCount). Critical records retained.").font(.caption).foregroundStyle(.secondary)
+                    HStack {
+                        Button("Newest") { environment.reloadLogs(); environment.loadRuns() }
+                        Spacer()
+                        Button("Older page") { environment.olderLogs() }.disabled(!environment.logsState.hasOlder || environment.logsState.isLoading)
+                    }
+                }.padding().background(.regularMaterial)
+            }
+            .onAppear { environment.reloadLogs(); environment.loadRuns() }
+            .onDisappear { if exportedFileURL == nil { exportTask?.cancel() } }
+            .onChange(of: environment.logsState.originFilter) { environment.reloadLogs() }
+            .onChange(of: environment.logsState.severityFilter) { environment.reloadLogs() }
+            .onChange(of: environment.logsState.selectedRunID) { environment.reloadLogs() }
+            .refreshable { environment.reloadLogs() }
             .navigationTitle("Logs")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        Task {
-                            isExporting = true
+                        isExporting = true
+                        exportTask = Task {
                             defer { isExporting = false }
                             do {
                                 let url = try await environment.exportRedactedLogs()
                                 exportedFileURL = url
+                            } catch is CancellationError {
+                                // Owner releases an export completed after cancellation.
                             } catch {
-                                exportErrorMessage = error.localizedDescription
+                                exportErrorMessage = FailureExplanation.message(ProviderSupport.safe(error, domain: .fileSystem))
                             }
                         }
                     } label: {
@@ -79,7 +105,7 @@ public struct LogsView: View {
 
     private func cleanupExportFile() {
         if let url = exportedFileURL {
-            try? FileManager.default.removeItem(at: url)
+            environment.releaseExport(url)
             exportedFileURL = nil
         }
     }
@@ -87,6 +113,14 @@ public struct LogsView: View {
 
     private var filtersHeader: some View {
         VStack(spacing: 8) {
+            Picker("Run", selection: $environment.logsState.selectedRunID) {
+                Text("All runs").tag(nil as UUID?)
+                if let selected = environment.logsState.selectedRunID, !environment.logsState.runs.contains(where: { $0.id == selected }) {
+                    Text("Selected run \(selected.uuidString.prefix(8))").tag(Optional(selected))
+                }
+                ForEach(environment.logsState.runs) { run in Text(run.title).tag(Optional(run.id)) }
+            }
+            if environment.logsState.hasOlderRuns { Button("Older runs") { environment.loadRuns(older: true) } }
             Picker("Origin", selection: $environment.logsState.originFilter) {
                 ForEach(LogOriginFilter.allCases) { filter in
                     Text(filter.rawValue).tag(filter)
@@ -158,7 +192,7 @@ public struct LogRow: View {
 
                 Spacer()
 
-                Text(entry.timestamp, style: .time)
+                Text(entry.timestamp.formatted(date: .abbreviated, time: .standard))
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
@@ -204,12 +238,12 @@ import UIKit
 
 struct ShareSheet: UIViewControllerRepresentable {
     let activityItems: [Any]
-    let onDismiss: () -> Void
+    let onDismiss: @MainActor @Sendable () -> Void
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
         let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
         controller.completionWithItemsHandler = { _, _, _, _ in
-            onDismiss()
+            Task { @MainActor in onDismiss() }
         }
         return controller
     }

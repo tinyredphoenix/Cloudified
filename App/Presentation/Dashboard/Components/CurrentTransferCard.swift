@@ -50,6 +50,7 @@ public struct CurrentTransferCard: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
+                            Text(current.activity).font(.caption).foregroundStyle(.secondary)
                             Text(current.filename)
                                 .font(.subheadline.bold())
                                 .lineLimit(1)

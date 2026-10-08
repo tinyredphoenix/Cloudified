@@ -6,6 +6,7 @@ public struct SettingsView: View {
     @State private var showingTelegramAuthSheet = false
     @State private var showingGoogleDisconnectAlert = false
     @State private var showingTelegramDisconnectAlert = false
+    @State private var showingTelegramLogoutAlert = false
 
     public init(environment: AppEnvironment) {
         self.environment = environment
@@ -134,10 +135,11 @@ public struct SettingsView: View {
                     Button {
                         showingTelegramAuthSheet = true
                     } label: {
-                        Text(environment.settingsState.isTelegramConnected ? "Change Telegram Account / Channel" : "Connect Telegram")
+                        Text(environment.settingsState.isTelegramConnected ? "Map Another Channel" : "Connect Telegram")
                     }
 
                     if environment.settingsState.isTelegramConnected {
+                        Button("Log Out to Switch Telegram Account", role: .destructive) { showingTelegramLogoutAlert = true }
                         Button(role: .destructive) {
                             showingTelegramDisconnectAlert = true
                         } label: {
@@ -154,26 +156,33 @@ public struct SettingsView: View {
                     }
                 }
 
+                if let error = environment.settingsState.googleAuthErrorMessage {
+                    Section("Google Photos error") { Text(error).foregroundStyle(.red) }
+                }
+                if let error = environment.settingsState.telegramAuthErrorMessage {
+                    Section("Telegram error") { Text(error).foregroundStyle(.red) }
+                }
                 // Section 4: Network & Battery Policy
                 Section(
                     header: Text("Network & Power Policy"),
-                    footer: Text("Wi-Fi enforcement will be available after lifecycle integration. The saved preference is not yet enforced.")
+                    footer: Text("Wi-Fi Only applies to both providers. Device heat and background execution limits pause new work safely.")
                 ) {
                     Toggle("Wi-Fi Only", isOn: Binding(
                         get: { environment.settingsState.isWiFiOnlyEnabled },
                         set: { environment.setWiFiOnly($0) }
                     ))
-                    .disabled(true)
+
                 }
 
                 // Section 5: Architecture & Version Information
                 Section(header: Text("About Cloudified")) {
-                    labeledRow(label: "Version", value: "1.0.0 (Build 1)")
+                    labeledRow(label: "Version", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unavailable") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unavailable"))")
                     labeledRow(label: "Platform", value: "iOS 26 Native (Swift 6 / SwiftUI)")
                     labeledRow(label: "Quality Mode", value: "Original Quality Only")
                     labeledRow(label: "State Ledger", value: "Durable SQLite")
                 }
             }
+            .disabled(environment.settingsState.isSettlingGoogle || environment.settingsState.isSettlingTelegram)
             .navigationTitle("Settings")
             .sheet(isPresented: $showingGoogleAuthSheet) {
                 GoogleAuthSheet(environment: environment)
@@ -191,6 +200,10 @@ public struct SettingsView: View {
             } message: {
                 Text("This will settle active transfers and unlink the Google Photos destination. Remote uploads will not be deleted.")
             }
+            .alert("Log out of Telegram?", isPresented: $showingTelegramLogoutAlert) {
+                Button("Log Out", role: .destructive) { Task { try? await environment.logoutTelegram() } }
+                Button("Cancel", role: .cancel) {}
+            } message: { Text("Settles retained inputs, logs out the native Telegram account, and unlinks the channel. Remote documents remain.") }
             .alert("Disconnect Telegram?", isPresented: $showingTelegramDisconnectAlert) {
                 Button("Disconnect", role: .destructive) {
                     Task {
@@ -281,9 +294,9 @@ public struct GoogleAuthSheet: View {
             Form {
                 Section(
                     header: Text("Google Photos Sign In"),
-                    footer: Text("Provide your Google OAuth 2.0 access token with Photos scope. Cloudified exchanges this for an Android master token using the pinned PhotosBackup implementation, verifies your OpenID subject identity, and securely stores credentials in the Keychain.")
+                    footer: Text("Provide the oauth2_4… login token used by the pinned PhotosBackup flow, not a general Google API access token. Cloudified exchanges it for a protected Android master token and verifies the account identity before mapping.")
                 ) {
-                    SecureField("OAuth Access Token", text: $oauthToken)
+                    SecureField("PhotosBackup Login Token", text: $oauthToken)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
 
@@ -292,6 +305,7 @@ public struct GoogleAuthSheet: View {
                         guard !token.isEmpty else { return }
                         Task {
                             do {
+                                defer { oauthToken = "" }
                                 try await environment.connectGoogle(oauthToken: token)
                                 dismiss()
                             } catch {
@@ -319,6 +333,7 @@ public struct GoogleAuthSheet: View {
                     }
                 }
             }
+            .onDisappear { oauthToken = "" }
             .navigationTitle("Google Sign In")
             .inlineNavigationTitle()
             .toolbar {
@@ -350,6 +365,7 @@ public struct TelegramAuthSheet: View {
     @State private var email = ""
     @State private var emailCode = ""
     @State private var channelChatIDText = ""
+    @State private var confirmLogout = false
 
     public init(environment: AppEnvironment) {
         self.environment = environment
@@ -359,6 +375,8 @@ public struct TelegramAuthSheet: View {
         NavigationStack {
             Form {
                 switch environment.settingsState.telegramAuthStep {
+                case .initializing:
+                    Section { ProgressView("Initializing TDLib") }
                 case .unconfigured:
                     apiCredentialsSection
                 case .enterPhoneNumber:
@@ -391,6 +409,11 @@ public struct TelegramAuthSheet: View {
                     }
                 }
             }
+            .onDisappear { apiHashText = ""; password = ""; verificationCode = ""; emailCode = ""; phoneNumber = ""; email = "" }
+            .alert("Switch Telegram account?", isPresented: $confirmLogout) {
+                Button("Log Out", role: .destructive) { Task { try? await environment.logoutTelegram() } }
+                Button("Cancel", role: .cancel) {}
+            } message: { Text("Logs out this native account after retained inputs settle. Remote documents remain.") }
             .navigationTitle("Telegram Authentication")
             .inlineNavigationTitle()
             .toolbar {
@@ -410,7 +433,7 @@ public struct TelegramAuthSheet: View {
         ) {
             TextField("API ID (e.g. 1234567)", text: $apiIdText)
                 .numberKeyboard()
-            TextField("API Hash", text: $apiHashText)
+            SecureField("API Hash", text: $apiHashText)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
 
@@ -421,6 +444,7 @@ public struct TelegramAuthSheet: View {
                 }
                 let hash = apiHashText.trimmingCharacters(in: .whitespacesAndNewlines)
                 Task {
+                    defer { apiHashText = "" }
                     try? await environment.saveTelegramAPICredentials(apiId: id, apiHash: hash)
                 }
             } label: {
@@ -471,6 +495,7 @@ public struct TelegramAuthSheet: View {
                 let code = verificationCode.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !code.isEmpty else { return }
                 Task {
+                    defer { verificationCode = "" }
                     try? await environment.submitTelegramCode(code)
                 }
             } label: {
@@ -492,9 +517,10 @@ public struct TelegramAuthSheet: View {
             SecureField("2FA Password", text: $password)
 
             Button {
-                let pwd = password.trimmingCharacters(in: .whitespacesAndNewlines)
+                let pwd = password
                 guard !pwd.isEmpty else { return }
                 Task {
+                    defer { password = "" }
                     try? await environment.submitTelegramPassword(pwd)
                 }
             } label: {
@@ -504,7 +530,7 @@ public struct TelegramAuthSheet: View {
                     Text("Submit Password")
                 }
             }
-            .disabled(password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || environment.settingsState.isConnectingTelegram)
+            .disabled(password.isEmpty || environment.settingsState.isConnectingTelegram)
         }
     }
 
@@ -534,6 +560,7 @@ public struct TelegramAuthSheet: View {
                 let code = emailCode.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !code.isEmpty else { return }
                 Task {
+                    defer { emailCode = "" }
                     try? await environment.submitTelegramEmailCode(code)
                 }
             }
@@ -570,6 +597,8 @@ public struct TelegramAuthSheet: View {
             header: Text("Target Channel Mapping"),
             footer: Text("Cloudified requires an owned private channel (supergroup) with creator permissions and message auto-delete disabled (0 seconds). Public channels or channels with auto-delete are rejected.")
         ) {
+            Button("Log Out to Switch Account", role: .destructive) { confirmLogout = true }
+                .disabled(environment.settingsState.isConnectingTelegram || environment.settingsState.isSettlingTelegram)
             TextField("Channel Chat ID (e.g. -1001234567890)", text: $channelChatIDText)
                 .numbersAndPunctuationKeyboard()
 
@@ -604,7 +633,7 @@ public struct TelegramAuthSheet: View {
 
             Button("Re-initialize Client") {
                 Task {
-                    await environment.reconnectTelegram()
+                    try? await environment.reconnectTelegram()
                 }
             }
         }

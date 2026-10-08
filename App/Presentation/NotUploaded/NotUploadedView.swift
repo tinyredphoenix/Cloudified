@@ -1,14 +1,6 @@
 import SwiftUI
 import Photos
 import CloudifiedCore
-#if canImport(UIKit)
-import UIKit
-public typealias PlatformImage = UIImage
-#elseif canImport(AppKit)
-import AppKit
-public typealias PlatformImage = NSImage
-#endif
-
 public struct NotUploadedView: View {
     @ObservedObject public var environment: AppEnvironment
     @State private var selectedItemForDetails: NotUploadedItem?
@@ -34,16 +26,32 @@ public struct NotUploadedView: View {
                             NotUploadedRow(item: item) {
                                 selectedItemForDetails = item
                             } onRetry: {
-                                environment.retryItem(item)
+                                if item.needsRecovery { environment.recoverItem(item) } else { environment.retryItem(item) }
                             }
                         }
                     }
                     .listStyle(.plain)
                 }
             }
+            .safeAreaInset(edge: .bottom) {
+                VStack {
+                    if let error = environment.notUploadedState.pageError { Text(error).font(.caption).foregroundStyle(.red) }
+                    if environment.notUploadedState.isLoading { ProgressView() }
+                    HStack {
+                        Button("Newest") { environment.reloadFailures() }
+                        Spacer()
+                        Button("Older page") { environment.olderFailures() }.disabled(!environment.notUploadedState.hasOlder || environment.notUploadedState.isLoading)
+                    }
+                }.padding().background(.regularMaterial)
+            }
+            .onAppear { environment.reloadFailures() }
+            .onChange(of: environment.notUploadedState.destinationFilter) { environment.reloadFailures() }
+            .onChange(of: environment.notUploadedState.mediaTypeFilter) { environment.reloadFailures() }
+            .onChange(of: environment.notUploadedState.statusFilter) { environment.reloadFailures() }
+            .refreshable { environment.reloadFailures() }
             .navigationTitle("Not Uploaded")
             .sheet(item: $selectedItemForDetails) { item in
-                NotUploadedDetailSheet(item: item)
+                NotUploadedDetailSheet(item: item, environment: environment)
             }
         }
     }
@@ -104,7 +112,7 @@ public struct NotUploadedRow: View {
     public let onRetry: () -> Void
 
     public var body: some View {
-        Button(action: onTap) {
+        HStack {
             HStack(alignment: .top, spacing: 12) {
                 // Small error-identification thumbnail (<=100 cached / 16 MiB, cancellable)
                 NotUploadedThumbnailView(localIdentifier: item.localIdentifier, mediaType: item.mediaType)
@@ -148,26 +156,29 @@ public struct NotUploadedRow: View {
                         }
                     }
 
+                    Button("Details", action: onTap).frame(minHeight: 44)
                     Text(item.plainLanguageReason)
                         .font(.caption)
                         .foregroundColor(.red)
                         .lineLimit(2)
 
                     HStack {
-                        Text(item.captureDate, style: .date)
+                        Group { if let date = item.captureDate { Text(date, style: .date) } else { Text("Capture date unavailable") } }
                             .font(.caption2)
                             .foregroundColor(.secondary)
 
                         Spacer()
 
                         Button(action: onRetry) {
-                            Text("Retry")
+                            Text(item.needsRecovery ? "Recover" : "Retry")
                                 .font(.caption.bold())
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 4)
                         }
                         .buttonStyle(.bordered)
                         .tint(.accentColor)
+                        .frame(minHeight: 44)
+                        .disabled(!item.canRetry && !item.needsRecovery)
                     }
                     .padding(.top, 2)
                 }
@@ -183,57 +194,6 @@ public struct NotUploadedRow: View {
         formatter.unitsStyle = .positional
         formatter.zeroFormattingBehavior = .pad
         return formatter.string(from: seconds) ?? ""
-    }
-}
-
-/// Small cancellable thumbnail view bounded by a <=100 item / 16 MiB cache.
-@MainActor
-final class RowThumbnailLoader: ObservableObject {
-    @Published var image: PlatformImage? = nil
-    private var requestID: PHImageRequestID? = nil
-
-    private static let cache: NSCache<NSString, PlatformImage> = {
-        let c = NSCache<NSString, PlatformImage>()
-        c.countLimit = 100
-        c.totalCostLimit = 16 * 1024 * 1024 // 16 MiB
-        return c
-    }()
-
-    func load(localIdentifier: String) {
-        guard !localIdentifier.isEmpty else { return }
-        if let cached = Self.cache.object(forKey: localIdentifier as NSString) {
-            self.image = cached
-            return
-        }
-        let fetch = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil)
-        guard let asset = fetch.firstObject else { return }
-
-        let options = PHImageRequestOptions()
-        options.isNetworkAccessAllowed = false // Local access only; no cloud preview fetch
-        options.deliveryMode = .fastFormat
-        options.resizeMode = .fast
-        options.isSynchronous = false
-
-        requestID = PHImageManager.default().requestImage(
-            for: asset,
-            targetSize: CGSize(width: 96, height: 96),
-            contentMode: .aspectFill,
-            options: options
-        ) { [weak self] img, _ in
-            guard let img else { return }
-            let bytes = Int(img.size.width * img.size.height * 4)
-            Self.cache.setObject(img, forKey: localIdentifier as NSString, cost: bytes)
-            Task { @MainActor in
-                self?.image = img
-            }
-        }
-    }
-
-    func cancel() {
-        if let req = requestID {
-            PHImageManager.default().cancelImageRequest(req)
-            requestID = nil
-        }
     }
 }
 
@@ -273,6 +233,7 @@ struct NotUploadedThumbnailView: View {
         .onAppear {
             loader.load(localIdentifier: localIdentifier)
         }
+        .onChange(of: localIdentifier) { loader.load(localIdentifier: localIdentifier) }
         .onDisappear {
             loader.cancel()
         }
@@ -283,6 +244,11 @@ struct NotUploadedThumbnailView: View {
 /// Detailed inspector sheet for an individual failed asset.
 public struct NotUploadedDetailSheet: View {
     public let item: NotUploadedItem
+    @ObservedObject var environment: AppEnvironment
+    @State private var history: [AttemptHistoryRow] = []
+    @State private var historyError: String?
+    @State private var historyHasOlder = false
+    @State private var historyTask: Task<Void, Never>?
     @Environment(\.dismiss) private var dismiss
 
     public var body: some View {
@@ -292,10 +258,22 @@ public struct NotUploadedDetailSheet: View {
                     labeledRow(label: "Filename", value: item.filename)
                     labeledRow(label: "Media Type", value: item.mediaType)
                     labeledRow(label: "Destination", value: item.provider)
-                    labeledRow(label: "Capture Date", value: item.captureDate.formatted())
-                    labeledRow(label: "Attempts", value: "\(item.attemptCount) of \(item.maxAttempts)")
+                    labeledRow(label: "Capture Date", value: item.captureDate?.formatted() ?? "Unavailable")
+                    labeledRow(label: "Attempts", value: item.attemptText)
                 }
 
+                Section("Attempt history (durable)") {
+                    ForEach(history, id: \.cursor) { row in
+                        VStack(alignment: .leading) {
+                            Text("Attempt \(row.number) · cycle \(row.cycleID.uuidString.prefix(8)) · \(row.startedAt.formatted())")
+                            Text(row.failure.map(environment.explain) ?? (row.endedAt == nil ? "No terminal outcome recorded" : "Attempt ended"))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    if let historyError { Text(historyError).foregroundStyle(.red) }
+                    if historyHasOlder { Button("Older attempts") { loadHistory(before: history.last?.cursor) } }
+                    Button("Newest attempts") { loadHistory() }
+                }
                 Section(header: Text("Diagnostic Information")) {
                     labeledRow(label: "Stage", value: item.stage)
                     labeledRow(label: "Category", value: item.errorCategory)
@@ -303,6 +281,7 @@ public struct NotUploadedDetailSheet: View {
                         labeledRow(label: "Technical Code", value: code)
                     }
                     labeledRow(label: "Reason", value: item.plainLanguageReason)
+                    if let date = item.nextRetryDate { labeledRow(label: "Next retry", value: date.formatted()) }
                     if let remedy = item.suggestedRemedy {
                         labeledRow(label: "Suggested Remedy", value: remedy)
                     }
@@ -319,6 +298,8 @@ public struct NotUploadedDetailSheet: View {
                     }
                 }
             }
+            .onAppear { loadHistory() }
+            .onDisappear { historyTask?.cancel() }
             .navigationTitle("Failure Details")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -330,6 +311,15 @@ public struct NotUploadedDetailSheet: View {
                     }
                 }
             }
+        }
+    }
+
+    private func loadHistory(before: Int64? = nil) {
+        historyTask?.cancel()
+        historyTask = Task {
+            do { let page = try await environment.attemptHistory(item, before: before); try Task.checkCancellation(); history = page; historyHasOlder = page.count == 25; historyError = nil }
+            catch is CancellationError { }
+            catch { historyError = FailureExplanation.message(ProviderSupport.safe(error, domain: .sqlite)) }
         }
     }
 

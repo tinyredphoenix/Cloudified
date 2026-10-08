@@ -16,6 +16,8 @@
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0.0</string>
+	<key>CloudifiedRevision</key>
+	<string>$(CLOUDIFIED_REVISION)</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>LSRequiresIPhoneOS</key>
@@ -24,7 +26,6 @@
 	<string>Cloudified requires photo library access to back up original quality photos and videos to Google Photos and Telegram.</string>
 	<key>UIBackgroundModes</key>
 	<array>
-		<string>fetch</string>
 		<string>processing</string>
 	</array>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>

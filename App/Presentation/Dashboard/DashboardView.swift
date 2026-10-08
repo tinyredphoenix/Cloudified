@@ -24,6 +24,9 @@ public struct DashboardView: View {
                         savedToBoth: environment.dashboardState.savedToBothCount,
                         permissionScope: environment.dashboardState.permissionScopeDescription,
                         scanDate: environment.dashboardState.scanTimestamp,
+                        canPause: environment.dashboardState.canPause && environment.dashboardState.controlsAvailable,
+                        canResume: environment.dashboardState.canResume && environment.dashboardState.controlsAvailable,
+                        canStart: environment.dashboardState.canStartBackup && environment.dashboardState.controlsAvailable,
                         onBackUp: {
                             environment.requestBackup()
                         },
@@ -36,9 +39,9 @@ public struct DashboardView: View {
                     )
 
                     // 2. Active Transfer (Current file, bytes, part, attempt)
-                    CurrentTransferCard(
-                        transfer: environment.dashboardState.currentTransfer
-                    )
+                    ForEach(environment.dashboardState.currentTransfers) { transfer in
+                        CurrentTransferCard(transfer: transfer)
+                    }
 
                     // 3. Independent Destinations (Google & Telegram)
                     VStack(alignment: .leading, spacing: 10) {

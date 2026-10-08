@@ -41,6 +41,7 @@ xcodebuild \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
   "CLOUDIFIED_NATIVE_ROOT=$output_root/tdlib" \
+  "CLOUDIFIED_REVISION=$(git -C "$repo_root" rev-parse HEAD)" \
   build 2>&1 | tee "$output_root/xcodebuild.log"
 
 app_path="$output_root/DerivedData/Build/Products/Release-iphoneos/Cloudified.app"

@@ -62,6 +62,7 @@ public struct ProviderCardState: Equatable, Sendable {
     public var savedCount: Int?
     public var remainingCount: Int?
     public var totalCount: Int?
+    public var waitingCount: Int?
     public var failedCount: Int?
     public var lastConfirmedDate: Date?
 
@@ -75,6 +76,7 @@ public struct ProviderCardState: Equatable, Sendable {
         savedCount: Int? = nil,
         remainingCount: Int? = nil,
         totalCount: Int? = nil,
+        waitingCount: Int? = nil,
         failedCount: Int? = nil,
         lastConfirmedDate: Date? = nil
     ) {
@@ -87,6 +89,7 @@ public struct ProviderCardState: Equatable, Sendable {
         self.savedCount = savedCount
         self.remainingCount = remainingCount
         self.totalCount = totalCount
+        self.waitingCount = waitingCount
         self.failedCount = failedCount
         self.lastConfirmedDate = lastConfirmedDate
     }
@@ -157,26 +160,31 @@ public struct MediaSectionState: Equatable, Sendable {
 }
 
 /// Precise information about the currently transferring file.
-public struct CurrentTransferState: Equatable, Sendable {
+public struct CurrentTransferState: Identifiable, Equatable, Sendable {
+    public let id: String
+    public var activity: String
     public let filename: String
     public let mediaType: String
     public let provider: String
     public var bytesSent: Int64
     public var totalBytes: Int64?
     public var componentOrPart: String?
-    public var attemptNumber: Int
+    public var attemptNumber: Int?
     public let maxAttempts: Int
 
     public init(
+        id: String,
+        activity: String,
         filename: String,
         mediaType: String,
         provider: String,
         bytesSent: Int64 = 0,
         totalBytes: Int64? = nil,
         componentOrPart: String? = nil,
-        attemptNumber: Int = 1,
+        attemptNumber: Int? = nil,
         maxAttempts: Int = 3
     ) {
+        self.id = id; self.activity = activity
         self.filename = filename
         self.mediaType = mediaType
         self.provider = provider
@@ -212,7 +220,7 @@ public struct CurrentTransferState: Equatable, Sendable {
     }
 
     public var attemptText: String {
-        return "Attempt \(attemptNumber) of \(maxAttempts)"
+        return attemptNumber.map { "Attempt \($0) of \(maxAttempts)" } ?? "Attempt not started"
     }
 }
 
@@ -231,7 +239,10 @@ public struct DashboardViewState: Equatable, Sendable {
     public var photosSection: MediaSectionState
     public var videosSection: MediaSectionState
 
-    public var currentTransfer: CurrentTransferState?
+    public var canPause = false
+    public var canResume = false
+    public var controlsAvailable = false
+    public var currentTransfers: [CurrentTransferState]
 
     public var confirmedThisSessionCount: Int?
     public var currentTransferSpeedBytesPerSec: Int64?
@@ -254,7 +265,7 @@ public struct DashboardViewState: Equatable, Sendable {
             title: "Videos",
             subtitle: "Full original quality; independent concurrent queue"
         ),
-        currentTransfer: CurrentTransferState? = nil,
+        currentTransfers: [CurrentTransferState] = [],
         confirmedThisSessionCount: Int? = nil,
         currentTransferSpeedBytesPerSec: Int64? = nil,
         estimatedRemainingTimeSeconds: TimeInterval? = nil
@@ -269,7 +280,7 @@ public struct DashboardViewState: Equatable, Sendable {
         self.telegramStatus = telegramStatus
         self.photosSection = photosSection
         self.videosSection = videosSection
-        self.currentTransfer = currentTransfer
+        self.currentTransfers = currentTransfers
         self.confirmedThisSessionCount = confirmedThisSessionCount
         self.currentTransferSpeedBytesPerSec = currentTransferSpeedBytesPerSec
         self.estimatedRemainingTimeSeconds = estimatedRemainingTimeSeconds

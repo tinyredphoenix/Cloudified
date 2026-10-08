@@ -53,9 +53,22 @@ public struct DiagnosticLogEntry: Identifiable, Equatable, Sendable {
 }
 
 /// State representation for the Logs screen.
+public struct LogRunChoice: Identifiable, Equatable, Sendable {
+    public let id: UUID
+    public let title: String
+}
+
 public struct LogsViewState: Equatable, Sendable {
     public var originFilter: LogOriginFilter
     public var severityFilter: LogSeverityFilter
+    public var runs: [LogRunChoice] = []
+    public var selectedRunID: UUID?
+    public var hasOlderRuns = false
+    public var isLoading = false
+    public var hasOlder = false
+    public var prunedEventCount: Int64 = 0
+    public var pageError: String?
+    public var fallbackEntries: [DiagnosticLogEntry] = []
     public var entries: [DiagnosticLogEntry]
 
     public init(

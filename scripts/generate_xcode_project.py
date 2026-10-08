@@ -38,6 +38,14 @@ groups = [
 sources = [
     ("CloudifiedApp.swift", "application"),
     ("AppEnvironment.swift", "application"),
+    ("AppEnvironment+Accounts.swift", "application"),
+    ("AppEnvironment+Backup.swift", "application"),
+    ("AppEnvironment+Lifecycle.swift", "application"),
+    ("AppEnvironment+Recovery.swift", "application"),
+    ("AppEnvironment+Presentation.swift", "application"),
+    ("AppEnvironment+Pages.swift", "application"),
+    ("DemandSourceProducer.swift", "application"),
+
     ("RootTabView.swift", "presentation"),
     ("DashboardView.swift", "dashboard"),
     ("DashboardViewState.swift", "dashboard"),
@@ -80,6 +88,12 @@ sources = [
     ("KeychainCredentialStore.swift", "security"),
     ("SystemAdapterProtocol.swift", "system"),
     ("StorageLayout.swift", "system"),
+    ("BackupContinuation.swift", "system"),
+    ("DiagnosticExportStore.swift", "system"),
+    ("DiagnosticFallback.swift", "system"),
+    ("FailureExplanation.swift", "system"),
+    ("NetworkPolicyMonitor.swift", "system"),
+    ("RowThumbnailLoader.swift", "system"),
     ("ProviderSupport.swift", "system")
 ]
 
@@ -136,7 +150,7 @@ file_ref_lines = [
 ]
 for fname, gkey in sources:
     fr_id = gid(f"FileRef_{fname}")
-    file_ref_lines.append(f"\t\t{fr_id} /* {fname} */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = {fname}; sourceTree = \"<group>\"; }};")
+    file_ref_lines.append(f"\t\t{fr_id} /* {fname} */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = \"{fname}\"; sourceTree = \"<group>\"; }};")
 
 for rname, ftype, _, _ in resources:
     fr_id = gid(f"FileRef_{rname}")
@@ -438,6 +452,7 @@ pbxproj_content = f"""// !$*UTF8*$!
 \t\t\t\tCODE_SIGN_STYLE = Manual;
 \t\t\t\tCODE_SIGNING_ALLOWED = NO;
 \t\t\t\tCODE_SIGNING_REQUIRED = NO;
+\t\t\t\tCLOUDIFIED_REVISION = unknown;
 \t\t\t\tCLOUDIFIED_NATIVE_ROOT = "$(PROJECT_DIR)/build/tdlib";
 \t\t\t\tCURRENT_PROJECT_VERSION = 1;
 \t\t\t\tDEVELOPMENT_TEAM = "";
@@ -476,6 +491,7 @@ pbxproj_content = f"""// !$*UTF8*$!
 \t\t\t\tCODE_SIGN_STYLE = Manual;
 \t\t\t\tCODE_SIGNING_ALLOWED = NO;
 \t\t\t\tCODE_SIGNING_REQUIRED = NO;
+\t\t\t\tCLOUDIFIED_REVISION = unknown;
 \t\t\t\tCLOUDIFIED_NATIVE_ROOT = "$(PROJECT_DIR)/build/tdlib";
 \t\t\t\tCURRENT_PROJECT_VERSION = 1;
 \t\t\t\tDEVELOPMENT_TEAM = "";

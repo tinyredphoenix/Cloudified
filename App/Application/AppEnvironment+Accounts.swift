@@ -1,0 +1,195 @@
+import Foundation
+import CloudifiedCore
+
+extension AppEnvironment {
+    public func setGoogleEnabled(_ value: Bool) { setEnabled(.google, value) }
+    public func setTelegramEnabled(_ value: Bool) { setEnabled(.telegram, value) }
+    func setEnabled(_ provider: Provider, _ value: Bool) {
+        guard commandProvider == nil else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            let token = UUID()
+            do {
+                _ = try await self.beginProviderChange(provider, token: token, requiresReleasedInputs: false)
+                defer { self.endProviderChange(token) }
+                guard let destination = try await self.ledger?.selectedDestination(provider) else { return }
+                try await self.backupEngine?.setEnabled(destinationID: destination.id, enabled: value)
+                // User preference persists even when recovery/auth is unavailable.
+                // Ledger recovery and provider inspection still gate actual sends.
+                if value { try await self.recoverMapping(destination) }
+                await self.refreshStoredSettings()
+            } catch { self.endProviderChange(token); await self.report(error, provider: provider) }
+        }
+    }
+    public func setWiFiOnly(_ value: Bool) {
+        settingsState.isWiFiOnlyEnabled = value
+        UserDefaults.standard.set(value, forKey: "CloudifiedWiFiOnly")
+        networkPolicy.setCellularAllowed(!value)
+        schedulePolicyUpdate()
+    }
+    public func updateLivePhotoPolicy(_ option: LivePhotoFallbackOption) {
+        guard option != settingsState.livePhotoFallback, commandProvider == nil else { return }
+        Task { [weak self] in
+            guard let self, let ledger = self.ledger else { return }
+            let token = UUID()
+            do {
+                let enabled = try await self.beginProviderChange(.google, token: token)
+                defer { self.endProviderChange(token) }
+                if let destination = try await ledger.selectedDestination(.google) {
+                    try await ledger.invalidateCurrentCoverage(destinationID: destination.id)
+                    self.settingsState.livePhotoFallback = option
+                    UserDefaults.standard.set(option.rawValue, forKey: "CloudifiedLivePhotoFallback")
+                    // Frozen new policy + reset cursor. Alias absence already makes
+                    // old smaller coverage no longer Saved; producer replans only
+                    // under this new generation, even if an asset cannot prepare.
+                    try await self.backupEngine?.setEnabled(destinationID: destination.id, enabled: enabled)
+                } else {
+                    self.settingsState.livePhotoFallback = option
+                    UserDefaults.standard.set(option.rawValue, forKey: "CloudifiedLivePhotoFallback")
+                }
+                await self.refreshStoredSettings()
+            } catch { self.endProviderChange(token); await self.report(error, provider: .google) }
+        }
+    }
+    public func connectGoogle(oauthToken: String) async throws {
+        let token = UUID()
+        do {
+            _ = try await beginProviderChange(.google, token: token)
+            defer { endProviderChange(token) }
+            settingsState.isConnectingGoogle = true
+            defer { settingsState.isConnectingGoogle = false }
+            guard allowedNetwork, let session = googleSession, let adapter = googleAdapter, let ledger else {
+                throw SafeFailure(.connectivity, domain: .google, cause: .offline)
+            }
+            _ = try await session.connect(oauthToken: oauthToken)
+            let destination = try await adapter.mapVerifiedAccount()
+            try await ledger.setEnabled(destination.id, false)
+            try await adapter.recover(destination)
+            try await ledger.unblockDestination(destination.id)
+            try await backupEngine?.setEnabled(destinationID: destination.id, enabled: true)
+            providerErrors.removeValue(forKey: .google); settingsState.googleAuthErrorMessage = nil
+            await establishStartupInventory(); await refreshStoredSettings()
+        } catch {
+            endProviderChange(token); await report(error, provider: .google)
+            throw ProviderSupport.safe(error, domain: .google)
+        }
+    }
+    public func disconnectGoogle() async throws {
+        let token = UUID()
+        do {
+            _ = try await beginProviderChange(.google, token: token)
+            defer { endProviderChange(token) }
+            if let destination = try await ledger?.selectedDestination(.google) { try await ledger?.deselectDestination(destination.id) }
+            try await googleSession?.disconnect()
+            settingsState.isGoogleConnected = false; settingsState.googleAccountEmail = nil
+            await refreshStoredSettings()
+        } catch { endProviderChange(token); await report(error, provider: .google); throw ProviderSupport.safe(error, domain: .google) }
+    }
+    public func saveTelegramAPICredentials(apiId: Int32, apiHash: String) async throws {
+        let token = UUID()
+        do {
+            _ = try await beginProviderChange(.telegram, token: token)
+            defer { endProviderChange(token) }
+            settingsState.isConnectingTelegram = true
+            defer { settingsState.isConnectingTelegram = false }
+            // API credentials identify the application, not a Telegram account.
+            if await tdlibClient?.authorizationState != .uninitialized {
+                try await replaceTelegramSession()
+            }
+            try credentialStore.saveTelegramCredential(StoredTelegramCredential(apiId: apiId, apiHash: apiHash), forProfile: "primary")
+            try await ensureTelegramStarted()
+            settingsState.telegramAuthErrorMessage = nil
+        } catch { endProviderChange(token); await report(error, provider: .telegram); throw ProviderSupport.safe(error, domain: .tdlib) }
+    }
+    func replaceTelegramSession() async throws {
+        try await requireNoRetainedInputs(.telegram)
+        // Do not retire observers/profile until native close really acknowledges.
+        try await telegramAdapter?.close()
+        let old = telegramObservers; for task in old { task.cancel() }; for task in old { await task.value }
+        telegramObservers.removeAll()
+        guard let ledger, let files = fileLeaseStore else { throw CoreError.recoveryRequired }
+        let client = try TDLibClient(profileID: "primary", credentialStore: credentialStore, diagnosticSink: diagnosticSink)
+        tdlibClient = client; telegramAdapter = TelegramProviderAdapter(client: client, ledger: ledger, files: files)
+        startTelegramSubscriptions()
+    }
+    public func reconnectTelegram() async throws {
+        let token = UUID()
+        do {
+            _ = try await beginProviderChange(.telegram, token: token)
+            defer { endProviderChange(token) }
+            if await tdlibClient?.authorizationState == .closed { try await replaceTelegramSession() }
+            try await ensureTelegramStarted()
+            if let destination = try await ledger?.selectedDestination(.telegram) {
+                try await recoverMapping(destination)
+            }
+            await refreshStoredSettings()
+        } catch { endProviderChange(token); await report(error, provider: .telegram); throw ProviderSupport.safe(error, domain: .tdlib) }
+    }
+    public func submitTelegramPhone(_ phone: String) async throws { try await telegramAuth { try await $0.setAuthenticationPhoneNumber(phone) } }
+    public func submitTelegramCode(_ code: String) async throws { try await telegramAuth { try await $0.checkAuthenticationCode(code) } }
+    public func submitTelegramPassword(_ password: String) async throws { try await telegramAuth { try await $0.checkAuthenticationPassword(password) } }
+    public func submitTelegramEmail(_ email: String) async throws {
+        try await telegramAuth { _ = try await $0.request(["@type": "setAuthenticationEmailAddress", "email_address": email]) }
+    }
+    public func submitTelegramEmailCode(_ code: String) async throws {
+        try await telegramAuth { _ = try await $0.request(["@type": "checkAuthenticationEmailCode", "code": ["@type": "emailAddressAuthenticationCode", "code": code]]) }
+    }
+    func telegramAuth(_ operation: @Sendable (TDLibClient) async throws -> Void) async throws {
+        guard !settingsState.isConnectingTelegram, commandProvider == nil, let client = tdlibClient else { throw CoreError.invalidTransition }
+        settingsState.isConnectingTelegram = true
+        defer { settingsState.isConnectingTelegram = false }
+        do {
+            guard allowedNetwork else { throw SafeFailure(.connectivity, domain: .tdlib, cause: .offline) }
+            try await operation(client)
+            updateTelegramAuthStep(await client.authorizationState)
+            settingsState.telegramAuthErrorMessage = nil
+        } catch { await report(error, provider: .telegram); throw ProviderSupport.safe(error, domain: .tdlib) }
+    }
+    public func mapTelegramChannel(chatID: Int64) async throws {
+        let token = UUID()
+        do {
+            _ = try await beginProviderChange(.telegram, token: token)
+            defer { endProviderChange(token) }
+            settingsState.isConnectingTelegram = true
+            defer { settingsState.isConnectingTelegram = false }
+            guard let adapter = telegramAdapter, let ledger else { throw CoreError.recoveryRequired }
+            let destination = try await adapter.mapVerifiedChannel(chatID: chatID)
+            try await ledger.setEnabled(destination.id, false)
+            try await adapter.recover(destination)
+            try await ledger.unblockDestination(destination.id)
+            try await backupEngine?.setEnabled(destinationID: destination.id, enabled: true)
+            providerErrors.removeValue(forKey: .telegram); settingsState.telegramAuthErrorMessage = nil
+            await establishStartupInventory(); await refreshStoredSettings()
+        } catch { endProviderChange(token); await report(error, provider: .telegram); throw ProviderSupport.safe(error, domain: .tdlib) }
+    }
+    public func disconnectTelegram() async throws {
+        let token = UUID()
+        do {
+            _ = try await beginProviderChange(.telegram, token: token)
+            defer { endProviderChange(token) }
+            try await replaceTelegramSession()
+            if let destination = try await ledger?.selectedDestination(.telegram) { try await ledger?.deselectDestination(destination.id) }
+            // App unlink retains the protected native account/database for genuine
+            // same-account reconnect; it does not falsely claim Telegram logout.
+            settingsState.isTelegramConnected = false; settingsState.telegramAccountName = nil
+            settingsState.telegramChannelName = nil; settingsState.telegramChatID = nil
+            settingsState.telegramAuthStep = .unconfigured
+            await refreshStoredSettings()
+        } catch { endProviderChange(token); await report(error, provider: .telegram); throw ProviderSupport.safe(error, domain: .tdlib) }
+    }
+    public func logoutTelegram() async throws {
+        // Actual account switch is an explicit logout, never deletion of DB keys.
+        let token = UUID()
+        do {
+            _ = try await beginProviderChange(.telegram, token: token)
+            defer { endProviderChange(token) }
+            guard let client = tdlibClient else { throw CoreError.recoveryRequired }
+            _ = try await client.request(["@type": "logOut"])
+            try await replaceTelegramSession()
+            if let destination = try await ledger?.selectedDestination(.telegram) { try await ledger?.deselectDestination(destination.id) }
+            settingsState.isTelegramConnected = false
+            try await ensureTelegramStarted()
+            await refreshStoredSettings()
+        } catch { endProviderChange(token); await report(error, provider: .telegram); throw ProviderSupport.safe(error, domain: .tdlib) }
+    }
+}

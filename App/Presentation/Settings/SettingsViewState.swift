@@ -25,6 +25,7 @@ public enum LivePhotoFallbackOption: String, CaseIterable, Identifiable, Sendabl
 
 /// Current step in Telegram TDLib authentication.
 public enum TelegramAuthStep: String, Equatable, Sendable {
+    case initializing = "Initializing secure session"
     case unconfigured = "API Credentials Required"
     case enterPhoneNumber = "Phone Number Required"
     case enterCode = "Verification Code Required"

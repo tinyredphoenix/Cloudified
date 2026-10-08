@@ -1,4 +1,5 @@
 import Foundation
+import CloudifiedCore
 
 /// Filter options for provider destination in Not Uploaded screen.
 public enum DestinationFilter: String, CaseIterable, Identifiable, Sendable {
@@ -22,7 +23,7 @@ public enum MediaTypeFilter: String, CaseIterable, Identifiable, Sendable {
 public enum FailureStatusFilter: String, CaseIterable, Identifiable, Sendable {
     case failed = "Failed"
     case waiting = "Waiting"
-    case pending = "Pending"
+    case pending = "Pending retry"
     case all = "All"
 
     public var id: String { rawValue }
@@ -31,15 +32,19 @@ public enum FailureStatusFilter: String, CaseIterable, Identifiable, Sendable {
 /// Detailed record representing an asset that is failed, waiting, or pending.
 public struct NotUploadedItem: Identifiable, Equatable, Sendable {
     public let id: String
+    public let destinationID: UUID
+    public let sourceAsset: AssetIdentity?
+    public let canRetry: Bool
+    public let needsRecovery: Bool
     public let jobID: UUID?
     public let localIdentifier: String
     public let filename: String
-    public let captureDate: Date
+    public let captureDate: Date?
     public let mediaType: String
     public let durationSeconds: TimeInterval?
     public let provider: String
     public let status: String
-    public let attemptCount: Int
+    public let attemptCount: Int?
     public let maxAttempts: Int
     public let stage: String
     public let errorCategory: String
@@ -52,15 +57,19 @@ public struct NotUploadedItem: Identifiable, Equatable, Sendable {
 
     public init(
         id: String,
+        destinationID: UUID,
+        sourceAsset: AssetIdentity? = nil,
+        canRetry: Bool = false,
+        needsRecovery: Bool = false,
         jobID: UUID? = nil,
         localIdentifier: String = "",
         filename: String,
-        captureDate: Date,
+        captureDate: Date?,
         mediaType: String,
         durationSeconds: TimeInterval? = nil,
         provider: String,
         status: String = "Failed",
-        attemptCount: Int = 3,
+        attemptCount: Int? = nil,
         maxAttempts: Int = 3,
         stage: String = "Transfer",
         errorCategory: String = "Network error",
@@ -71,6 +80,8 @@ public struct NotUploadedItem: Identifiable, Equatable, Sendable {
         missingObligations: [String] = [],
         nextRetryDate: Date? = nil
     ) {
+        self.destinationID = destinationID; self.sourceAsset = sourceAsset
+        self.canRetry = canRetry; self.needsRecovery = needsRecovery
         self.id = id
         self.jobID = jobID
         self.localIdentifier = localIdentifier
@@ -94,7 +105,7 @@ public struct NotUploadedItem: Identifiable, Equatable, Sendable {
 
 
     public var attemptText: String {
-        return "\(attemptCount)/\(maxAttempts)"
+        return attemptCount.map { "\($0)/\(maxAttempts)" } ?? "Not started"
     }
 }
 
@@ -103,6 +114,9 @@ public struct NotUploadedViewState: Equatable, Sendable {
     public var destinationFilter: DestinationFilter
     public var mediaTypeFilter: MediaTypeFilter
     public var statusFilter: FailureStatusFilter
+    public var isLoading = false
+    public var hasOlder = false
+    public var pageError: String?
     public var items: [NotUploadedItem]
 
     public init(
