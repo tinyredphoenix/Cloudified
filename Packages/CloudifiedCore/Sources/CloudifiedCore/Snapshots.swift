@@ -74,6 +74,14 @@ public struct SourceFailureRow: Sendable {
     public let occurredAt: Date
 }
 extension Ledger {
+    public func aliasedJob(assetID: UUID, destinationID: UUID) throws -> JobRecord? {
+        guard let row = try db.rows("SELECT job_id FROM aliases WHERE asset_id=? AND destination_id=?", [assetID.sql, destinationID.sql]).first else { return nil }
+        guard let id = UUID(uuidString: try row.string("job_id")) else { throw CoreError.invalidContract }
+        return try loadJob(id)
+    }
+    public func hasRetainedTransfers(jobID: UUID) throws -> Bool {
+        try !db.rows("SELECT id FROM transfers WHERE job_id=? LIMIT 1", [jobID.sql]).isEmpty
+    }
     public func attemptHistoryPage(jobID: UUID, beforeCursor: Int64? = nil, limit: Int = 50) throws -> [AttemptHistoryRow] {
         guard (1...100).contains(limit) else { throw CoreError.invalidContract }
         return try db.rows("SELECT rowid AS cursor,* FROM attempts WHERE job_id=? AND rowid<? ORDER BY rowid DESC LIMIT ?",
@@ -117,13 +125,14 @@ extension Ledger {
             }
         }
     }
-    public func sourceFailurePage(beforeCursor: Int64? = nil, provider: Provider? = nil, kind: MediaKind? = nil, limit: Int = 50) throws -> [SourceFailureRow] {
+    public func sourceFailurePage(beforeCursor: Int64? = nil, provider: Provider? = nil, kind: MediaKind? = nil, limit: Int = 50, permanent: Bool? = nil) throws -> [SourceFailureRow] {
         guard (1...100).contains(limit) else { throw CoreError.invalidContract }
         var clauses = ["f.seq<?", "d.selected=1", "a.scan_id=(SELECT value FROM meta WHERE key='scan')",
                        "NOT EXISTS(SELECT 1 FROM aliases x JOIN jobs j ON j.id=x.job_id WHERE x.asset_id=a.id AND x.destination_id=d.id AND j.state='confirmed')"]
         var args: [SQLValue] = [.integer(beforeCursor ?? Int64.max)]
         if let provider { clauses.append("d.provider=?"); args.append(.text(provider.rawValue)) }
         if let kind { clauses.append("a.kind=?"); args.append(.text(kind.rawValue)) }
+        if let permanent { clauses.append("f.permanent=?"); args.append(.integer(permanent ? 1 : 0)) }
         args.append(.integer(Int64(limit)))
         return try db.rows("SELECT f.*,a.body AS asset_body,d.body AS destination_body FROM source_failures f JOIN assets a ON a.id=f.asset_id JOIN destinations d ON d.id=f.destination_id WHERE \(clauses.joined(separator: " AND ")) ORDER BY f.seq DESC LIMIT ?", args).map {
             SourceFailureRow(cursor: $0.int("seq"), asset: try db.decode(AssetIdentity.self, $0, "asset_body"), destination: try db.decode(Destination.self, $0, "destination_body"), error: try db.decode(SafeFailure.self, $0, "error"), permanent: $0.int("permanent") == 1, occurredAt: Date(timeIntervalSince1970: $0.double("occurred")!))
@@ -186,12 +195,17 @@ extension Ledger {
                            alreadyPresent: confirmed - uploaded, failed: Int(row.int("failed")), waiting: Int(row.int("waiting")))
     }
     public func failurePage(beforeCursor: Int64? = nil, provider: Provider? = nil, kind: MediaKind? = nil,
-                            limit: Int = 50) throws -> [FailureRow] {
+                            limit: Int = 50, states: [JobState]? = nil) throws -> [FailureRow] {
         guard (1...100).contains(limit) else { throw CoreError.invalidContract }
         var clauses = ["x.rowid<?", "d.selected=1", "j.state IN ('failed','waiting','reconciling','delayed')", "a.scan_id=(SELECT value FROM meta WHERE key='scan')"]
         var args: [SQLValue] = [.integer(beforeCursor ?? Int64.max)]
         if let provider { clauses.append("d.provider=?"); args.append(.text(provider.rawValue)) }
         if let kind { clauses.append("a.kind=?"); args.append(.text(kind.rawValue)) }
+        if let states {
+            guard !states.isEmpty, states.count <= 4, states.allSatisfy({ [.failed, .waiting, .reconciling, .delayed].contains($0) }) else { throw CoreError.invalidContract }
+            clauses.append("j.state IN (\(states.map { _ in "?" }.joined(separator: ",")))")
+            args.append(contentsOf: states.map { .text($0.rawValue) })
+        }
         args.append(.integer(Int64(limit)))
         return try db.rows("SELECT x.rowid AS cursor,j.id AS job_id,a.body AS asset_body,j.failure,(SELECT COUNT(*) FROM obligations o WHERE o.job_id=j.id AND o.status='confirmed') AS confirmed,(SELECT COUNT(*) FROM obligations o WHERE o.job_id=j.id) AS required FROM aliases x JOIN jobs j ON j.id=x.job_id JOIN assets a ON a.id=x.asset_id JOIN destinations d ON d.id=j.destination_id WHERE \(clauses.joined(separator: " AND ")) ORDER BY x.rowid DESC LIMIT ?", args).map { row in
             guard let id = UUID(uuidString: try row.string("job_id")) else { throw CoreError.invalidContract }

@@ -10,7 +10,7 @@ public actor Ledger {
     private var observers: [UUID: AsyncStream<Void>.Continuation] = [:]
     public init(databaseURL: URL, version: String, revision: String) throws {
         guard !version.isEmpty, version.utf8.count <= 64, revision.utf8.count <= 64,
-              revision.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }) else { throw CoreError.invalidContract }
+              (revision == "unknown" || revision.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) })) else { throw CoreError.invalidContract }
         self.version = version; self.revision = revision
         let connection = try SQLite(url: databaseURL)
         try Schema.install(connection)

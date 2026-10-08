@@ -253,12 +253,12 @@ public final class PhotoLibraryPipeline: PhotoLibraryAdapterProtocol, Sendable {
             do { cached = try await fileStore.acquireContent(known.originalContent) }
             catch CoreError.stagedUnavailable { cached = nil }
             if let cached {
-                do { _ = try await fileStore.sweep(limit: 100) }
+                do { _ = try await fileStore.sweepIfInventoried(limit: 100) }
                 catch { try await fileStore.release(cached); throw error }
                 return (known, cached)
             }
         }
-        _ = try await fileStore.sweep(limit: 100)
+        _ = try await fileStore.sweepIfInventoried(limit: 100)
         let fixed: Int64 = 67_108_864
         let reservation = try await ledger.reserveSourceStorage(availableBytes: storageLayout.availableCapacity(),
             additionalCopyCount: copyCount, fixedOverheadBytes: fixed)

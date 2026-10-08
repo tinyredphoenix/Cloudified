@@ -60,11 +60,18 @@ extension Ledger {
         }
     }
     public func logPage(beforeSequence: Int64? = nil, origin: EventOrigin? = nil,
-                        severity: EventSeverity? = nil, runID: UUID? = nil, limit: Int = 100) throws -> LogPage {
+                        severity: EventSeverity? = nil, runID: UUID? = nil, limit: Int = 100,
+                        origins: [EventOrigin]? = nil) throws -> LogPage {
         guard (1...200).contains(limit) else { throw CoreError.invalidContract }
         var clauses = ["seq < ?"]
         var values: [SQLValue] = [.integer(beforeSequence ?? Int64.max)]
         if let origin { clauses.append("origin=?"); values.append(.text(origin.rawValue)) }
+        if let origins {
+            guard origin == nil, !origins.isEmpty, origins.count <= 4,
+                  Set(origins.map(\.rawValue)).count == origins.count else { throw CoreError.invalidContract }
+            clauses.append("origin IN (\(origins.map { _ in "?" }.joined(separator: ",")))")
+            values.append(contentsOf: origins.map { .text($0.rawValue) })
+        }
         if let severity { clauses.append("severity=?"); values.append(.text(severity.rawValue)) }
         if let runID { clauses.append("run_id=?"); values.append(runID.sql) }
         values.append(.integer(Int64(limit)))
@@ -105,7 +112,11 @@ extension Ledger {
     /// Caller supplies an app-owned export URL and handles sharing/deletion in P5.
     public func exportDiagnostics(to url: URL) throws {
         guard !FileManager.default.fileExists(atPath: url.path) else { throw CoreError.invalidContract }
-        guard FileManager.default.createFile(atPath: url.path, contents: nil) else { throw CoreError.persistence(-1) }
+        var attributes: [FileAttributeKey: Any] = [:]
+        #if os(iOS)
+        attributes[.protectionKey] = FileProtectionType.completeUntilFirstUserAuthentication
+        #endif
+        guard FileManager.default.createFile(atPath: url.path, contents: nil, attributes: attributes) else { throw CoreError.persistence(-1) }
         let file = try FileHandle(forWritingTo: url)
         defer { try? file.close() }
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]

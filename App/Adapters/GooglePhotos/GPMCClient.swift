@@ -177,6 +177,7 @@ final class UploadRequestNetworkPolicy: @unchecked Sendable {
         lock.unlock()
         request.allowsCellularAccess = allowed
         request.allowsExpensiveNetworkAccess = allowed
+        request.allowsConstrainedNetworkAccess = false
     }
 }
 

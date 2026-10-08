@@ -399,7 +399,7 @@ public final class PhotoLibraryOriginalPreparer: OriginalPreparer, Sendable {
         var exportEnded = false
         var masterReleased = false
         do {
-            _ = try await fileStore.sweep()
+            _ = try await fileStore.sweepIfInventoried()
             let available = try storageLayout.availableCapacity()
             let copyOverhead = partDesc.byteCount + 67_108_864
             let admitted = try await ledger.reserveStorage(

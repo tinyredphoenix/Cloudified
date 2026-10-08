@@ -55,6 +55,10 @@ public actor BackupEngine {
     private var paused = false
     private var systemGate: KnownCause?
     private var batchRunning = false
+    private var batchWork: [Provider: @Sendable () async -> LaneResult] = [:]
+    private var batchResults: [Provider: LaneResult] = [:]
+    private var batchCompletion: CheckedContinuation<[LaneResult], Never>?
+    private var laneFinished: (@Sendable (LaneResult) async -> Void)?
     public init(ledger: Ledger, files: FileLeaseStore) { self.ledger = ledger; self.files = files }
 
     public func snapshot() async throws -> EngineSnapshot {
@@ -97,46 +101,77 @@ public actor BackupEngine {
     /// Finite drain of currently-ready work. Returns retry deadlines to one P6
     /// event-driven wake timer; no polling/sleep loop or provider-drain sequencing.
     /// Caller must not end a system background task while retained transfers exist.
-    public func runReadyBatch(adapters: [any ProviderAdapter], preparer: any OriginalPreparer) async throws -> [LaneResult] {
-        guard !batchRunning, !paused, systemGate == nil,
+    public func runReadyBatch(adapters: [any ProviderAdapter], preparer: any OriginalPreparer,
+                             source: (any SourceWorkProducer)? = nil,
+                             onLaneFinished: (@Sendable (LaneResult) async -> Void)? = nil) async throws -> [LaneResult] {
+        guard !batchRunning, !paused, systemGate == nil, !adapters.isEmpty,
               Set(adapters.map(\.provider)).count == adapters.count else { throw CoreError.invalidTransition }
         batchRunning = true
-        defer { batchRunning = false; workers.removeAll() }
+        defer { batchRunning = false; batchWork.removeAll(); batchResults.removeAll(); laneFinished = nil }
         let runID = try await ledger.beginRun()
-        failures.removeAll()
-        // Create ALL worker tasks before awaiting ANY result. Errors are values:
-        // one provider cannot throw out of a group and cancel its sibling.
+        failures.removeAll(); laneFinished = onLaneFinished
         for adapter in adapters {
-            let provider = adapter.provider
-            workers[provider] = Task { await self.runLane(adapter, preparer: preparer, runID: runID) }
+            guard let destination = try await ledger.selectedDestination(adapter.provider) else { continue }
+            batchWork[adapter.provider] = { await self.runLane(adapter, destination: destination, preparer: preparer, source: source, runID: runID) }
         }
-        var results: [LaneResult] = []
-        for provider in Provider.allCases {
-            if let task = workers[provider] { results.append(await task.value) }
+        if batchWork.isEmpty { try await ledger.endRun(runID, needsAttention: false); return [] }
+        // All workers are installed in one actor turn before any is awaited.
+        let results = await withCheckedContinuation { continuation in
+            batchCompletion = continuation
+            for provider in Provider.allCases where batchWork[provider] != nil { startLane(provider) }
         }
         try await ledger.endRun(runID, needsAttention: results.contains { $0.failure != nil })
         return results
+    }
+    /// An existing batch may restart only an idle lane, using the SAME frozen
+    /// destination/source generation. New mappings enter a subsequent batch.
+    public func wakeReadyLanes() {
+        guard batchRunning, batchCompletion != nil, !paused, systemGate == nil else { return }
+        for provider in Provider.allCases where workers[provider] == nil && batchWork[provider] != nil { startLane(provider) }
+    }
+    private func startLane(_ provider: Provider) {
+        guard let work = batchWork[provider], workers[provider] == nil else { return }
+        workers[provider] = Task {
+            let result = await work()
+            await self.finishedLane(result)
+            return result
+        }
+    }
+    private func finishedLane(_ result: LaneResult) async {
+        workers.removeValue(forKey: result.provider); batchResults[result.provider] = result
+        await laneFinished?(result)
+        // Callback may have admitted a genuine wake. Never drop a new reader.
+        if workers.isEmpty, let continuation = batchCompletion {
+            batchCompletion = nil
+            continuation.resume(returning: Provider.allCases.compactMap { batchResults[$0] })
+        }
     }
     private func runnable(_ destination: UUID) async throws -> Bool {
         guard !paused, systemGate == nil, !Task.isCancelled else { return false }
         return try await ledger.canRun(destination)
     }
-    private func runLane(_ adapter: any ProviderAdapter, preparer: any OriginalPreparer, runID: UUID) async -> LaneResult {
+    private func runLane(_ adapter: any ProviderAdapter, destination: Destination, preparer: any OriginalPreparer,
+                         source: (any SourceWorkProducer)?, runID: UUID) async -> LaneResult {
         let provider = adapter.provider
         var destinationID: UUID?
         defer { active.removeValue(forKey: provider); progressAt.removeValue(forKey: provider) }
         do {
-            guard let destination = try await ledger.selectedDestination(provider) else {
-                return LaneResult(provider: provider, nextWake: nil, failure: nil)
-            }
             destinationID = destination.id
             try await ledger.appendEvent(.laneStart, context: EventContext(runID: runID, origin: provider.origin, destinationID: destination.id), decision: .proceed)
-            while try await runnable(destination.id), let job = try await ledger.claimNext(destinationID: destination.id, runID: runID) {
-                try await process(job, adapter: adapter, preparer: preparer, runID: runID)
+            while try await runnable(destination.id) {
+                guard await adapter.canAcceptWork else { break }
+                if let job = try await ledger.claimNext(destinationID: destination.id, runID: runID) {
+                    try await process(job, adapter: adapter, preparer: preparer, runID: runID)
+                } else if let source, try await source.produceNext(for: destination) {
+                    // Producer admission is finite and cursor-backed. A failed
+                    // source advances too; it cannot trap this lane on one asset.
+                    continue
+                } else { break }
             }
             try await ledger.appendEvent(.laneEnd, context: EventContext(runID: runID, origin: provider.origin, destinationID: destination.id), decision: .wait)
             return LaneResult(provider: provider, nextWake: try await ledger.nextWake(destinationID: destination.id), failure: nil)
         } catch {
+            if error is CancellationError { return LaneResult(provider: provider, nextWake: nil, failure: nil) }
             let failure = Self.safe(error)
             failures[provider] = failure
             // DB failure cannot reliably log to that DB. In-memory safe failure is

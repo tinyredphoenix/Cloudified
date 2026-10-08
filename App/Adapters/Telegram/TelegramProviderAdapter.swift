@@ -5,10 +5,11 @@ import CloudifiedCore
 /// retain ownership without preventing unrelated ready assets from proceeding.
 /// Three logical attempts remain exclusively owned by BackupEngine/Ledger.
 struct TelegramNativeTransferStatus: Sendable {
-    enum Activity: Sendable { case uploading, awaitingAcknowledgement, waitingForConnection, uncertain }
+    enum Activity: Sendable, Equatable { case uploading, awaitingAcknowledgement, waitingForConnection, uncertain }
     let transferID: UUID
     let destinationID: UUID
     let jobID: UUID
+    let resourceTag: String
     let uploadedBytes: Int64
     let expectedBytes: Int64
     let activity: Activity
@@ -69,11 +70,12 @@ actor TelegramProviderAdapter: ProviderAdapter {
     }
     /// Real retained native work remains visible after the Core worker stops
     /// waiting. The UI merges by transfer/job identity, never inventing Saved.
+    var canAcceptWork: Bool { get async { pending.count < 8 && streamFailure == nil } }
     func nativeTransferSnapshot() async -> [TelegramNativeTransferStatus] {
         let connected = await client.connectionReady
         return pending.values.filter { $0.checkpoint.phase == .transferring || $0.checkpoint.phase == .uncertain }.map { item in
             TelegramNativeTransferStatus(transferID: item.checkpoint.transferID, destinationID: item.checkpoint.destinationID,
-                jobID: item.checkpoint.jobID, uploadedBytes: item.uploadedBytes, expectedBytes: item.state.byteCount,
+                jobID: item.checkpoint.jobID, resourceTag: item.checkpoint.tag, uploadedBytes: item.uploadedBytes, expectedBytes: item.state.byteCount,
                 activity: streamFailure != nil ? .uncertain : (!connected ? .waitingForConnection : (item.nativeActive ? .uploading : .awaitingAcknowledgement)))
         }
     }
@@ -548,6 +550,17 @@ actor TelegramProviderAdapter: ProviderAdapter {
         guard !busy else { throw CoreError.invalidTransition }
         try await client.close(); consumer?.cancel(); await consumer?.value; consumer = nil; eventContinuation.finish(); statusContinuation.finish()
         streamFailure = SafeFailure(.reconciliation, domain: .tdlib, cause: .interrupted); epoch = nil
+    }
+    /// Native cache only. No original/DB/remote-message deletion. Called once at
+    /// idle after global input inventory proves there are no retained readers.
+    func trimIdleCache() async throws {
+        guard !busy, pending.isEmpty, await client.authorizationState == .ready,
+              await client.connectionReady else { return }
+        busy = true; defer { busy = false }
+        _ = try await client.request(["@type": "optimizeStorage", "size": 67_108_864,
+            "ttl": 604800, "count": 1000, "immunity_delay": 0,
+            "file_types": [["@type": "fileTypeDocument"]], "chat_ids": [Int64](),
+            "exclude_chat_ids": [Int64](), "return_deleted_file_statistics": false, "chat_limit": 0])
     }
     private func receipt(_ destination: Destination, _ reference: TelegramDocumentReference, kind: ConfirmationKind) throws -> RemoteReceipt {
         RemoteReceipt(destinationID: destination.id, tag: reference.tag, opaqueReference: try ProviderSupport.canonical(reference), kind: kind)

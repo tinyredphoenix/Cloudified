@@ -10,6 +10,8 @@ public actor TDLibClient {
     let profileID: String
     private let credentialStore: KeychainCredentialStore
     private var isStarting = false
+    private var networkType = "networkTypeNone"
+    private var appliedNetworkType: String?
     private let session: TDLibSession
     private let diagnosticSink: (@Sendable (EventOperation, EventContext, EventDecision, EventSeverity, SafeFailure?, TimeInterval?, Int64?, Int64?) async throws -> Void)?
 
@@ -142,6 +144,8 @@ public actor TDLibClient {
         // The pinned ABI emits no updates until its first request. This genuine
         // query starts delivery; session applies its auth response before resuming.
         _ = try await session.sendRequest(["@type": "getAuthorizationState"], timeout: 10)
+        // Set network eligibility before loading the persistent native queue.
+        _ = try await session.sendRequest(["@type": "setNetworkType", "type": ["@type": networkType]])
         guard await session.authState == .waitTdlibParameters else {
             throw TDLibError.executionFailed("Unexpected authorization state during initialization.")
         }
@@ -259,6 +263,15 @@ public actor TDLibClient {
             try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
             throw classified
         }
+    }
+    func setNetworkPolicy(allowed: Bool, wifi: Bool) async throws {
+        let type = allowed ? (wifi ? "networkTypeWiFi" : "networkTypeMobile") : "networkTypeNone"
+        networkType = type
+        guard type != appliedNetworkType else { return }
+        let state = await session.authState
+        guard state != .uninitialized, state != .closed, state != .closing else { return }
+        _ = try await session.sendRequest(["@type": "setNetworkType", "type": ["@type": type]])
+        appliedNetworkType = type
     }
 
     private func emitDiagnostic(

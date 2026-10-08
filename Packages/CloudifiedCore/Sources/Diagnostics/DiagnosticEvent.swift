@@ -21,6 +21,7 @@ public enum KnownCause: String, Codable, Sendable {
     case incompleteHistory, outcomeUnknown, interrupted, disabled, paused, contentChanged
     case persistenceFailed, invalidContract, identityUnverified, pairingUnverified, pendingSendUnmatched
     case privateChannelRequired, accountChanged
+    case lowDataMode, wifiRequired, thermalPressure, backgroundRestricted, backgroundExpired
 }
 
 /// Whitelisted values only. Never put raw response text, credentials, account names,

@@ -11,6 +11,12 @@ public enum JobState: String, Codable, Sendable {
 }
 public enum ResourceRole: String, Codable, Sendable { case still, motion, video, auxiliary, manifest }
 public enum ConfirmationKind: String, Codable, Sendable { case uploaded, alreadyPresent }
+/// Demand admission, separate from upload retries. At most one original plan is
+/// produced at a time; each lane requests work only when its ready queue is empty.
+public protocol SourceWorkProducer: Sendable {
+    /// True means the durable source cursor advanced (possibly to a source error).
+    func produceNext(for destination: Destination) async throws -> Bool
+}
 public enum FailureDisposition: String, Codable, Sendable { case retryable, permanent, providerWait, waiting }
 public enum RemoteAcceptance: String, Codable, Sendable { case definitelyNotAccepted, unknown }
 
@@ -150,6 +156,8 @@ public struct TransferProgress: Sendable {
 }
 public protocol ProviderAdapter: Sendable {
     var provider: Provider { get }
+    /// Backpressure before claiming or measuring another original.
+    var canAcceptWork: Bool { get async }
     func inspect(destination: Destination, resource: ResourceRequirement) async -> RemotePresence
     /// Return terminal only after every file reader/callback is fenced. Background
     /// tasks retain the transferID hold until real OS/TDLib terminal reconciliation.
@@ -166,3 +174,5 @@ public protocol OriginalPreparer: Sendable {
 public enum CoreError: Error, Sendable {
     case invalidContract, invalidTransition, recoveryRequired, staleMapping, stagedUnavailable, persistence(Int32)
 }
+
+extension ProviderAdapter { public var canAcceptWork: Bool { get async { true } } }

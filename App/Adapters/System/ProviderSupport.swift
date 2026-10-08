@@ -42,9 +42,19 @@ enum ProviderSupport {
         if cocoa.domain == NSCocoaErrorDomain && cocoa.code == NSFileWriteOutOfSpaceError { return SafeFailure(.diskFull, domain: .fileSystem, code: cocoa.code, cause: .insufficientSpace) }
         if cocoa.domain == NSCocoaErrorDomain && [NSFileReadNoPermissionError, NSFileWriteNoPermissionError].contains(cocoa.code) { return SafeFailure(.accessDenied, domain: .fileSystem, code: cocoa.code, cause: .permissionDenied) }
         if case CoreError.staleMapping = error { return SafeFailure(.authentication, domain: domain, cause: .accountChanged) }
+        if case CoreError.recoveryRequired = error { return SafeFailure(.reconciliation, domain: domain, cause: .outcomeUnknown) }
         if error is CoreError { return SafeFailure(.invariant, domain: .core, cause: .invalidContract) }
         if error is CancellationError { return SafeFailure(.connectivity, domain: domain, cause: .interrupted) }
-        if let error = error as? URLError { return SafeFailure(.connectivity, domain: .urlSession, code: error.errorCode, cause: .offline) }
+        if let error = error as? URLError {
+            let cause: KnownCause
+            switch error.code {
+            case .timedOut: cause = .deadlineExceeded
+            case .notConnectedToInternet, .networkConnectionLost: cause = .offline
+            case .cancelled: cause = .interrupted
+            default: cause = .unknown
+            }
+            return SafeFailure(error.code == .timedOut ? .timeout : .connectivity, domain: .urlSession, code: error.errorCode, cause: cause)
+        }
         return SafeFailure(.transfer, domain: domain, cause: .unknown)
     }
     static func disposition(_ failure: SafeFailure) -> FailureDisposition {

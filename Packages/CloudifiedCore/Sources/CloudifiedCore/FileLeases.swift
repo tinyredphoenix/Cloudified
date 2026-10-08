@@ -118,6 +118,12 @@ public actor FileLeaseStore {
     /// Called after PhotoKit callbacks, actual background sessions and TDLib sends
     /// are inventoried. Retained holds remain protected, including unmatched tasks.
     public func completeStartupInventory() { inventoryReconciled = true }
+    /// An unavailable provider can fence global cleanup without fencing another
+    /// provider's safe new exports. Admission still observes all durable holds.
+    @discardableResult public func sweepIfInventoried(limit: Int = 20) async throws -> Int {
+        guard inventoryReconciled else { return 0 }
+        return try await sweep(limit: limit)
+    }
     public func hold(files: [LeasedFile], transferID: UUID, job: JobRecord, resourceID: UUID) async throws {
         guard files.allSatisfy({ leases[$0.leaseID] == $0.fileID }) else { throw CoreError.invalidContract }
         try await ledger.holdFiles(files.map(\.fileID), transferID: transferID, job: job, resourceID: resourceID)
