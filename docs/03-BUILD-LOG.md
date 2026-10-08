@@ -1210,3 +1210,14 @@ changes. iPhone-only background branch still needs actual iOS build/runtime evid
 Builder holds; the next build/device session requires the explicit existing manual
 handoff. Commit recorded in repository history; no release tag for source correction.
 Exact claimed paths release after commit/push. Untracked scratch/ preserved untouched.
+
+## 2026-10-09 — P8 manual build and compiler recovery
+
+User explicitly authorized the iPhone build. Architect owns the focused paths
+listed in [P8 build recovery](P8-BUILD-RECOVERY.md). Build 7 from `0c3524f`
+passed preflight and restored/verified native cache, then Swift 6.3.3 crashed
+during IR generation of a LivePhotoFallbackOption closure thunk. No IPA produced.
+Four Settings Binding setters now use explicit closures; the extended real-source
+check passes optimized whole-module IR generation as well as parse/typecheck for
+all 64 app sources. Exact run, cache, failure and replacement build evidence live
+in that recovery document. No device/account tests or dependency changes.

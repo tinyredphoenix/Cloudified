@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--sdk", type=Path, required=True, help="Installed macOS SDK with iOSSupport/UIKit")
 parser.add_argument("--cache-dir", type=Path, default=Path(tempfile.gettempdir()) / "cloudified-source-module-cache")
+parser.add_argument("--emit-ir", action="store_true", help="Also check optimized whole-module IR generation without linking/running")
 args = parser.parse_args()
 sdk = args.sdk.resolve()
 frameworks = sdk / "System/iOSSupport/System/Library/Frameworks"
@@ -46,4 +47,10 @@ with tempfile.TemporaryDirectory(prefix="cloudified-source-modules-") as directo
     run(f"Typecheck all {len(app_sources)} actual app sources (Catalyst)", ["-typecheck", *common,
         "-I", modules, "-I", ROOT / "Packages/CTDLib/Sources/CTDLib/include",
         "-Xcc", f"-fmodule-map-file={sqlite_map}", "-Xcc", f"-fmodule-map-file={tdlib_map}", *app_sources])
+    if args.emit_ir:
+        run("Emit optimized whole-module IR for actual app sources (no link/run)", ["-emit-ir", "-O",
+            "-whole-module-optimization", "-module-name", "Cloudified", *common,
+            "-I", modules, "-I", ROOT / "Packages/CTDLib/Sources/CTDLib/include",
+            "-Xcc", f"-fmodule-map-file={sqlite_map}", "-Xcc", f"-fmodule-map-file={tdlib_map}",
+            "-o", os.devnull, *app_sources])
 print("Source checks passed. Not an iPhone build, link, app run or device/visual verification.")

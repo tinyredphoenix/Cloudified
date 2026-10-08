@@ -54,7 +54,7 @@ public struct SettingsView: View {
                     }
                 }
                 Section("Upload preferences") {
-                    Toggle("Wi-Fi only", isOn: Binding(get: { state.isWiFiOnlyEnabled }, set: environment.setWiFiOnly))
+                    Toggle("Wi-Fi only", isOn: Binding(get: { state.isWiFiOnlyEnabled }, set: { environment.setWiFiOnly($0) }))
                         .disabled(busy)
                     NavigationLink("Live Photos") { livePhotoSettings }
                 }
@@ -95,7 +95,7 @@ public struct SettingsView: View {
     private var googlePhotosSettings: some View {
         List {
             Section {
-                Toggle("Enable uploads", isOn: Binding(get: { state.isGoogleEnabled }, set: environment.setGoogleEnabled))
+                Toggle("Enable uploads", isOn: Binding(get: { state.isGoogleEnabled }, set: { environment.setGoogleEnabled($0) }))
                     .disabled(!controlsAvailable || !state.isGoogleConnected)
             } footer: { Text("Google Photos and Telegram upload independently. Disabling one keeps the other running.") }
             Section("Account") {
@@ -125,7 +125,7 @@ public struct SettingsView: View {
     private var telegramSettings: some View {
         List {
             Section {
-                Toggle("Enable uploads", isOn: Binding(get: { state.isTelegramEnabled }, set: environment.setTelegramEnabled))
+                Toggle("Enable uploads", isOn: Binding(get: { state.isTelegramEnabled }, set: { environment.setTelegramEnabled($0) }))
                     .disabled(!controlsAvailable || !state.isTelegramConnected)
             } footer: { Text("Original photos and videos are sent as files to your private archive channel.") }
             Section("Account and channel") {
@@ -166,7 +166,7 @@ public struct SettingsView: View {
     private var livePhotoSettings: some View {
         Form {
             Section {
-                Picker("Google Photos", selection: Binding(get: { state.livePhotoFallback }, set: environment.updateLivePhotoPolicy)) {
+                Picker("Google Photos", selection: Binding(get: { state.livePhotoFallback }, set: { environment.updateLivePhotoPolicy($0) })) {
                     ForEach(LivePhotoFallbackOption.allCases) { Text($0.rawValue).tag($0) }
                 }.pickerStyle(.inline).disabled(!controlsAvailable)
             } footer: { Text(state.livePhotoFallback.summaryDescription) }
