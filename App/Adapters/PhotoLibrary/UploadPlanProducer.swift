@@ -6,7 +6,7 @@ public enum UploadPlanProducer {
     /// Builds the Google Photos upload plan adhering to the specified Live Photo fallback choice.
     public static func buildGooglePlan(
         recipe: SourceRecipe,
-        livePhotoFallback: LivePhotoFallbackOption = .bothSeparately
+        livePhotoFallback: LivePhotoFallbackOption = .nativePair
     ) throws -> UploadPlan {
         try recipe.validate()
         var requirements: [ResourceRequirement] = []
@@ -17,6 +17,15 @@ public enum UploadPlanProducer {
             let hasStill = recipe.resources.contains { $0.role == .still }
             let hasMotion = recipe.resources.contains { $0.role == .motion }
             switch livePhotoFallback {
+            case .nativePair:
+                let stills = recipe.resources.filter { $0.role == .still }
+                let motions = recipe.resources.filter { $0.role == .motion }
+                guard stills.count == 1, motions.count == 1 else {
+                    throw SafeFailure(.unsupportedOriginal, domain: .google, cause: .formatRejected)
+                }
+                requirements.append(try ContentIdentity.resource(role: .still, originals: [stills[0].originalContent, motions[0].originalContent]))
+                policyVersion = "google-live-nativePair-v1"
+                selected = recipe.resources.filter { $0.role != .still && $0.role != .motion }
             case .keyImageOnly:
                 guard hasStill else { throw SafeFailure(.sourceUnavailable, domain: .photos, cause: .sourceMissing) }
                 policyVersion = "google-live-keyImageOnly-v1"

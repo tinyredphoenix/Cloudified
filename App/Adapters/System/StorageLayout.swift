@@ -13,7 +13,7 @@ public final class StorageLayout: Sendable {
     public init(fileManager: FileManager = .default) throws {
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
-        let cloudifiedRoot = appSupport.appendingPathComponent("Cloudified", isDirectory: true)
+        let cloudifiedRoot = appSupport.resolvingSymlinksInPath().appendingPathComponent("Cloudified", isDirectory: true)
 
         self.rootDirectory = cloudifiedRoot
         self.databaseURL = cloudifiedRoot.appendingPathComponent("ledger.sqlite")
@@ -28,6 +28,9 @@ public final class StorageLayout: Sendable {
     /// Prepares directory with intermediate paths, backup exclusion, and complete file protection.
     /// Throws classified SafeFailure on creation or attribute failure.
     private static func prepareDirectory(_ url: URL, fileManager: FileManager) throws {
+        guard url.resolvingSymlinksInPath().path == url.standardizedFileURL.path else {
+            throw SafeFailure(.invariant, domain: .fileSystem, cause: .invalidContract)
+        }
         do {
             try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
         } catch {

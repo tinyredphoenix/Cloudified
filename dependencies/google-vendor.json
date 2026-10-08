@@ -7,7 +7,7 @@
       "sourcePath": "GPMC/Core/GPMCClient.swift",
       "sourceSha256": "3bf0622b30d152e865668984d3a97de802d4b26afd519e0740c6378b08c81d70",
       "vendoredPath": "App/Adapters/GooglePhotos/GPMCClient.swift",
-      "vendoredSha256": "8b60a3b8a9759fc39e70c111605f8f524a08df1c562d8d629915ce1cf057bec2"
+      "vendoredSha256": "afae1de5ef3e6202fb4297deec4b72f211f6957e47500694fc2c3e71b88fc215"
     },
     {
       "sourcePath": "GPMC/Core/Protobuf.swift",
@@ -19,8 +19,8 @@
       "sourcePath": "App/Sources/TokenExchange.swift",
       "sourceSha256": "d76ffd0fdeeaaa2940efd349b67bb4eb68f7ef0102ebedc88f6de699b4a29f32",
       "vendoredPath": "App/Adapters/GooglePhotos/GoogleTokenExchange.swift",
-      "vendoredSha256": "c73c819e6f036b5d4d2132fd111eec1b2576be24c3e4922f2c0b647523431509"
+      "vendoredSha256": "f917b6a1e2219e2c2ddbaea9b6e07563f18ad3f1b9c69424f4f23ad57d27bdc4"
     }
   ],
-  "patchNotes": "See docs/P4-REVIEW.md and docs/P4-R2.md. Architect token boundary applies injected network policy and removes raw server/network details while preserving cancellation and wire fields. Hashes record provenance, not protocol/runtime acceptance."
+  "patchNotes": "See docs/P4-REVIEW.md and docs/P4-R2.md. Architect token boundary applies injected network policy and removes raw server/network details while preserving cancellation and wire fields. Hashes record provenance, not protocol/runtime acceptance. P4-B adds bounded callback-terminal foreground HTTP/file I/O, same-token OpenID subject verification, Retry-After propagation and adapter-verified single-pass preparation. Original/non-quota commit/device/quality fields, hash query and native-pair metadata remain pinned. See docs/P4-B-INTEGRATION.md."
 }

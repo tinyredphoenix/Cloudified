@@ -72,11 +72,15 @@ public enum StreamingFileHasher {
         guard (1...1_048_576).contains(chunkSize) else { throw CoreError.invalidContract }
         let handle = try FileHandle(forReadingFrom: fileURL); defer { try? handle.close() }
         var sha256 = SHA256(); var sha1 = Insecure.SHA1(); var total: Int64 = 0
-        while true {
-            try Task.checkCancellation()
-            let chunk = try handle.read(upToCount: chunkSize) ?? Data()
-            if chunk.isEmpty { break }
-            sha256.update(data: chunk); sha1.update(data: chunk); total += Int64(chunk.count)
+        var ended = false
+        while !ended {
+            try autoreleasepool {
+                try Task.checkCancellation()
+                let chunk = try handle.read(upToCount: chunkSize) ?? Data()
+                if chunk.isEmpty { ended = true; return }
+                guard total <= Int64.max - Int64(chunk.count) else { throw CoreError.invalidContract }
+                sha256.update(data: chunk); sha1.update(data: chunk); total += Int64(chunk.count)
+            }
         }
         return (sha256.finalize().map { String(format: "%02x", $0) }.joined(),
                 sha1.finalize().map { String(format: "%02x", $0) }.joined(), total)

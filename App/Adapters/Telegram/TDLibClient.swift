@@ -4,8 +4,10 @@ import CloudifiedCore
 
 /// High-level client coordinating TDLib session lifecycle, credentials, and authentication flows.
 /// Does not fabricate fake Connected states or fake receipts; surfaces real native states for Phase 4-B.
+struct TDLibRequestRejection: Error, Sendable { let failure: SafeFailure }
+
 public actor TDLibClient {
-    private let profileID: String
+    let profileID: String
     private let credentialStore: KeychainCredentialStore
     private var isStarting = false
     private let session: TDLibSession
@@ -42,6 +44,8 @@ public actor TDLibClient {
     public var requiresReconciliation: Bool {
         get async { await session.requiresReconciliation }
     }
+
+    var connectionReady: Bool { get async { await session.connectionReady } }
 
     /// Resolves and creates canonical disjoint, profile-bound database and files directories
     /// with NSFileProtectionCompleteUntilFirstUserAuthentication and backup exclusion.
@@ -213,6 +217,17 @@ public actor TDLibClient {
             let classified = Self.classify(error)
             try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
             throw classified
+        }
+    }
+
+    /// Internal production protocol surface. Ownership transfers to the session;
+    /// arbitrary native/server prose is never exposed through diagnostics.
+    func request(_ request: sending [String: Any], timeout: TimeInterval = 60) async throws -> TDLibResponse {
+        do { return try await session.sendRequest(request, timeout: timeout) }
+        catch {
+            if case TDLibError.tdlibError = error { throw TDLibRequestRejection(failure: Self.classify(error)) }
+            if error is CoreError || error is CancellationError { throw error }
+            throw Self.classify(error)
         }
     }
 

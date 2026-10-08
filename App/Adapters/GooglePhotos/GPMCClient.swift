@@ -43,6 +43,7 @@ struct GoogleStatus: Equatable, Sendable {
 
 struct GPMCError: LocalizedError, Equatable, Sendable {
     enum Kind: Equatable, Sendable {
+        case identityUnavailable
         case credentialRejected   // Google refused the credential; the account must be reconnected.
         case tokenBound           // TokenEncrypted=1 — bound token.
         case transport            // Network-level failure.
@@ -55,8 +56,9 @@ struct GPMCError: LocalizedError, Equatable, Sendable {
     let kind: Kind
     let message: String
     let status: GoogleStatus?
-    init(kind: Kind = .malformed, message: String, status: GoogleStatus? = nil) {
-        self.kind = kind; self.message = message; self.status = status
+    let retryAfter: Date?
+    init(kind: Kind = .malformed, message: String, status: GoogleStatus? = nil, retryAfter: Date? = nil) {
+        self.kind = kind; self.message = message; self.status = status; self.retryAfter = retryAfter
     }
     var errorDescription: String? { message }
 
@@ -76,7 +78,7 @@ struct GPMCError: LocalizedError, Equatable, Sendable {
         switch kind {
         case .transport, .invalidUploadReceipt, .pairedPhotoMissing: return true
         case .server(let code): return code == 408 || code == 429 || code >= 500
-        case .credentialRejected, .tokenBound, .malformed, .storageFull: return false
+        case .identityUnavailable, .credentialRejected, .tokenBound, .malformed, .storageFull: return false
         }
     }
 }
@@ -159,44 +161,6 @@ private func drainingAutoreleasePool<T>(_ body: () throws -> T) rethrows -> T {
     #endif
 }
 
-private final class ProgressDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
-    private let report: @Sendable (Int64, Int64) -> Void
-    init(_ report: @escaping @Sendable (Int64, Int64) -> Void) { self.report = report }
-    func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64, totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
-        report(totalBytesSent, max(totalBytesExpectedToSend, totalBytesSent))
-    }
-}
-
-final class ForegroundFileUploadTransport: FileUploadTransport, @unchecked Sendable {
-    let continuesAfterProcessExit = false
-    private let session: URLSession
-
-    init(session: URLSession) { self.session = session }
-
-    func upload(_ request: URLRequest, fromFile file: URL, transferID: UUID,
-                progress: @escaping @Sendable (Int64, Int64) -> Void) async throws -> FileUploadResult {
-        let delegate = ProgressDelegate(progress)
-        do {
-            let (data, response) = try await session.upload(for: request, fromFile: file, delegate: delegate)
-            guard let http = response as? HTTPURLResponse else {
-                throw GPMCError(message: "Invalid server response.")
-            }
-            return FileUploadResult(data: data, response: http)
-        } catch let error as URLError where error.code == .cancelled {
-            throw CancellationError()
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch let error as GPMCError {
-            throw error
-        } catch {
-            throw GPMCError(kind: .transport, message: "Could not reach Google: \(GPMCError.describeTransport(error))")
-        }
-    }
-
-    func forget(transferID: UUID) async {}
-    func cancel(transferID: UUID) async {}
-}
-
 final class UploadRequestNetworkPolicy: @unchecked Sendable {
     private let lock = NSLock()
     private var cellularAllowed = true
@@ -218,7 +182,7 @@ final class UploadRequestNetworkPolicy: @unchecked Sendable {
 
 actor GPMCClient {
     private let auth: AuthData
-    private let session: URLSession
+    private let httpTransport: ForegroundFileUploadTransport
     private let networkPolicy: UploadRequestNetworkPolicy
     private let fileUploadTransport: any FileUploadTransport
     private var token = ""
@@ -231,20 +195,12 @@ actor GPMCClient {
          fileUploadTransport: (any FileUploadTransport)? = nil) throws {
         auth = try AuthData(authData)
         self.networkPolicy = networkPolicy
-        if let session {
-            self.session = session
-            self.fileUploadTransport = fileUploadTransport ?? ForegroundFileUploadTransport(session: session)
-        } else {
-            let configuration = URLSessionConfiguration.default
-            configuration.waitsForConnectivity = true
-            configuration.timeoutIntervalForRequest = 120
-            configuration.timeoutIntervalForResource = 60 * 60
-            configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-            configuration.urlCache = nil
-            let session = URLSession(configuration: configuration)
-            self.session = session
-            self.fileUploadTransport = fileUploadTransport ?? ForegroundFileUploadTransport(session: session)
-        }
+        let configuration = session?.configuration ?? URLSessionConfiguration.ephemeral
+        configuration.waitsForConnectivity = true
+        configuration.timeoutIntervalForRequest = 120; configuration.timeoutIntervalForResource = 3600
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData; configuration.urlCache = nil
+        httpTransport = ForegroundFileUploadTransport(configuration: configuration)
+        self.fileUploadTransport = fileUploadTransport ?? ForegroundFileUploadTransport(configuration: configuration)
     }
 
     var accountEmail: String { auth.values["Email"] ?? "" }
@@ -256,20 +212,30 @@ actor GPMCClient {
         }
         guard (200..<300).contains(http.statusCode) else {
             let status = GoogleStatus(data)
+            var retryAfter: Date?
+            if let text = http.value(forHTTPHeaderField: "Retry-After") {
+                if let seconds = Double(text), seconds.isFinite, seconds >= 0, seconds <= 31_536_000 { retryAfter = Date().addingTimeInterval(seconds) }
+                else {
+                    let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX")
+                    formatter.timeZone = TimeZone(secondsFromGMT: 0); formatter.dateFormat = "EEE',' dd MMM yyyy HH':'mm':'ss z"
+                    retryAfter = formatter.date(from: text)
+                }
+            }
+            if http.statusCode == 429 && retryAfter == nil { retryAfter = Date().addingTimeInterval(60) }
             let detail = Self.explanation(data)
             switch status?.kind(httpStatus: http.statusCode) {
             case .storageFull:
                 throw GPMCError(kind: .storageFull,
                                 message: "The Google account is out of storage. Free up space in Google Photos, then resume."
-                                    + detail, status: status)
+                                    + detail, status: status, retryAfter: retryAfter)
             case .credentialRejected:
                 throw GPMCError(kind: .credentialRejected,
                                 message: "Google rejected the stored credential during \(operation). Connect the account again."
-                                    + detail, status: status)
+                                    + detail, status: status, retryAfter: retryAfter)
             default:
                 throw GPMCError(kind: .server(http.statusCode),
                                 message: "Google returned HTTP \(http.statusCode) during \(operation)."
-                                    + detail, status: status)
+                                    + detail, status: status, retryAfter: retryAfter)
             }
         }
         return (data, http)
@@ -295,7 +261,9 @@ actor GPMCClient {
         var request = originalRequest
         networkPolicy.apply(to: &request)
         do {
-            return try await session.data(for: request)
+            return try await httpTransport.requestData(request)
+        } catch let error as GPMCError {
+            throw error
         } catch let error as URLError where error.code == .cancelled {
             throw CancellationError()
         } catch is CancellationError {
@@ -329,6 +297,25 @@ actor GPMCClient {
             throw GPMCError(kind: .credentialRejected, message: "Google did not issue a token. Connect the account again.")
         }
         token = value; expiry = Date(timeIntervalSince1970: Double(fields["Expiry"] ?? "") ?? Date().addingTimeInterval(300).timeIntervalSince1970)
+    }
+
+    /// Same access token as the Photos RPCs. Email in imported authData is not
+    /// identity proof. Unsupported OpenID access blocks mapping rather than guessing.
+    func verifiedSubject() async throws -> String {
+        let data: Data
+        do {
+            data = try await request(URL(string: "https://openidconnect.googleapis.com/v1/userinfo")!,
+                                     method: "GET", headers: ["Accept": "application/json"], operation: "account verification").0
+        } catch let error as GPMCError where error.kind == .credentialRejected {
+            throw GPMCError(kind: .identityUnavailable, message: "Immutable Google account verification is unavailable.")
+        }
+        guard data.count <= 16_384,
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let subject = object["sub"] as? String, !subject.isEmpty, subject.utf8.count <= 255,
+              subject.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 45 || $0 == 95 || $0 == 46 }) else {
+            throw GPMCError(kind: .identityUnavailable, message: "Immutable Google account verification is unavailable.")
+        }
+        return subject
     }
 
     func validateReadAccess() async throws {
@@ -366,6 +353,18 @@ actor GPMCClient {
         try await request(URL(string: "https://photosdata-pa.googleapis.com/6439526531001121323/" + method)!,
                           body: body, headers: ext ? Self.extHeaders : [:],
                           operation: method == Self.commitMethod ? "finalization" : "duplicate check").0
+    }
+
+    func prepareVerifiedUpload(file: URL, filename: String, modified: Date?, hash: Data, byteCount: Int64,
+                               stillHash: Data?, phase: @escaping @Sendable (UploadPhase) -> Void) async throws -> UploadPreparation {
+        guard hash.count == 20, byteCount > 0 else { throw GPMCError(kind: .malformed, message: "Invalid verified original.") }
+        phase(.checkingDuplicate)
+        if let key = try await remoteMediaKey(sha1: hash, asLivePhotoMotion: stillHash != nil) { return .alreadyBackedUp(mediaKey: key) }
+        if let stillHash, try await remoteMediaKey(sha1: stillHash) == nil {
+            throw GPMCError(kind: .pairedPhotoMissing, message: "Paired still is not present.")
+        }
+        return .ready(try await startUploadSession(file: file, filename: filename, modified: modified, hash: hash,
+                                                   size: UInt64(byteCount), phase: phase))
     }
 
     func prepareUpload(file: URL, filename: String, modified: Date? = nil,
@@ -428,7 +427,7 @@ actor GPMCClient {
         let endpoint = URL(string: "https://photos.googleapis.com/data/upload/uploadmedia/interactive")!
         let body = Proto.int(1, 2) + Proto.int(2, 2) + Proto.int(3, 1) + Proto.int(4, 3) + Proto.int(7, size)
         let (_, response) = try await request(endpoint, body: body, headers: ["X-Goog-Hash": "sha1=" + hash.base64EncodedString(), "X-Upload-Content-Length": String(size)], operation: "upload initialization")
-        guard let uploadID = response.value(forHTTPHeaderField: "X-GUploader-UploadID"), !uploadID.isEmpty else { throw GPMCError(message: "Google did not return an upload ID.") }
+        guard let uploadID = response.value(forHTTPHeaderField: "X-GUploader-UploadID"), !uploadID.isEmpty, uploadID.utf8.count <= 8192 else { throw GPMCError(message: "Google did not return an upload ID.") }
         var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)!
         components.queryItems = [URLQueryItem(name: "upload_id", value: uploadID)]
         let date = modified ?? (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date()
@@ -453,7 +452,7 @@ actor GPMCClient {
         networkPolicy.apply(to: &request)
         let total = prepared.byteCount
         phase(.sending(sent: 0, total: total))
-        let transport: any FileUploadTransport = foreground ? ForegroundFileUploadTransport(session: session) : fileUploadTransport
+        let transport: any FileUploadTransport = foreground ? ForegroundFileUploadTransport() : fileUploadTransport
         let result = try await transport.upload(request, fromFile: file, transferID: transferID) { sent, expected in
             phase(.sending(sent: sent, total: expected > 0 ? expected : total))
         }
@@ -465,7 +464,7 @@ actor GPMCClient {
     }
 
     static func validateReceipt(_ receipt: Data) throws {
-        guard let fields = try? Proto.fields(receipt),
+        guard receipt.count <= 65_536, let fields = try? Proto.fields(receipt),
               let token = fields[2]?.first, !token.isEmpty else {
             throw GPMCError(kind: .invalidUploadReceipt,
                             message: "Google did not return a usable upload receipt. The file must be transferred again.")

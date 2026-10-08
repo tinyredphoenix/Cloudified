@@ -67,14 +67,20 @@ sources = [
     ("GPMCClient.swift", "google_photos"),
     ("GoogleTokenExchange.swift", "google_photos"),
     ("GooglePhotosClientSession.swift", "google_photos"),
+    ("ForegroundFileUploadTransport.swift", "google_photos"),
+    ("GooglePhotosProviderAdapter.swift", "google_photos"),
     ("TelegramAdapterProtocol.swift", "telegram"),
     ("TDLibBridge.swift", "telegram"),
     ("TDLibJSON.swift", "telegram"),
     ("TDLibSession.swift", "telegram"),
     ("TDLibClient.swift", "telegram"),
+    ("TelegramDocumentReference.swift", "telegram"),
+    ("TelegramInputFiles.swift", "telegram"),
+    ("TelegramProviderAdapter.swift", "telegram"),
     ("KeychainCredentialStore.swift", "security"),
     ("SystemAdapterProtocol.swift", "system"),
-    ("StorageLayout.swift", "system")
+    ("StorageLayout.swift", "system"),
+    ("ProviderSupport.swift", "system")
 ]
 
 # Resource files

@@ -160,6 +160,7 @@ public actor TDLibSession {
     }
     /// A delivery/log gap fences new commands; it is not remote rejection/absence.
     public var requiresReconciliation: Bool { processingFailure != nil }
+    public private(set) var connectionReady = false
 
     // MARK: - Lifecycle
 
@@ -340,6 +341,12 @@ public actor TDLibSession {
                    let stateType = stateObj.type {
                     isClosedAcknowledgement = await handleAuthStateUpdate(stateType)
                 }
+            } else if type == "updateConnectionState" {
+                guard let state = response.object(forKey: "state")?.type,
+                      ["connectionStateWaitingForNetwork", "connectionStateConnectingToProxy", "connectionStateConnecting", "connectionStateUpdating", "connectionStateReady"].contains(state) else {
+                    connectionReady = false; interruptInput(TDLibError.malformedResponse); return
+                }
+                connectionReady = state == "connectionStateReady"
             } else if type == "updateFile" {
                 if !processFileProgress(response) { return }
             }

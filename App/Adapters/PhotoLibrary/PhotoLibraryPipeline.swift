@@ -36,7 +36,7 @@ public final class PhotoLibraryPipeline: PhotoLibraryAdapterProtocol, Sendable {
     }
 
     public func planAsset(asset: AssetIdentity, googleDestination: Destination? = nil,
-        telegramDestination: Destination? = nil, googleLiveFallback: LivePhotoFallbackOption = .bothSeparately,
+        telegramDestination: Destination? = nil, googleLiveFallback: LivePhotoFallbackOption = .nativePair,
         videoPartThreshold: Int64 = LosslessVideoPartSplitter.defaultTargetPartSize
     ) async throws {
         let destinations = [googleDestination, telegramDestination].compactMap { $0 }
@@ -219,7 +219,7 @@ public final class PhotoLibraryPipeline: PhotoLibraryAdapterProtocol, Sendable {
         switch fallback {
         case .keyImageOnly: return role != .motion
         case .motionVideoOnly: return role == .motion
-        case .bothSeparately: return true
+        case .bothSeparately, .nativePair: return true
         }
     }
     private func record(_ failure: SafeFailure, asset: AssetIdentity, destinations: [Destination]) async throws {
@@ -323,7 +323,7 @@ public final class PhotoLibraryPipeline: PhotoLibraryAdapterProtocol, Sendable {
         public let hasMore: Bool
     }
     public func planNextAsset(scanID: UUID, afterCursor: Int64 = 0, googleDestination: Destination? = nil,
-        telegramDestination: Destination? = nil, googleLiveFallback: LivePhotoFallbackOption = .bothSeparately,
+        telegramDestination: Destination? = nil, googleLiveFallback: LivePhotoFallbackOption = .nativePair,
         videoPartThreshold: Int64 = LosslessVideoPartSplitter.defaultTargetPartSize
     ) async throws -> PlanBatchResult {
         guard googleDestination != nil || telegramDestination != nil else {
@@ -346,7 +346,7 @@ public final class PhotoLibraryPipeline: PhotoLibraryAdapterProtocol, Sendable {
     }
     public func planScannedBatch(scanID: UUID, afterCursor: Int64 = 0, limit: Int = 1,
         googleDestination: Destination? = nil, telegramDestination: Destination? = nil,
-        googleLiveFallback: LivePhotoFallbackOption = .bothSeparately,
+        googleLiveFallback: LivePhotoFallbackOption = .nativePair,
         videoPartThreshold: Int64 = LosslessVideoPartSplitter.defaultTargetPartSize
     ) async throws -> PlanBatchResult {
         guard limit == 1 else { throw CoreError.invalidContract }

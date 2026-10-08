@@ -5,7 +5,7 @@ import CloudifiedCore
 /// Handles session lifecycle, authenticated RPC dispatch, transport injection, and classified error diagnostics
 /// while preserving the boundaries required before Phase 4-B critical upload integration.
 actor GooglePhotosClientSession {
-    private let profileID: String
+    let profileID: String
     private let credentialStore: KeychainCredentialStore
     private let customTransport: (any FileUploadTransport)?
     private let networkPolicy: UploadRequestNetworkPolicy
@@ -91,8 +91,16 @@ actor GooglePhotosClientSession {
         } catch let err as GPMCError {
             let classified = Self.classify(err)
             try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
-            throw classified
+            throw SafeProviderFailure(failure: classified, retryAfter: err.retryAfter)
         }
+    }
+
+    func verifiedSubject() async throws -> String {
+        do { return try await requireClient().verifiedSubject() }
+        catch let error as GPMCError { throw SafeProviderFailure(failure: Self.classify(error), retryAfter: error.retryAfter) }
+    }
+    var usesBackgroundTransfers: Bool {
+        get async { guard let client else { return false }; return await client.usesBackgroundFileTransfers }
     }
 
     /// Validates read access by running an authenticated dry-run hash check.
@@ -103,7 +111,7 @@ actor GooglePhotosClientSession {
         } catch let err as GPMCError {
             let classified = Self.classify(err)
             try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
-            throw classified
+            throw SafeProviderFailure(failure: classified, retryAfter: err.retryAfter)
         }
     }
 
@@ -115,8 +123,15 @@ actor GooglePhotosClientSession {
         } catch let err as GPMCError {
             let classified = Self.classify(err)
             try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
-            throw classified
+            throw SafeProviderFailure(failure: classified, retryAfter: err.retryAfter)
         }
+    }
+
+    func prepareVerifiedUpload(file: URL, filename: String, modified: Date?, hash: Data, byteCount: Int64,
+                               stillHash: Data?, phase: @escaping @Sendable (UploadPhase) -> Void) async throws -> UploadPreparation {
+        do { return try await requireClient().prepareVerifiedUpload(file: file, filename: filename, modified: modified,
+                     hash: hash, byteCount: byteCount, stillHash: stillHash, phase: phase) }
+        catch let error as GPMCError { throw SafeProviderFailure(failure: Self.classify(error), retryAfter: error.retryAfter) }
     }
 
     /// Prepares an upload session for a standard photo or video original.
@@ -132,7 +147,7 @@ actor GooglePhotosClientSession {
         } catch let err as GPMCError {
             let classified = Self.classify(err)
             try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
-            throw classified
+            throw SafeProviderFailure(failure: classified, retryAfter: err.retryAfter)
         }
     }
 
@@ -156,7 +171,7 @@ actor GooglePhotosClientSession {
         } catch let err as GPMCError {
             let classified = Self.classify(err)
             try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
-            throw classified
+            throw SafeProviderFailure(failure: classified, retryAfter: err.retryAfter)
         }
     }
 
@@ -174,7 +189,7 @@ actor GooglePhotosClientSession {
         } catch let err as GPMCError {
             let classified = Self.classify(err)
             try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
-            throw classified
+            throw SafeProviderFailure(failure: classified, retryAfter: err.retryAfter)
         }
     }
 
@@ -192,7 +207,7 @@ actor GooglePhotosClientSession {
         } catch let err as GPMCError {
             let classified = Self.classify(err)
             try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
-            throw classified
+            throw SafeProviderFailure(failure: classified, retryAfter: err.retryAfter)
         }
     }
 
@@ -224,6 +239,8 @@ actor GooglePhotosClientSession {
     /// Maps GPMC protocol errors to Core classified SafeFailure values.
     static func classify(_ error: GPMCError) -> SafeFailure {
         switch error.kind {
+        case .identityUnavailable:
+            return SafeFailure(.authentication, domain: .google, cause: .identityUnverified)
         case .credentialRejected:
             return SafeFailure(.authentication, domain: .google, cause: .loginRequired)
         case .tokenBound:

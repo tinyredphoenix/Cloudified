@@ -190,7 +190,7 @@ public enum GoogleTokenExchange {
     ) async throws -> (Data, HTTPURLResponse) {
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await session.data(for: req)
+            (data, response) = try await ForegroundFileUploadTransport(configuration: session.configuration).requestData(req)
         } catch is CancellationError {
             throw CancellationError()
         } catch let error as URLError where error.code == .cancelled {

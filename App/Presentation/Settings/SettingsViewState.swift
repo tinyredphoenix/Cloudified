@@ -2,6 +2,7 @@ import Foundation
 
 /// Fallback policy for Google Photos Live Photo uploads when native pairing is unavailable.
 public enum LivePhotoFallbackOption: String, CaseIterable, Identifiable, Sendable {
+    case nativePair = "Paired originals (where supported)"
     case bothSeparately = "Both originals separately"
     case keyImageOnly = "Key image only"
     case motionVideoOnly = "Motion video only"
@@ -10,6 +11,8 @@ public enum LivePhotoFallbackOption: String, CaseIterable, Identifiable, Sendabl
 
     public var summaryDescription: String {
         switch self {
+        case .nativePair:
+            return "Preserves both originals and requests native Google pairing. Choose an explicit fallback if Google rejects pairing."
         case .bothSeparately:
             return "Recommended for preservation. Uploads both the high-resolution photo and full video component as separate original assets."
         case .keyImageOnly:
@@ -38,7 +41,7 @@ public struct SettingsViewState: Equatable, Sendable {
         isGoogleEnabled: Bool = true,
         isTelegramEnabled: Bool = true,
         isWiFiOnlyEnabled: Bool = true,
-        livePhotoFallback: LivePhotoFallbackOption = .bothSeparately,
+        livePhotoFallback: LivePhotoFallbackOption = .nativePair,
         isGoogleConnected: Bool = false,
         googleAccountEmail: String? = nil,
         isTelegramConnected: Bool = false,
