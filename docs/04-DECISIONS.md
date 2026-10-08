@@ -281,3 +281,15 @@ No mocks, app runs, downloads or availability-check suppression. The correct Cat
 platform gate excludes continued-processing APIs unavailable on that platform while
 preserving the iPhone branch. This is stronger source evidence than parse-only checks;
 actual iPhone building, background and visual/account/device evidence remain separate.
+
+## D41 — visible version bumps follow the user's release categories
+
+User requested minor increments for bug fixes and major increments for features so
+SideStore releases are easy to identify. Use 1.0 → 1.1 → 1.2 for fixes and 1.x → 2.0
+for features (reset minor); mixed releases use the feature bump. This supersedes
+keeping all successive builds under 1.0. CI run/build numbers remain independent
+attempt identifiers. Update the real app short version and generator before release
+packaging, preserving agreement with Settings and SideStore's verified metadata.
+Failed-build retries retain the pending version. Existing published artifacts are
+immutable; build 8 stays 1.0. [Distribution policy](DISTRIBUTION.md) is authoritative
+for future release preparation. No new build is authorized merely by this rule.

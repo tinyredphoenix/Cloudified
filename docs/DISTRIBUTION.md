@@ -1,10 +1,26 @@
-# Cloudified 1.0 SideStore distribution
+# Cloudified SideStore distribution
 
-The app's short version is **1.0**. Each manual GitHub Actions build supplies its
-run number as `CFBundleVersion` so SideStore can distinguish successive
-1.0 builds. This is version identity, not an assertion of device or service
+The currently published app's short version is **1.0**. Each manual GitHub Actions
+build supplies its run number as `CFBundleVersion` to distinguish build attempts.
+This is version identity, not an assertion of device or service
 acceptance. The first native/Xcode IPA build succeeded in run 37778211603;
 real iPhone, Google, Telegram, quality and reinstall checks remain P7 work.
+
+## Version policy — user instruction
+
+Bug-fix releases increment the minor version: **1.0 → 1.1 → 1.2**. Feature releases
+increment the major version and reset the minor: **1.x → 2.0**, then **3.0** for
+the next feature release. A release containing both uses the feature bump. This
+deliberately follows the user's convention rather than semantic versioning.
+
+Before the next release build, update `CFBundleShortVersionString` and the project
+generator's version consistently. The actual packaged IPA, Settings and SideStore
+metadata must show the same visible version; CI build number remains separate.
+Retries of a failed build retain the pending release version. Never change source
+metadata to relabel an already published IPA. Current version 1.0 build 8 stays as
+published; the next bug-fix release is 1.1, or 2.0 if it introduces features.
+
+## Source and publication
 
 Add this URL in SideStore > Sources:
 

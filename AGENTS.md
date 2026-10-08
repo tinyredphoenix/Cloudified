@@ -47,6 +47,11 @@ not postponed until failures occur.
   validation evidence and unresolved failures to the architect.
 - Make small commits at coherent batches. Annotated milestone tags must accurately
   describe evidence: plan tags are not app releases. Push history and tags to origin.
+- User's visible release convention: bug fixes increment minor (1.0 → 1.1 → 1.2);
+  features increment major and reset minor (1.x → 2.0). Update the app short version
+  and project generator before a release build; IPA, Settings and SideStore must agree.
+  CI build numbers still distinguish attempts; retries retain the pending version.
+  Never relabel an existing published IPA. See docs/DISTRIBUTION.md and D41.
 
 User explicitly authorized Architect to complete P5 corrections and critical P6.
 Read docs/P5-REVIEW.md and docs/P5-R1.md for correction scope; runtime contracts

@@ -1230,3 +1230,17 @@ usage: 163,235,882 bytes / 10 GB. IPA size/checksum, publication URLs and remain
 device/service acceptance are recorded in P8-BUILD-RECOVERY.md and DISTRIBUTION.md.
 No binaries, private logs or scratch files enter this commit. Claimed paths release
 after evidence commit/push; no active Builder assignment.
+
+## 2026-10-09 — user-defined visible version increments
+
+Architect claims AGENTS.md, docs/DISTRIBUTION.md, docs/04-DECISIONS.md and this
+log for the user's release-version policy. Future bug-fix releases increment the
+minor number (1.0 → 1.1 → 1.2); feature releases increment the major number and
+reset minor (1.x → 2.0). This is the user's convention, not semantic versioning.
+Before a release build, update the app's short version consistently in the source
+and project generator so the IPA, Settings and SideStore show the same version.
+Keep the CI build number for identifying individual attempts. Failed/retried builds
+of the same pending release retain its short version; published releases are not
+relabeled. Current published 1.0 build 8 remains unchanged. No build dispatched.
+D41 and the distribution contract record the rule. Claimed paths release after
+documentation checks/commit/push. No active Builder assignment; scratch/ untouched.
