@@ -13,9 +13,9 @@ public struct NotUploadedView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 // Filters section
-                filtersHeader
-                    .padding()
-                    .background(Color(.secondarySystemBackground))
+                DisclosureGroup("Filters") { filtersHeader.padding(.top, 8) }
+                    .padding(.horizontal)
+                    .padding(.vertical, 10)
 
                 // Content list or empty state
                 if environment.notUploadedState.filteredItems.isEmpty {
@@ -34,22 +34,29 @@ public struct NotUploadedView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
+                if environment.notUploadedState.pageError != nil || environment.notUploadedState.isLoading || environment.notUploadedState.hasOlder {
                 VStack {
                     if let error = environment.notUploadedState.pageError { Text(error).font(.caption).foregroundStyle(.red) }
                     if environment.notUploadedState.isLoading { ProgressView() }
-                    HStack {
-                        Button("Newest") { environment.reloadFailures() }
-                        Spacer()
-                        Button("Older page") { environment.olderFailures() }.disabled(!environment.notUploadedState.hasOlder || environment.notUploadedState.isLoading)
+                    if environment.notUploadedState.hasOlder {
+                        Button("Older page") { environment.olderFailures() }.disabled(environment.notUploadedState.isLoading)
                     }
-                }.padding().background(.regularMaterial)
+                }.padding(.horizontal).padding(.vertical, 8).background(.regularMaterial)
+                }
             }
             .onAppear { environment.reloadFailures() }
             .onChange(of: environment.notUploadedState.destinationFilter) { environment.reloadFailures() }
             .onChange(of: environment.notUploadedState.mediaTypeFilter) { environment.reloadFailures() }
             .onChange(of: environment.notUploadedState.statusFilter) { environment.reloadFailures() }
             .refreshable { environment.reloadFailures() }
-            .navigationTitle("Not Uploaded")
+            .navigationTitle("Not uploaded")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { environment.reloadFailures() } label: {
+                        Label("Newest items", systemImage: "arrow.clockwise")
+                    }
+                }
+            }
             .sheet(item: $selectedItemForDetails) { item in
                 NotUploadedDetailSheet(item: item, environment: environment)
             }
@@ -91,10 +98,10 @@ public struct NotUploadedView: View {
             Image(systemName: "checkmark.circle")
                 .font(.system(size: 44))
                 .foregroundColor(.secondary)
-            Text("No Failed or Pending Uploads")
+            Text("No matching items")
                 .font(.headline)
                 .foregroundColor(.primary)
-            Text("The library has not been scanned yet, or all processed items were successfully confirmed. Failed or blocked uploads will appear here with diagnostic details.")
+            Text("No items match these filters. Upload problems appear here after a backup starts.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)

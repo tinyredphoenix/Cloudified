@@ -20,7 +20,13 @@
       "sourceSha256": "d76ffd0fdeeaaa2940efd349b67bb4eb68f7ef0102ebedc88f6de699b4a29f32",
       "vendoredPath": "App/Adapters/GooglePhotos/GoogleTokenExchange.swift",
       "vendoredSha256": "f917b6a1e2219e2c2ddbaea9b6e07563f18ad3f1b9c69424f4f23ad57d27bdc4"
+    },
+    {
+      "sourcePath": "App/Sources/AccountConnectWebView.swift",
+      "sourceSha256": "e609cf9634c1b936dc2e0a4c7a1cdee1ca9216cfbbd8147e9b00e77e58f88c43",
+      "vendoredPath": "App/Presentation/Settings/GoogleAccountLoginView.swift",
+      "vendoredSha256": "55cbf859bc9a357b9ab15693de635298a90cc7bb6008afa1b3f085cbf14d74ce"
     }
   ],
-  "patchNotes": "See docs/P4-REVIEW.md and docs/P4-R2.md. Architect token boundary applies injected network policy and removes raw server/network details while preserving cancellation and wire fields. Hashes record provenance, not protocol/runtime acceptance. P4-B adds bounded callback-terminal foreground HTTP/file I/O, same-token OpenID subject verification, Retry-After propagation and adapter-verified single-pass preparation. Original/non-quota commit/device/quality fields, hash query and native-pair metadata remain pinned. See docs/P4-B-INTEGRATION.md. P5/P6 disallow constrained networks consistently with the shared Low Data gate. Source pin unchanged; adapted-file digest refreshed. See docs/P5-P6-INTEGRATION.md."
+  "patchNotes": "See docs/P4-REVIEW.md and docs/P4-R2.md. Architect token boundary applies injected network policy and removes raw server/network details while preserving cancellation and wire fields. Hashes record provenance, not protocol/runtime acceptance. P4-B adds bounded callback-terminal foreground HTTP/file I/O, same-token OpenID subject verification, Retry-After propagation and adapter-verified single-pass preparation. Original/non-quota commit/device/quality fields, hash query and native-pair metadata remain pinned. See docs/P4-B-INTEGRATION.md. P5/P6 disallow constrained networks consistently with the shared Low Data gate. Source pin unchanged; adapted-file digest refreshed. See docs/P5-P6-INTEGRATION.md. P8-R1 adapts the same pinned upstream isolated browser sign-in in Settings: strict cookie domain, foreground/deadline-bounded observer supplementation, sanitized failures and teardown. No source-pin or upload-protocol change; device login remains unverified. See docs/P8-FIRST-RUN.md."
 }

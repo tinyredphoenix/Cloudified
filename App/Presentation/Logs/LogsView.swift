@@ -15,9 +15,9 @@ public struct LogsView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 // Filters Header
-                filtersHeader
-                    .padding()
-                    .background(Color(.secondarySystemBackground))
+                DisclosureGroup("Filters") { filtersHeader.padding(.top, 8) }
+                    .padding(.horizontal)
+                    .padding(.vertical, 10)
 
                 // Log entries list or empty state
                 if environment.logsState.filteredEntries.isEmpty && environment.logsState.fallbackEntries.isEmpty {
@@ -37,16 +37,18 @@ public struct LogsView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
+                if environment.logsState.pageError != nil || environment.logsState.isLoading || environment.logsState.prunedEventCount > 0 || environment.logsState.hasOlder {
                 VStack {
                     if let error = environment.logsState.pageError { Text(error).font(.caption).foregroundStyle(.red) }
                     if environment.logsState.isLoading { ProgressView() }
-                    Text("Routine events pruned: \(environment.logsState.prunedEventCount). Critical records retained.").font(.caption).foregroundStyle(.secondary)
-                    HStack {
-                        Button("Newest") { environment.reloadLogs(); environment.loadRuns() }
-                        Spacer()
-                        Button("Older page") { environment.olderLogs() }.disabled(!environment.logsState.hasOlder || environment.logsState.isLoading)
+                    if environment.logsState.prunedEventCount > 0 {
+                        Text("Routine events pruned: \(environment.logsState.prunedEventCount). Critical records retained.").font(.caption).foregroundStyle(.secondary)
                     }
-                }.padding().background(.regularMaterial)
+                    if environment.logsState.hasOlder {
+                        Button("Older page") { environment.olderLogs() }.disabled(environment.logsState.isLoading)
+                    }
+                }.padding(.horizontal).padding(.vertical, 8).background(.regularMaterial)
+                }
             }
             .onAppear { environment.reloadLogs(); environment.loadRuns() }
             .onDisappear { if exportedFileURL == nil { exportTask?.cancel() } }
@@ -56,6 +58,11 @@ public struct LogsView: View {
             .refreshable { environment.reloadLogs() }
             .navigationTitle("Logs")
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button { environment.reloadLogs(); environment.loadRuns() } label: {
+                        Label("Newest logs", systemImage: "arrow.clockwise")
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         isExporting = true
@@ -143,10 +150,10 @@ public struct LogsView: View {
             Image(systemName: "doc.text.magnifyingglass")
                 .font(.system(size: 44))
                 .foregroundColor(.secondary)
-            Text("No Diagnostic Logs Recorded")
+            Text("No matching events")
                 .font(.headline)
                 .foregroundColor(.primary)
-            Text("Structured diagnostic logging begins during backup runs. Personal data, auth tokens, and location metadata are strictly redacted on-device.")
+            Text("Connection and backup events appear here. Use Export to save diagnostics when reporting a problem.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)

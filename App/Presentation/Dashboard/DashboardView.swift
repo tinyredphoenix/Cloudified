@@ -1,197 +1,113 @@
 import SwiftUI
+import UIKit
 
 public struct DashboardView: View {
     @ObservedObject public var environment: AppEnvironment
-
-    public init(environment: AppEnvironment) {
-        self.environment = environment
+    @Environment(\.openURL) private var openURL
+    @State private var showingGoogle = false
+    @State private var showingTelegram = false
+    public init(environment: AppEnvironment) { self.environment = environment }
+    private var state: DashboardViewState { environment.dashboardState }
+    private var needsSetup: Bool {
+        !state.photosAccess.canRead || state.accessibleLibraryTotal == nil ||
+        (!state.googleStatus.isConnected && !state.telegramStatus.isConnected)
     }
 
     public var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    // Unconnected destinations warning banner
-                    if !environment.dashboardState.googleStatus.isConnected && !environment.dashboardState.telegramStatus.isConnected {
-                        unconnectedNoticeBanner
+            List {
+                if needsSetup { setupSection }
+                if state.photosAccess.canRead && state.accessibleLibraryTotal != nil {
+                    Section {
+                        OverallActivityCard(state: state.overallState, waitingReason: state.waitingOrErrorReason,
+                            libraryTotal: state.accessibleLibraryTotal, savedToBoth: state.savedToBothCount,
+                            permissionScope: state.permissionScopeDescription, scanDate: state.scanTimestamp,
+                            canPause: state.canPause && state.controlsAvailable,
+                            canResume: state.canResume && state.controlsAvailable && state.canStartBackup,
+                            canStart: state.canStartBackup && state.controlsAvailable && !state.canPause,
+                            onBackUp: environment.requestBackup, onPause: environment.requestPause,
+                            onResume: environment.requestResume)
                     }
-
-                    // 1. Overall Activity & Controls
-                    OverallActivityCard(
-                        state: environment.dashboardState.overallState,
-                        waitingReason: environment.dashboardState.waitingOrErrorReason,
-                        libraryTotal: environment.dashboardState.accessibleLibraryTotal,
-                        savedToBoth: environment.dashboardState.savedToBothCount,
-                        permissionScope: environment.dashboardState.permissionScopeDescription,
-                        scanDate: environment.dashboardState.scanTimestamp,
-                        canPause: environment.dashboardState.canPause && environment.dashboardState.controlsAvailable,
-                        canResume: environment.dashboardState.canResume && environment.dashboardState.controlsAvailable,
-                        canStart: environment.dashboardState.canStartBackup && environment.dashboardState.controlsAvailable,
-                        onBackUp: {
-                            environment.requestBackup()
-                        },
-                        onPause: {
-                            environment.requestPause()
-                        },
-                        onResume: {
-                            environment.requestResume()
+                    Section("Destinations") {
+                        ProviderStatusCard(state: state.googleStatus, onSettingsTapped: { showingGoogle = true })
+                        ProviderStatusCard(state: state.telegramStatus, onSettingsTapped: { showingTelegram = true })
+                    }
+                    if !state.currentTransfers.isEmpty {
+                        Section("Uploading now") {
+                            ForEach(state.currentTransfers) { CurrentTransferCard(transfer: $0) }
                         }
-                    )
-
-                    // 2. Active Transfer (Current file, bytes, part, attempt)
-                    ForEach(environment.dashboardState.currentTransfers) { transfer in
-                        CurrentTransferCard(transfer: transfer)
                     }
-
-                    // 3. Independent Destinations (Google & Telegram)
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Destinations")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-
-                        Text("Both enabled destinations run concurrently. Neither waits for the other to finish.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-
-                        ProviderStatusCard(
-                            state: environment.dashboardState.googleStatus,
-                            onSettingsTapped: {
-                                environment.selectedTab = .settings
+                    Section("Your library") {
+                        MediaSectionCard(state: state.photosSection)
+                        MediaSectionCard(state: state.videosSection)
+                    }
+                    Section {
+                        DisclosureGroup("Backup details") {
+                            LabeledContent("Photos access", value: state.permissionScopeDescription)
+                            if let date = state.scanTimestamp {
+                                LabeledContent("Last scan", value: date.formatted())
                             }
-                        )
-
-                        ProviderStatusCard(
-                            state: environment.dashboardState.telegramStatus,
-                            onSettingsTapped: {
-                                environment.selectedTab = .settings
+                            if let count = state.confirmedThisSessionCount {
+                                LabeledContent("Saved this session", value: String(count))
                             }
-                        )
+                            if let speed = state.currentTransferSpeedBytesPerSec {
+                                LabeledContent("Speed", value: ByteCountFormatter.string(fromByteCount: speed, countStyle: .binary) + "/s")
+                            }
+                            if let eta = state.estimatedRemainingTimeSeconds {
+                                LabeledContent("Time remaining", value: Duration.seconds(eta).formatted(.units(allowed: [.hours, .minutes])))
+                            }
+                            Button("Scan library again", action: environment.requestPhotoLibraryAccess)
+                                .disabled(!state.controlsAvailable || state.canPause)
+                        }
                     }
-
-                    // 4. Separate Media Breakdown (Photos & Videos)
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Media Breakdown")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-
-                        MediaSectionCard(
-                            state: environment.dashboardState.photosSection
-                        )
-
-                        MediaSectionCard(
-                            state: environment.dashboardState.videosSection
-                        )
-                    }
-
-                    // 5. Session Metrics
-                    sessionMetricsCard
                 }
-                .padding()
             }
-            .navigationTitle("Dashboard")
+            .navigationTitle("Backup")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        environment.selectedTab = .settings
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .accessibilityLabel("Settings")
+                    Button { environment.selectedTab = .settings } label: {
+                        Image(systemName: "gearshape").accessibilityLabel("Settings")
                     }
                 }
             }
+            .sheet(isPresented: $showingGoogle) { GoogleAuthSheet(environment: environment) }
+            .sheet(isPresented: $showingTelegram) { TelegramAuthSheet(environment: environment) }
         }
     }
 
-    private var unconnectedNoticeBanner: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: "exclamationmark.circle.fill")
-                    .foregroundColor(.orange)
-                Text("No Destinations Connected")
-                    .font(.subheadline.bold())
-                    .foregroundColor(.primary)
-            }
-
-            Text("Connect your Google Photos and/or Telegram accounts in Settings to start backing up.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            Button {
-                environment.selectedTab = .settings
-            } label: {
-                Text("Configure Destinations in Settings")
-                    .font(.caption.bold())
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.orange)
-            .padding(.top, 4)
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.orange.opacity(0.12))
-        .cornerRadius(12)
-    }
-
-    private var sessionMetricsCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Session Details")
-                .font(.headline)
-                .foregroundColor(.primary)
-
-            HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Session Saved")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text(environment.dashboardState.confirmedThisSessionCount.map(String.init) ?? "--")
-                        .font(.subheadline.bold())
-                        .foregroundColor(.primary)
-                }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Transfer Speed")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    if let speed = environment.dashboardState.currentTransferSpeedBytesPerSec {
-                        Text("\(ByteCountFormatter.string(fromByteCount: speed, countStyle: .binary))/s")
-                            .font(.subheadline.bold())
-                            .foregroundColor(.primary)
-                    } else {
-                        Text("-- KB/s")
-                            .font(.subheadline.bold())
-                            .foregroundColor(.primary)
+    private var setupSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Set up your backup").font(.title2.weight(.semibold))
+                Text("Choose Photos access, then connect a destination. Uploading starts when you tap Back Up.")
+                    .foregroundStyle(.secondary)
+            }.padding(.vertical, 8)
+            if state.photosAccess == .restricted {
+                Label(state.photosAccess.description, systemImage: "lock")
+            } else if state.photosAccess == .denied {
+                Button("Open Photos permissions") { openURL(URL(string: UIApplication.openSettingsURLString)!) }
+            } else if !state.photosAccess.canRead || state.accessibleLibraryTotal == nil {
+                Button(action: environment.requestPhotoLibraryAccess) {
+                    HStack {
+                        Label(state.photosAccess.canRead ? "Scan your library" : "Allow Photos access", systemImage: "photo")
+                        if state.isReadingLibrary { Spacer(); ProgressView() }
                     }
-                }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Estimated Time")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    if let eta = environment.dashboardState.estimatedRemainingTimeSeconds {
-                        Text(formatDuration(eta))
-                            .font(.subheadline.bold())
-                            .foregroundColor(.primary)
-                    } else {
-                        Text("--")
-                            .font(.subheadline.bold())
-                            .foregroundColor(.primary)
-                    }
-                }
+                }.disabled(!state.controlsAvailable || state.isReadingLibrary)
+            } else {
+                Label("\(state.accessibleLibraryTotal ?? 0) accessible items", systemImage: "checkmark.circle")
+                    .foregroundStyle(.secondary)
+            }
+            if !state.googleStatus.isConnected {
+                Button { showingGoogle = true } label: { Label("Connect Google Photos", systemImage: "photo.stack") }
+                    .disabled(!state.controlsAvailable)
+            }
+            if !state.telegramStatus.isConnected {
+                Button { showingTelegram = true } label: { Label("Connect Telegram", systemImage: "paperplane") }
+                    .disabled(!state.controlsAvailable)
+            }
+            if let reason = state.waitingOrErrorReason, case .needsAttention = state.overallState {
+                Text(reason).font(.footnote).foregroundStyle(.red)
             }
         }
-        .padding()
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(12)
-    }
-
-    private func formatDuration(_ seconds: TimeInterval) -> String {
-        let formatter = DateComponentsFormatter()
-        formatter.allowedUnits = [.hour, .minute, .second]
-        formatter.unitsStyle = .abbreviated
-        return formatter.string(from: seconds) ?? "--"
     }
 }

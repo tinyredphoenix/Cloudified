@@ -58,6 +58,7 @@ sources = [
     ("LogsView.swift", "logs"),
     ("LogsViewState.swift", "logs"),
     ("SettingsView.swift", "settings"),
+    ("GoogleAccountLoginView.swift", "settings"),
     ("SettingsViewState.swift", "settings"),
     ("PhotoLibraryAdapterProtocol.swift", "photo_library"),
     ("SourceRecipe.swift", "photo_library"),

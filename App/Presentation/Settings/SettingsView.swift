@@ -1,4 +1,6 @@
 import SwiftUI
+import UIKit
+import CloudifiedCore
 
 public struct SettingsView: View {
     @ObservedObject public var environment: AppEnvironment
@@ -15,172 +17,46 @@ public struct SettingsView: View {
     public var body: some View {
         NavigationStack {
             Form {
-                // Section 1: Independent Provider Switches
-                Section(
-                    header: Text("Destinations"),
-                    footer: Text("Both enabled providers run concurrently in the same backup batch. Disabling a provider retains its backlog and confirmed counts.")
-                ) {
-                    Toggle(isOn: Binding(
-                        get: { environment.settingsState.isGoogleEnabled },
-                        set: { environment.setGoogleEnabled($0) }
-                    )) {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Google Photos")
-                                    .foregroundColor(.primary)
-                                Text("Uploads originals via PhotosBackup bridge")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        } icon: {
-                            Image(systemName: "photo.stack.fill")
-                                .foregroundColor(.red)
-                        }
-                    }
-
-                    Toggle(isOn: Binding(
-                        get: { environment.settingsState.isTelegramEnabled },
-                        set: { environment.setTelegramEnabled($0) }
-                    )) {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Telegram")
-                                    .foregroundColor(.primary)
-                                Text("Archives originals to private channel via TDLib")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        } icon: {
-                            Image(systemName: "paperplane.fill")
-                                .foregroundColor(.blue)
+                Section("Photos") {
+                    LabeledContent("Access", value: environment.dashboardState.photosAccess.description)
+                    if environment.dashboardState.photosAccess == .notDetermined {
+                        Button("Allow Photos access", action: environment.requestPhotoLibraryAccess)
+                            .disabled(!environment.dashboardState.controlsAvailable)
+                    } else if environment.dashboardState.photosAccess == .restricted {
+                        Text("Photos access is restricted by this device's settings.").font(.footnote).foregroundStyle(.secondary)
+                    } else {
+                        Link("Change Photos access", destination: URL(string: UIApplication.openSettingsURLString)!)
+                        if environment.dashboardState.photosAccess.canRead {
+                            Button("Scan library", action: environment.requestPhotoLibraryAccess)
+                                .disabled(!environment.dashboardState.controlsAvailable || environment.dashboardState.canPause)
                         }
                     }
                 }
-
-                // Section 2: Google Photos Account & Configuration
-                Section(
-                    header: Text("Google Photos Configuration"),
-                    footer: Text("Native Live Photo pairing is preferred. When unverified, the selected fallback policy is applied.")
-                ) {
-                    HStack {
-                        Text("Account")
-                        Spacer()
-                        Text(environment.settingsState.googleAccountEmail ?? "Not connected")
-                            .foregroundColor(.secondary)
+                Section("Destinations") {
+                    NavigationLink { googleSettings } label: {
+                        accountRow("Google Photos", subtitle: environment.settingsState.googleAccountEmail ?? "Not connected", icon: "photo.stack")
                     }
-
-                    Button {
-                        showingGoogleAuthSheet = true
-                    } label: {
-                        Text(environment.settingsState.isGoogleConnected ? "Switch Google Account" : "Sign In with Google")
-                    }
-
-                    if environment.settingsState.isGoogleConnected {
-                        Button(role: .destructive) {
-                            showingGoogleDisconnectAlert = true
-                        } label: {
-                            if environment.settingsState.isSettlingGoogle {
-                                HStack {
-                                    ProgressView()
-                                    Text("Settling & Disconnecting...")
-                                }
-                            } else {
-                                Text("Disconnect Google Photos")
-                            }
-                        }
-                        .disabled(environment.settingsState.isSettlingGoogle)
-                    }
-
-                    Picker("Live Photo Fallback", selection: Binding(
-                        get: { environment.settingsState.livePhotoFallback },
-                        set: { environment.updateLivePhotoPolicy($0) }
-                    )) {
-                        ForEach(LivePhotoFallbackOption.allCases) { option in
-                            Text(option.rawValue).tag(option)
-                        }
-                    }
-
-                    Text(environment.settingsState.livePhotoFallback.summaryDescription)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                // Section 3: Telegram Account & Destination Channel
-                Section(
-                    header: Text("Telegram Configuration"),
-                    footer: Text("Telegram requires both an authenticated user account and a designated private archive channel with zero message auto-delete.")
-                ) {
-                    HStack {
-                        Text("Account")
-                        Spacer()
-                        Text(environment.settingsState.telegramAccountName ?? "Not connected")
-                            .foregroundColor(.secondary)
-                    }
-
-                    HStack {
-                        Text("Target Channel")
-                        Spacer()
-                        Text(environment.settingsState.telegramChannelName ?? "Not mapped")
-                            .foregroundColor(.secondary)
-                    }
-
-                    HStack {
-                        Text("Auth Status")
-                        Spacer()
-                        Text(environment.settingsState.telegramAuthStep.rawValue)
-                            .font(.caption.bold())
-                            .foregroundColor(.secondary)
-                    }
-
-                    Button {
-                        showingTelegramAuthSheet = true
-                    } label: {
-                        Text(environment.settingsState.isTelegramConnected ? "Map Another Channel" : "Connect Telegram")
-                    }
-
-                    if environment.settingsState.isTelegramConnected {
-                        Button("Log Out to Switch Telegram Account", role: .destructive) { showingTelegramLogoutAlert = true }
-                        Button(role: .destructive) {
-                            showingTelegramDisconnectAlert = true
-                        } label: {
-                            if environment.settingsState.isSettlingTelegram {
-                                HStack {
-                                    ProgressView()
-                                    Text("Settling & Disconnecting...")
-                                }
-                            } else {
-                                Text("Disconnect Telegram")
-                            }
-                        }
-                        .disabled(environment.settingsState.isSettlingTelegram)
+                    NavigationLink { telegramSettings } label: {
+                        accountRow("Telegram", subtitle: environment.settingsState.telegramChannelName ?? "Not connected", icon: "paperplane")
                     }
                 }
-
-                if let error = environment.settingsState.googleAuthErrorMessage {
-                    Section("Google Photos error") { Text(error).foregroundStyle(.red) }
+                Section("Backup options") {
+                    Toggle("Wi-Fi Only", isOn: Binding(get: { environment.settingsState.isWiFiOnlyEnabled }, set: environment.setWiFiOnly))
+                    NavigationLink("Live Photos") {
+                        Form {
+                            Section {
+                                Picker("Google Photos", selection: Binding(get: { environment.settingsState.livePhotoFallback }, set: environment.updateLivePhotoPolicy)) {
+                                    ForEach(LivePhotoFallbackOption.allCases) { Text($0.rawValue).tag($0) }
+                                }.pickerStyle(.inline)
+                            } footer: { Text(environment.settingsState.livePhotoFallback.summaryDescription) }
+                            Section { Text("Telegram keeps both original components.").foregroundStyle(.secondary) }
+                        }.navigationTitle("Live Photos").inlineNavigationTitle()
+                    }
                 }
-                if let error = environment.settingsState.telegramAuthErrorMessage {
-                    Section("Telegram error") { Text(error).foregroundStyle(.red) }
-                }
-                // Section 4: Network & Battery Policy
-                Section(
-                    header: Text("Network & Power Policy"),
-                    footer: Text("Wi-Fi Only applies to both providers. Device heat and background execution limits pause new work safely.")
-                ) {
-                    Toggle("Wi-Fi Only", isOn: Binding(
-                        get: { environment.settingsState.isWiFiOnlyEnabled },
-                        set: { environment.setWiFiOnly($0) }
-                    ))
-
-                }
-
-                // Section 5: Architecture & Version Information
-                Section(header: Text("About Cloudified")) {
+                Section {
                     labeledRow(label: "Version", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unavailable") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unavailable"))")
-                    labeledRow(label: "Platform", value: "iOS 26 Native (Swift 6 / SwiftUI)")
-                    labeledRow(label: "Quality Mode", value: "Original Quality Only")
-                    labeledRow(label: "State Ledger", value: "Durable SQLite")
-                }
+                } footer: { Text("Original photos and videos. You control when backup starts.") }
+
             }
             .disabled(environment.settingsState.isSettlingGoogle || environment.settingsState.isSettlingTelegram)
             .navigationTitle("Settings")
@@ -215,6 +91,53 @@ public struct SettingsView: View {
                 Text("This will settle active transfers and unlink the Telegram channel destination. Remote messages will not be deleted.")
             }
         }
+    }
+
+    private func accountRow(_ title: String, subtitle: String, icon: String) -> some View {
+        Label {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                Text(subtitle).font(.footnote).foregroundStyle(.secondary).lineLimit(1).privacySensitive()
+            }
+        } icon: { Image(systemName: icon) }
+    }
+    private var googleSettings: some View {
+        Form {
+            Section {
+                if environment.settingsState.isGoogleConnected {
+                    LabeledContent("Account", value: environment.settingsState.googleAccountEmail ?? "Connected").privacySensitive()
+                    Toggle("Upload to Google Photos", isOn: Binding(get: { environment.settingsState.isGoogleEnabled }, set: environment.setGoogleEnabled))
+                }
+                Button(environment.settingsState.isGoogleConnected ? "Switch account" : "Connect Google Photos") { showingGoogleAuthSheet = true }
+            } footer: { Text("Sign in separately for Cloudified. Your other Google apps stay signed in.") }
+            if let error = environment.settingsState.googleAuthErrorMessage {
+                Section("Connection issue") { Text(error).font(.footnote).foregroundStyle(.red) }
+            }
+            if environment.settingsState.isGoogleConnected {
+                Section { Button("Disconnect", role: .destructive) { showingGoogleDisconnectAlert = true } }
+            }
+        }.navigationTitle("Google Photos").inlineNavigationTitle()
+    }
+    private var telegramSettings: some View {
+        Form {
+            Section {
+                if environment.settingsState.isTelegramConnected {
+                    LabeledContent("Account", value: environment.settingsState.telegramAccountName ?? "Connected").privacySensitive()
+                    LabeledContent("Channel", value: environment.settingsState.telegramChannelName ?? "Not mapped").privacySensitive()
+                    Toggle("Upload to Telegram", isOn: Binding(get: { environment.settingsState.isTelegramEnabled }, set: environment.setTelegramEnabled))
+                }
+                Button(environment.settingsState.isTelegramConnected ? "Change archive channel" : "Connect Telegram") { showingTelegramAuthSheet = true }
+            } footer: { Text("Use an owned private archive channel with auto-delete off.") }
+            if let error = environment.settingsState.telegramAuthErrorMessage {
+                Section("Connection issue") { Text(error).font(.footnote).foregroundStyle(.red) }
+            }
+            if environment.settingsState.isTelegramConnected {
+                Section {
+                    Button("Switch Telegram account", role: .destructive) { showingTelegramLogoutAlert = true }
+                    Button("Disconnect", role: .destructive) { showingTelegramDisconnectAlert = true }
+                }
+            }
+        }.navigationTitle("Telegram").inlineNavigationTitle()
     }
 
     private func labeledRow(label: String, value: String) -> some View {
@@ -283,66 +206,91 @@ private extension View {
 public struct GoogleAuthSheet: View {
     @ObservedObject public var environment: AppEnvironment
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State private var oauthToken = ""
-
-    public init(environment: AppEnvironment) {
-        self.environment = environment
-    }
+    @State private var showBrowser = false
+    @State private var loading = true
+    @State private var browserError: String?
+    @State private var exchanging = false
+    @State private var connected = false
+    @State private var loginTask: Task<Void, Never>?
+    public init(environment: AppEnvironment) { self.environment = environment }
 
     public var body: some View {
         NavigationStack {
-            Form {
-                Section(
-                    header: Text("Google Photos Sign In"),
-                    footer: Text("Provide the oauth2_4… login token used by the pinned PhotosBackup flow, not a general Google API access token. Cloudified exchanges it for a protected Android master token and verifies the account identity before mapping.")
-                ) {
-                    SecureField("PhotosBackup Login Token", text: $oauthToken)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-
-                    Button {
-                        let token = oauthToken.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !token.isEmpty else { return }
-                        Task {
-                            do {
-                                defer { oauthToken = "" }
-                                try await environment.connectGoogle(oauthToken: token)
-                                dismiss()
-                            } catch {
-                                // Error is recorded in environment.settingsState.googleAuthErrorMessage
-                            }
-                        }
-                    } label: {
-                        if environment.settingsState.isConnectingGoogle {
-                            HStack {
-                                ProgressView()
-                                Text("Verifying Account & Connecting...")
-                            }
-                        } else {
-                            Text("Connect with Token")
-                        }
+            Group {
+                if connected {
+                    Form {
+                        Section {
+                            Label("Google Photos connected", systemImage: "checkmark.circle")
+                            Text(environment.settingsState.googleAccountEmail ?? "Verified account").privacySensitive()
+                            Button("Done") { dismiss() }
+                        } footer: { Text("Return to Backup when you're ready to upload.") }
                     }
-                    .disabled(oauthToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || environment.settingsState.isConnectingGoogle)
-                }
-
-                if let err = environment.settingsState.googleAuthErrorMessage {
-                    Section {
-                        Text(err)
-                            .font(.caption)
-                            .foregroundColor(.red)
+                } else if exchanging {
+                    VStack(spacing: 16) {
+                        ProgressView()
+                        Text("Verifying your account…")
+                        Text("Checking the destination before enabling uploads.").font(.footnote).foregroundStyle(.secondary)
+                    }.padding()
+                } else if showBrowser {
+                    ZStack(alignment: .top) {
+                        GoogleAccountLoginView(active: scenePhase == .active,
+                            onToken: connect, onLoading: { loading = $0 }, onFailure: { message, failure in
+                                showBrowser = false; browserError = message
+                                loginTask = Task {
+                                    await environment.report(failure, provider: .google)
+                                }
+                            })
+                        if loading { ProgressView("Loading Google…").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) }
+                    }
+                } else {
+                    Form {
+                        Section {
+                            Text("Connect Google Photos").font(.title2.weight(.semibold))
+                            Text("Sign in with the account you want to back up to. This session is separate from Safari and your other Google apps.")
+                                .foregroundStyle(.secondary)
+                            Button("Continue to Google") { loading = true; browserError = nil; showBrowser = true }
+                        }
+                        if let error = browserError ?? environment.settingsState.googleAuthErrorMessage {
+                            Section("Connection issue") { Text(error).font(.footnote).foregroundStyle(.red) }
+                        }
+                        Section {
+                            DisclosureGroup("Advanced: login token") {
+                                SecureField("PhotosBackup login token", text: $oauthToken)
+                                    .autocorrectionDisabled().textInputAutocapitalization(.never)
+                                Button("Connect with token") {
+                                    let value = oauthToken.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    oauthToken = ""; connect(value)
+                                }.disabled(oauthToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                Text("Only for an existing PhotosBackup login token. A normal Google API access token is not compatible.")
+                                    .font(.footnote).foregroundStyle(.secondary)
+                            }
+                        }
                     }
                 }
             }
-            .onDisappear { oauthToken = "" }
-            .navigationTitle("Google Sign In")
-            .inlineNavigationTitle()
+            .navigationTitle("Google Photos").inlineNavigationTitle()
+            .interactiveDismissDisabled(exchanging)
+            .onDisappear { oauthToken = ""; showBrowser = false; loginTask?.cancel() }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
+                    Button(showBrowser ? "Back" : "Cancel") {
+                        if showBrowser { showBrowser = false } else { dismiss() }
+                    }.disabled(exchanging)
                 }
             }
+        }
+    }
+    private func connect(_ token: String) {
+        guard !exchanging, !token.isEmpty else { return }
+        showBrowser = false; exchanging = true; browserError = nil
+        loginTask = Task {
+            defer { exchanging = false }
+            do {
+                try await environment.connectGoogle(oauthToken: token)
+                connected = true
+            } catch { /* Existing account command persists the classified failure. */ }
         }
     }
 }
@@ -376,7 +324,7 @@ public struct TelegramAuthSheet: View {
             Form {
                 switch environment.settingsState.telegramAuthStep {
                 case .initializing:
-                    Section { ProgressView("Initializing TDLib") }
+                    Section { ProgressView("Starting Telegram…") }
                 case .unconfigured:
                     apiCredentialsSection
                 case .enterPhoneNumber:
@@ -414,7 +362,7 @@ public struct TelegramAuthSheet: View {
                 Button("Log Out", role: .destructive) { Task { try? await environment.logoutTelegram() } }
                 Button("Cancel", role: .cancel) {}
             } message: { Text("Logs out this native account after retained inputs settle. Remote documents remain.") }
-            .navigationTitle("Telegram Authentication")
+            .navigationTitle("Connect Telegram")
             .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -428,10 +376,11 @@ public struct TelegramAuthSheet: View {
 
     private var apiCredentialsSection: some View {
         Section(
-            header: Text("Telegram API Credentials"),
-            footer: Text("Enter your Telegram API ID and API Hash from my.telegram.org. Credentials are encrypted and stored in the iOS Keychain.")
+            header: Text("One-time API setup"),
+            footer: Text("Telegram requires these once. Cloudified stores them in the iOS Keychain.")
         ) {
-            TextField("API ID (e.g. 1234567)", text: $apiIdText)
+            Link("Get API credentials", destination: URL(string: "https://my.telegram.org")!)
+            TextField("API ID", text: $apiIdText)
                 .numberKeyboard()
             SecureField("API Hash", text: $apiHashText)
                 .autocorrectionDisabled()
@@ -451,10 +400,10 @@ public struct TelegramAuthSheet: View {
                 if environment.settingsState.isConnectingTelegram {
                     ProgressView()
                 } else {
-                    Text("Save & Initialize TDLib")
+                    Text("Continue")
                 }
             }
-            .disabled(environment.settingsState.isConnectingTelegram)
+            .disabled((Int32(apiIdText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0) <= 0 || apiHashText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || environment.settingsState.isConnectingTelegram)
         }
     }
 
@@ -465,6 +414,7 @@ public struct TelegramAuthSheet: View {
         ) {
             TextField("Phone Number", text: $phoneNumber)
                 .phoneKeyboard()
+                .textContentType(.telephoneNumber)
 
             Button {
                 let phone = phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -476,7 +426,7 @@ public struct TelegramAuthSheet: View {
                 if environment.settingsState.isConnectingTelegram {
                     ProgressView()
                 } else {
-                    Text("Submit Phone Number")
+                    Text("Continue")
                 }
             }
             .disabled(phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || environment.settingsState.isConnectingTelegram)
@@ -490,6 +440,7 @@ public struct TelegramAuthSheet: View {
         ) {
             TextField("Verification Code", text: $verificationCode)
                 .numberKeyboard()
+                .textContentType(.oneTimeCode)
 
             Button {
                 let code = verificationCode.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -502,7 +453,7 @@ public struct TelegramAuthSheet: View {
                 if environment.settingsState.isConnectingTelegram {
                     ProgressView()
                 } else {
-                    Text("Submit Code")
+                    Text("Continue")
                 }
             }
             .disabled(verificationCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || environment.settingsState.isConnectingTelegram)
@@ -515,6 +466,7 @@ public struct TelegramAuthSheet: View {
             footer: Text("Enter your 2FA cloud password configured for this Telegram account.")
         ) {
             SecureField("2FA Password", text: $password)
+                .textContentType(.password)
 
             Button {
                 let pwd = password
@@ -527,7 +479,7 @@ public struct TelegramAuthSheet: View {
                 if environment.settingsState.isConnectingTelegram {
                     ProgressView()
                 } else {
-                    Text("Submit Password")
+                    Text("Continue")
                 }
             }
             .disabled(password.isEmpty || environment.settingsState.isConnectingTelegram)
@@ -594,12 +546,12 @@ public struct TelegramAuthSheet: View {
 
     private var channelMappingSection: some View {
         Section(
-            header: Text("Target Channel Mapping"),
-            footer: Text("Cloudified requires an owned private channel (supergroup) with creator permissions and message auto-delete disabled (0 seconds). Public channels or channels with auto-delete are rejected.")
+            header: Text("Archive channel"),
+            footer: Text("Enter the numeric ID of an owned private channel. Auto-delete must be off.")
         ) {
             Button("Log Out to Switch Account", role: .destructive) { confirmLogout = true }
                 .disabled(environment.settingsState.isConnectingTelegram || environment.settingsState.isSettlingTelegram)
-            TextField("Channel Chat ID (e.g. -1001234567890)", text: $channelChatIDText)
+            TextField("Channel Chat ID", text: $channelChatIDText)
                 .numbersAndPunctuationKeyboard()
 
             Button {
@@ -618,10 +570,10 @@ public struct TelegramAuthSheet: View {
                 if environment.settingsState.isConnectingTelegram {
                     ProgressView()
                 } else {
-                    Text("Verify & Map Channel")
+                    Text("Use this channel")
                 }
             }
-            .disabled(channelChatIDText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || environment.settingsState.isConnectingTelegram)
+            .disabled((Int64(channelChatIDText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0) == 0 || environment.settingsState.isConnectingTelegram)
         }
     }
 

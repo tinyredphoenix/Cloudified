@@ -18,7 +18,9 @@ See [actual setup status](docs/SETUP-STATUS.md) and
 [SideStore distribution](docs/DISTRIBUTION.md).
 For the first actual iPhone session, follow the [ordered device-test guide](docs/P7-DEVICE-TEST-GUIDE.md)
 and copy the [results and bug-report template](docs/P7-TEST-RESULTS-TEMPLATE.md)
-to a private folder before filling it in. No device results are recorded yet.
+to a private folder before filling it in. The first device attempt found Photos
+permission/setup and presentation blockers before either account was linked;
+see [P8 first-run corrections and linking plan](docs/P8-FIRST-RUN.md).
 
 ## Stack and build location
 

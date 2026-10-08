@@ -28,6 +28,7 @@
 		7F9361CFC65F0B118F621579 /* LogsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89B769065C8FE53636E09C06 /* LogsView.swift */; };
 		60BE2EA5876CCE34A50B4AEC /* LogsViewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 096E5F4D9E3772CE356F849C /* LogsViewState.swift */; };
 		B194B991052625F01EA4C539 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC4B09C61D3A3BE3D1761161 /* SettingsView.swift */; };
+		9B3BC539F764A671FA91B1D8 /* GoogleAccountLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B9F2FB049C506F1CFB84239 /* GoogleAccountLoginView.swift */; };
 		D23A58A5CB6A654B58E90AD7 /* SettingsViewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77D8C06D52185A565EC76EF8 /* SettingsViewState.swift */; };
 		5D43F9FD9A912799708A48E0 /* PhotoLibraryAdapterProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8637BE190C9FCAA37C4EFD8 /* PhotoLibraryAdapterProtocol.swift */; };
 		E1E2F6696AF143B0DD415059 /* SourceRecipe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05712AB9382E0C74446DE95B /* SourceRecipe.swift */; };
@@ -93,6 +94,7 @@
 		89B769065C8FE53636E09C06 /* LogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LogsView.swift"; sourceTree = "<group>"; };
 		096E5F4D9E3772CE356F849C /* LogsViewState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LogsViewState.swift"; sourceTree = "<group>"; };
 		FC4B09C61D3A3BE3D1761161 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SettingsView.swift"; sourceTree = "<group>"; };
+		4B9F2FB049C506F1CFB84239 /* GoogleAccountLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GoogleAccountLoginView.swift"; sourceTree = "<group>"; };
 		77D8C06D52185A565EC76EF8 /* SettingsViewState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SettingsViewState.swift"; sourceTree = "<group>"; };
 		D8637BE190C9FCAA37C4EFD8 /* PhotoLibraryAdapterProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PhotoLibraryAdapterProtocol.swift"; sourceTree = "<group>"; };
 		05712AB9382E0C74446DE95B /* SourceRecipe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SourceRecipe.swift"; sourceTree = "<group>"; };
@@ -230,6 +232,7 @@
 			isa = PBXGroup;
 			children = (
 				FC4B09C61D3A3BE3D1761161 /* SettingsView.swift */,
+				4B9F2FB049C506F1CFB84239 /* GoogleAccountLoginView.swift */,
 				77D8C06D52185A565EC76EF8 /* SettingsViewState.swift */,
 			);
 			path = Settings; sourceTree = "<group>";
@@ -424,6 +427,7 @@
 				7F9361CFC65F0B118F621579 /* LogsView.swift in Sources */,
 				60BE2EA5876CCE34A50B4AEC /* LogsViewState.swift in Sources */,
 				B194B991052625F01EA4C539 /* SettingsView.swift in Sources */,
+				9B3BC539F764A671FA91B1D8 /* GoogleAccountLoginView.swift in Sources */,
 				D23A58A5CB6A654B58E90AD7 /* SettingsViewState.swift in Sources */,
 				5D43F9FD9A912799708A48E0 /* PhotoLibraryAdapterProtocol.swift in Sources */,
 				E1E2F6696AF143B0DD415059 /* SourceRecipe.swift in Sources */,
