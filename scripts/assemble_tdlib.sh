@@ -217,7 +217,7 @@ PROBE
 xcrun --sdk iphoneos clang++ -target arm64-apple-ios26.0 -isysroot "$IPHONEOS_SDK" \
     -I "$OUTPUT_DIR/include" "$BUILD_DIR/link-probe.cpp" \
     -Wl,-all_load "$OUTPUT_DIR/lib/libtdjson.a" -Wl,-fatal_warnings \
-    -lc++ -lz -o "$BUILD_DIR/link-probe"
+    -lz -o "$BUILD_DIR/link-probe"
 xcrun vtool -show-build "$BUILD_DIR/link-probe" > "$BUILD_DIR/link-platform.txt"
 python3 - "$OUTPUT_DIR" "$BUILD_DIR/link-platform.txt" "${REQUIRED_ARCHIVES[@]}" <<'VERIFY'
 import hashlib, json, pathlib, sys
