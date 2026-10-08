@@ -4,7 +4,7 @@
 # and OpenSSL 3.5.9 (pinned commit 45e844fa2a14ec92d146bd8f5778ac130b6625fb).
 # Designed for the selected cloud build runner (macOS-26 / Xcode 26).
 # Builds in an owned temporary directory with cleanup trap, targets iOS 26 arm64 device architecture,
-# Native closure is unverified and requires P4-A-R2 corrections before P7 assembly.
+# Native recipe has static review only; actual device link gate runs during P7 assembly.
 # Seals the native cache per docs/BUILD-CACHE.md; a seal does not prove link correctness.
 
 set -euo pipefail
@@ -79,11 +79,9 @@ echo "2. Building iOS OpenSSL arm64..."
 (
     cd "$BUILD_DIR/src-openssl"
     # Configure OpenSSL for iOS arm64 without shared libraries
-    export CROSS_TOP="$(xcrun --sdk iphoneos --show-sdk-platform-path)/Developer"
-    export CROSS_SDK="$(basename "$IPHONEOS_SDK")"
-    ./Configure ios64-cross no-shared no-dso no-tests no-engine \
-        --prefix="$BUILD_DIR/ios-openssl" \
-        -D__ARM_MAX_ARCH__=8 \
+    export SDKROOT="$IPHONEOS_SDK"
+    ./Configure ios64-xcrun no-shared no-dso no-tests no-engine \
+        --prefix="$BUILD_DIR/ios-openssl" --libdir=lib \
         -mios-version-min=26.0
     make -j "$(sysctl -n hw.ncpu || echo 4)" build_libs
     make install_dev
@@ -115,6 +113,13 @@ OPENSSL_SSL="$OPENSSL_LIB_DIR/libssl.a"
         -DCMAKE_OSX_ARCHITECTURES="arm64" \
         -DCMAKE_OSX_DEPLOYMENT_TARGET="26.0" \
         -DOPENSSL_ROOT_DIR="$BUILD_DIR/ios-openssl" \
+        -DOPENSSL_FOUND=TRUE \
+        -DZLIB_FOUND=TRUE \
+        -DZLIB_LIBRARY="$IPHONEOS_SDK/usr/lib/libz.tbd" \
+        -DZLIB_LIBRARIES="$IPHONEOS_SDK/usr/lib/libz.tbd" \
+        -DZLIB_INCLUDE_DIR="$IPHONEOS_SDK/usr/include" \
+        -DTDUTILS_USE_EXTERNAL_DEPENDENCIES=OFF \
+        -DTD_WITH_ABSEIL=OFF \
         -DOPENSSL_USE_STATIC_LIBS=TRUE \
         -DOPENSSL_CRYPTO_LIBRARY="$OPENSSL_CRYPTO" \
         -DOPENSSL_SSL_LIBRARY="$OPENSSL_SSL" \
@@ -178,7 +183,7 @@ for arch in "${REQUIRED_ARCHIVES[@]}"; do
         echo "Error: Archive member $arch is empty or missing!" >&2
         exit 5
     fi
-    if ! xcrun lipo -info "$arch" | grep -q "arm64"; then
+    if [[ "$(xcrun lipo -archs "$arch")" != "arm64" ]]; then
         echo "Error: Archive member $arch does not target arm64 architecture!" >&2
         exit 6
     fi
@@ -195,8 +200,52 @@ cp "$BUILD_DIR/src-td/td/telegram/td_json_client.h" "$OUTPUT_DIR/include/td/tele
 cp "$BUILD_DIR/ios-td/td/telegram/tdjson_export.h" "$OUTPUT_DIR/include/"
 cp "$BUILD_DIR/ios-td/td/telegram/tdjson_export.h" "$OUTPUT_DIR/include/td/telegram/"
 
-# Verify arm64 architecture on the final static closure
-xcrun lipo -info "$OUTPUT_DIR/lib/libtdjson.a"
+# Link every member into a device executable, without running it. This checks
+# symbol closure and rejects wrong-platform/ABI members before sealing a cache.
+cat > "$BUILD_DIR/link-probe.cpp" <<'PROBE'
+#define TDJSON_STATIC_DEFINE
+#include "td_json_client.h"
+int main() {
+    auto volatile create = &td_create_client_id;
+    auto volatile send = &td_send;
+    auto volatile receive = &td_receive;
+    auto volatile execute = &td_execute;
+    auto volatile callback = &td_set_log_message_callback;
+    return create && send && receive && execute && callback ? 0 : 1;
+}
+PROBE
+xcrun --sdk iphoneos clang++ -target arm64-apple-ios26.0 -isysroot "$IPHONEOS_SDK" \
+    -I "$OUTPUT_DIR/include" "$BUILD_DIR/link-probe.cpp" \
+    -Wl,-all_load "$OUTPUT_DIR/lib/libtdjson.a" -Wl,-noall_load -Wl,-fatal_warnings \
+    -lc++ -lz -o "$BUILD_DIR/link-probe"
+xcrun vtool -show-build "$BUILD_DIR/link-probe" > "$BUILD_DIR/link-platform.txt"
+python3 - "$OUTPUT_DIR" "$BUILD_DIR/link-platform.txt" "${REQUIRED_ARCHIVES[@]}" <<'VERIFY'
+import hashlib, json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+lines = [line.split() for line in pathlib.Path(sys.argv[2]).read_text().splitlines()]
+if ["platform", "IOS"] not in lines or ["minos", "26.0"] not in lines:
+    raise SystemExit("Native closure link probe must target iOS device, deployment 26.0")
+def sha(path):
+    h = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""): h.update(chunk)
+    return h.hexdigest()
+members = [{"name": pathlib.Path(name).name, "sha256": sha(pathlib.Path(name)),
+            "architecture": "arm64"} for name in sys.argv[3:]]
+record = {"schema": 1, "platform": "IOS", "deployment": "26.0",
+          "archiveSha256": sha(root / "lib/libtdjson.a"), "members": members,
+          "evidence": "clang++ device link with all_load/fatal_warnings and vtool; executable not run"}
+(root / "link-validation.json").write_text(json.dumps(record, sort_keys=True) + "\n")
+VERIFY
+
+# Keep exact dependency notices with cached native artifacts and later packaging.
+mkdir -p "$OUTPUT_DIR/licenses"
+cp "$BUILD_DIR/src-td/LICENSE_1_0.txt" "$OUTPUT_DIR/licenses/LICENSE-TDLib.txt"
+cp "$BUILD_DIR/src-openssl/LICENSE.txt" "$OUTPUT_DIR/licenses/LICENSE-OpenSSL.txt"
+cp "$BUILD_DIR/src-td/sqlite/sqlite/LICENSE" "$OUTPUT_DIR/licenses/LICENSE-TDSQLite.txt"
+for notice in "$BUILD_DIR/src-openssl"/NOTICE*; do
+    if [[ -f "$notice" ]]; then cp "$notice" "$OUTPUT_DIR/licenses/$(basename "$notice")"; fi
+done
 
 # Seal cache provenance per BUILD-CACHE.md
 echo "6. Sealing native TDLib cache..."

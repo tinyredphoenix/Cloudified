@@ -48,6 +48,10 @@ if [[ ! -d "$app_path" ]]; then
   echo 'Build did not produce the expected Cloudified.app.' >&2
   exit 3
 fi
+mkdir -p "$app_path/ThirdPartyLicenses"
+for notice in "$repo_root"/licenses/LICENSE-* "$output_root"/tdlib/licenses/NOTICE*; do
+  if [[ -f "$notice" ]]; then cp "$notice" "$app_path/ThirdPartyLicenses/"; fi
+done
 mkdir -p "$output_root/IPA/Payload"
 ditto "$app_path" "$output_root/IPA/Payload/Cloudified.app"
 ditto -c -k --keepParent "$output_root/IPA/Payload" "$output_root/Cloudified-unsigned.ipa"

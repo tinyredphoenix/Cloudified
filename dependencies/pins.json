@@ -35,7 +35,11 @@
         "method": "git ls-remote annotated release tag and peeled commit",
         "tagObject": "d0ca66a1abe52545f14eca635c648932fcde5615",
         "releaseSource": "https://openssl-library.org/source/"
-      }
+      },
+      "licenseSha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a",
+      "configurationSource": "Configurations/15-ios.conf",
+      "configurationSha256": "5276128a9e3ae665a128ba6e6330b65130ad78f4f6d822ccdf2ebe26b67518b5",
+      "configurationTarget": "ios64-xcrun"
     }
   ],
   "transitiveStatus": "OpenSSL 3.5.9 LTS exact source pin, license Apache 2.0 and configuration verified in P4-A-R2. Native closure/linking remains unbuilt until P7; manifest entries are not artifact evidence."

@@ -22,7 +22,8 @@ have not enabled paid usage. A workflow preflight stops private-repository build
 
 - Native TDLib assembly output only in build/tdlib. Exact fingerprint, no broad
   fallback. Fingerprint includes pinned source/dependency metadata, assembly recipe,
-  C/package inputs, cache validator, Xcode/SDK/compiler/CMake/Ninja versions, target
+  C/package inputs, TDLib vendor closure metadata/licenses, cache validator,
+  Xcode/SDK/compiler/CMake/Ninja versions, target
   platform/architecture/deployment and runner image metadata.
 - Compiler intermediates, module/SDK caches and Swift package checkouts under
   build/DerivedData. Key includes the native fingerprint, project/package/build
@@ -45,9 +46,14 @@ native/compile fingerprints. The assembly script must produce a complete, truly
 linked iPhone arm64 artifact and required headers/dependencies under build/tdlib,
 then call seal-tdlib. This records every output file's SHA-256 and native fingerprint
 in build/tdlib/provenance.json. verify-tdlib checks that complete inventory and
-fingerprint, rejects symbolic links and checks arm64 archives before reuse. These
-checks establish cache correspondence, not proof of native linking/platform or
-provider behavior; P4-A-R1 must correct the assembly/linkage, and P7 proves them.
+fingerprint, rejects symbolic links and checks arm64 archives before reuse. Assembly
+must first force-link all members into an arm64 iOS 26 executable with fatal linker
+warnings, inspect its platform/deployment with vtool and record link-validation.json
+with archive/member hashes. This executable is never run or kept as a cached binary.
+Cache validation requires matching link metadata, exact closure members and dependency
+licenses; it hashes large archives incrementally. These gates have not run yet.
+A future recorded device link establishes that closure/platform check, not provider
+behavior or a working iOS app; P7 supplies actual build/runtime evidence.
 
 Missing/stale/corrupt output is removed only from the owned build/tdlib directory
 and rebuilt. Failure stops the build; no weak stub/library-free IPA fallback.

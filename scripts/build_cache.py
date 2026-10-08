@@ -16,6 +16,14 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def file_digest(path):
+    value = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            value.update(chunk)
+    return value.hexdigest()
+
+
 def encoded(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
 
@@ -36,8 +44,9 @@ def owned_paths(build_root):
 
 
 def prepare(root, inputs):
-    native_files = [ROOT / "dependencies/pins.json", ROOT / "scripts/assemble_tdlib.sh",
+    native_files = [ROOT / "dependencies/pins.json", ROOT / "dependencies/tdlib-vendor.json", ROOT / "scripts/assemble_tdlib.sh",
                     ROOT / "scripts/build_cache.py"]
+    native_files += sorted((ROOT / "licenses").glob("LICENSE-*"))
     native_files.append(ROOT / "Packages/CTDLib/Package.swift")
     native_files += sorted((ROOT / "Packages/CTDLib/Sources").rglob("*.swift"))
     native_files += sorted((ROOT / "Packages/CTDLib/Sources").rglob("*.h"))
@@ -53,7 +62,7 @@ def prepare(root, inputs):
             "clang": command("xcrun", "clang", "--version"),
             "swift": command("xcrun", "swift", "--version"),
             "cmake": command("cmake", "--version"), "ninja": command("ninja", "--version")},
-        "files": {str(path.relative_to(ROOT)): digest(path.read_bytes()) for path in native_files}}
+        "files": {str(path.relative_to(ROOT)): file_digest(path) for path in native_files}}
     native_key = digest(encoded(native))
     compile_files = [ROOT / "Cloudified.xcodeproj/project.pbxproj", ROOT / "scripts/build_unsigned_ipa.sh"]
     compile_files += sorted((ROOT / "Packages").glob("*/Package.swift"))
@@ -62,7 +71,7 @@ def prepare(root, inputs):
     if (ROOT / "Package.resolved").is_file():
         compile_files.append(ROOT / "Package.resolved")
     compile_key = digest(encoded({"native": native_key, "files": {
-        str(path.relative_to(ROOT)): digest(path.read_bytes()) for path in compile_files}}))
+        str(path.relative_to(ROOT)): file_digest(path) for path in compile_files}}))
     root.mkdir(parents=True, exist_ok=True)
     inputs.write_bytes(encoded({"nativeKey": native_key, "compileKey": compile_key, "nativeInputs": native}))
     output = os.environ.get("GITHUB_OUTPUT")
@@ -78,12 +87,28 @@ def inventory(native):
     paths = sorted(native.rglob("*"))
     if any(path.is_symlink() for path in paths):
         raise ValueError("Native artifacts must not contain symbolic links")
-    files = {str(path.relative_to(native)): digest(path.read_bytes())
+    files = {str(path.relative_to(native)): file_digest(path)
              for path in paths if path.is_file() and path != native / "provenance.json"}
     if not files or not (native / "lib/libtdjson.a").is_file():
         raise ValueError("Native TDLib artifact is missing")
     if not any(name.startswith("include/") and name.endswith(".h") for name in files):
         raise ValueError("Native TDLib headers are missing")
+    proof = json.loads((native / "link-validation.json").read_text())
+    expected_members = [name.split()[0] for name in json.loads(
+        (ROOT / "dependencies/tdlib-vendor.json").read_text())["linkClosure"]
+        if name.split()[0].endswith(".a")]
+    actual_members = [member["name"] for member in proof["members"]]
+    if (proof["schema"] != 1 or proof["platform"] != "IOS" or proof["deployment"] != "26.0"
+            or proof["archiveSha256"] != files["lib/libtdjson.a"]
+            or sorted(actual_members) != sorted(expected_members)
+            or len(set(actual_members)) != len(actual_members)
+            or any(member["architecture"] != "arm64" for member in proof["members"])):
+        raise ValueError("Native device-link evidence does not match the archive/closure")
+    for name in ("licenses/LICENSE-TDLib.txt", "licenses/LICENSE-OpenSSL.txt", "licenses/LICENSE-TDSQLite.txt"):
+        if name not in files or not (native / name).stat().st_size:
+            raise ValueError("Native dependency license is missing")
+        if files[name] != file_digest(ROOT / name):
+            raise ValueError("Native dependency license differs from the pinned text")
     return files
 
 
@@ -122,5 +147,5 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except (ValueError, OSError, subprocess.CalledProcessError) as error:
+    except (ValueError, KeyError, TypeError, OSError, subprocess.CalledProcessError) as error:
         raise SystemExit(f"Build cache operation failed: {error}")
