@@ -68,8 +68,9 @@ Python AST syntax, plist/project lint, version agreement, documentation targets 
 diff whitespace checks passed. The final source publisher was read-only inspected;
 its version validation uses the incoming manifest rather than hard-coded 1.0.
 
-Pending release 1.1 has no cloud build or published IPA yet. Current SideStore
-version remains 1.0 build 8. Next authorized integrated device build must verify
+At source handoff, pending release 1.1 had no cloud build or published IPA; SideStore
+still offered 1.0 build 8. The subsequent authorized publication is recorded below.
+The next integrated device session must verify
 first/repeated Telegram setup reaches its real auth step, preserves its database,
 and shows a usable error if local storage genuinely fails. Then verify normal
 phone/code/2FA and owned-private-channel mapping with the user's credentials entered
@@ -91,3 +92,19 @@ observations. Do not assume API credential validity from this local-storage fail
 Firecrawl CLI unavailable; official web documentation and the pinned upstream raw
 document were retrieved instead. No new dependency/revision. Claimed paths release
 after commit/push; Builder holds. Untracked scratch/ remains untouched.
+
+## Authorized build and publication — 2026-10-09 IST
+
+User explicitly requested build and publish. Manual build
+[37832459359](https://github.com/tinyredphoenix/Cloudified/actions/runs/37832459359)
+passed from `e20c25c741d4bb98b982942b9cb388e1baded938`, preflight 6s and macOS
+build job 2m22s. Exact native cache hit/verification passed. Compiler cache missed
+after the project/version contract changed, then saved successfully. Final cache
+usage was 211,468,946 bytes across five caches, within the configured 10 GB limit.
+Public standard runners and existing manual workflow were used.
+
+App publisher 37832804683 and source publisher 37832844600 published version 1.1
+build 9. The public raw source entry matches the run manifest: 17,414,506-byte IPA,
+SHA-256 `eb9e98ff6dc3bdb9f8482f85c89fab514da8a15eec84e7a8c0a42d6f183e4861`.
+Exact release URLs and install guidance are in [distribution](DISTRIBUTION.md).
+No device/account/service execution occurred; the acceptance checks above remain.

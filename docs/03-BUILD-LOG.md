@@ -1262,3 +1262,25 @@ Catalyst typecheck and optimized IR, Python syntax, version agreement, plist/pro
 docs and whitespace checks pass. No app/device/account test or cloud dispatch.
 Published SideStore remains 1.0 build 8 until a new authorized build. Claimed paths
 release after commit/push; Builder holds and scratch/ remains untouched.
+
+## 2026-10-09 — authorized 1.1 build and publication
+
+User explicitly requested build and publish. Architect claims this log,
+docs/P8-LINKING-FIX.md and docs/DISTRIBUTION.md for resulting build/publication
+evidence. No active Builder writer. Manual run 37832459359 dispatched from
+`e20c25c`; public repository confirmed and cache usage 163,235,882 bytes against
+configured 10 GB. Standard pinned workflow/runners unchanged. Completion evidence
+follows below; device/account behavior is not established by build/publication.
+Untracked scratch/ remains untouched.
+
+Run [37832459359](https://github.com/tinyredphoenix/Cloudified/actions/runs/37832459359)
+passed: preflight 6s, macOS job 2m22s, version 1.1 build 9 from exact source
+`e20c25c741d4bb98b982942b9cb388e1baded938`. Exact native cache hit verified;
+compiler cache missed after project/version changes and saved successfully.
+Final cache usage 211,468,946 bytes across five caches / configured 10 GB.
+App publisher 37832804683 and source publisher 37832844600 published the permanent
+unsigned IPA. Public raw SideStore source reports 1.1 (9), matching manifest size
+17,414,506 bytes and SHA-256
+`eb9e98ff6dc3bdb9f8482f85c89fab514da8a15eec84e7a8c0a42d6f183e4861`.
+See DISTRIBUTION.md for URLs; device linking/upload acceptance remains pending.
+Claimed documentation paths release after evidence commit/push; Builder holds.

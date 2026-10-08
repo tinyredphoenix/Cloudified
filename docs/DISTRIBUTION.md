@@ -1,6 +1,6 @@
 # Cloudified SideStore distribution
 
-The currently published app's short version is **1.0**. Each manual GitHub Actions
+The currently published app's short version is **1.1**. Each manual GitHub Actions
 build supplies its run number as `CFBundleVersion` to distinguish build attempts.
 This is version identity, not an assertion of device or service
 acceptance. The first native/Xcode IPA build succeeded in run 37778211603;
@@ -17,8 +17,9 @@ Before the next release build, update `CFBundleShortVersionString` and the proje
 generator's version consistently. The actual packaged IPA, Settings and SideStore
 metadata must show the same visible version; CI build number remains separate.
 Retries of a failed build retain the pending release version. Never change source
-metadata to relabel an already published IPA. Current version 1.0 build 8 stays as
-published; the next bug-fix release is 1.1, or 2.0 if it introduces features.
+metadata to relabel an already published IPA. Version 1.0 build 8 stays as published.
+Current version is 1.1 build 9; the next bug-fix release is 1.2, or 2.0 if it
+introduces features.
 
 ## Source and publication
 
@@ -69,7 +70,7 @@ The installed icon and source behavior still need a SideStore/iPhone check.
 Build compilation and release checksum do not establish account uploads,
 original quality, background reliability or reinstall deduplication.
 
-## Latest published build — P8 corrections
+## Previous published build — P8 corrections
 
 Version **1.0 build 8** is published after the P8 source review and compiler
 recovery. Manual build [37828111234](https://github.com/tinyredphoenix/Cloudified/actions/runs/37828111234)
@@ -86,3 +87,22 @@ Build 7 failed in compiler IR generation and added no installable version. Build
 fixes that failure; [recovery evidence](P8-BUILD-RECOVERY.md) distinguishes local
 compiler checks from the successful iPhone build. Real-device/service acceptance
 remains pending; use P8-FIRST-RUN.md and the P7 device/result documents to record it.
+
+## Latest published build — 1.1 linking corrections
+
+Version **1.1 build 9** passed manual build
+[37832459359](https://github.com/tinyredphoenix/Cloudified/actions/runs/37832459359)
+from exact source `e20c25c741d4bb98b982942b9cb388e1baded938` (macOS job 2m22s).
+The [app publisher](https://github.com/tinyredphoenix/Cloudified/actions/runs/37832804683)
+and [source publisher](https://github.com/tinyredphoenix/Cloudified-Source/actions/runs/37832844600)
+published the [permanent untested prerelease](https://github.com/tinyredphoenix/Cloudified-Source/releases/tag/ci-run-37832459359-untested).
+The unsigned IPA is 17,414,506 bytes, SHA-256
+`eb9e98ff6dc3bdb9f8482f85c89fab514da8a15eec84e7a8c0a42d6f183e4861`.
+The unauthenticated public raw source serves 1.1 build 9 with matching size/checksum.
+Version verification uses the actual built source SHA rather than a fixed 1.0 gate.
+
+Refresh Cloudified's existing SideStore source and update. Confirm Settings shows
+**1.1 (9)**, then retry Telegram linking. The existing-folder correction and clearer
+errors are compiled; actual authentication/channel linking still need device evidence.
+Google's current session/device behavior is explained before sign-in; its auth
+protocol is unchanged. See [linking correction](P8-LINKING-FIX.md).
