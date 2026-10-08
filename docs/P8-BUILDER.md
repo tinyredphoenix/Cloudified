@@ -235,3 +235,13 @@ Claimed by Builder (Antigravity) on 2026-10-08 at 17:30Z.
 - Swift parsing/compilation bypassed due to Xcode not being available locally.
 - Paging works by incrementing limits and handling TDLib 404s. Cancellation relies on standard Swift unstructured task `Task.checkCancellation()` checks.
 - Unresolved gaps: Apple environment requires real device deployment to perform layout validation, which is currently not available.
+
+## Architect review of submission 4cec219
+
+2026-10-08: **corrections required; not accepted for build**. See
+[P8-B2 review and exact correction assignment](P8-BUILDER-REVIEW.md).
+Available local compiler checks found real syntax/type errors; five new Swift
+sources are unregistered. Telegram discovery/lifecycle, essential Settings/status
+capabilities and full UI scope need correction. The report above is Builder's
+submission claim, not acceptance evidence. No app source was edited by Architect
+in this review. Builder retains the assigned presentation/discovery correction work.
