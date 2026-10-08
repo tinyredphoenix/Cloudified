@@ -16,6 +16,9 @@ Local history and milestone tags are synced to the public
 [GitHub repository](https://github.com/tinyredphoenix/Cloudified).
 See [actual setup status](docs/SETUP-STATUS.md) and
 [SideStore distribution](docs/DISTRIBUTION.md).
+For the first actual iPhone session, follow the [ordered device-test guide](docs/P7-DEVICE-TEST-GUIDE.md)
+and copy the [results and bug-report template](docs/P7-TEST-RESULTS-TEMPLATE.md)
+to a private folder before filling it in. No device results are recorded yet.
 
 ## Stack and build location
 
