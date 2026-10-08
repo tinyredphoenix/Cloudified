@@ -31,6 +31,8 @@ public enum FailureStatusFilter: String, CaseIterable, Identifiable, Sendable {
 /// Detailed record representing an asset that is failed, waiting, or pending.
 public struct NotUploadedItem: Identifiable, Equatable, Sendable {
     public let id: String
+    public let jobID: UUID?
+    public let localIdentifier: String
     public let filename: String
     public let captureDate: Date
     public let mediaType: String
@@ -50,6 +52,8 @@ public struct NotUploadedItem: Identifiable, Equatable, Sendable {
 
     public init(
         id: String,
+        jobID: UUID? = nil,
+        localIdentifier: String = "",
         filename: String,
         captureDate: Date,
         mediaType: String,
@@ -68,6 +72,8 @@ public struct NotUploadedItem: Identifiable, Equatable, Sendable {
         nextRetryDate: Date? = nil
     ) {
         self.id = id
+        self.jobID = jobID
+        self.localIdentifier = localIdentifier
         self.filename = filename
         self.captureDate = captureDate
         self.mediaType = mediaType
@@ -85,6 +91,7 @@ public struct NotUploadedItem: Identifiable, Equatable, Sendable {
         self.missingObligations = missingObligations
         self.nextRetryDate = nextRetryDate
     }
+
 
     public var attemptText: String {
         return "\(attemptCount)/\(maxAttempts)"

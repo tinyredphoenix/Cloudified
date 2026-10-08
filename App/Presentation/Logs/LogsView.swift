@@ -2,7 +2,9 @@ import SwiftUI
 
 public struct LogsView: View {
     @ObservedObject public var environment: AppEnvironment
-    @State private var showingExportAlert = false
+    @State private var exportedFileURL: URL? = nil
+    @State private var isExporting = false
+    @State private var exportErrorMessage: String? = nil
 
     public init(environment: AppEnvironment) {
         self.environment = environment
@@ -32,23 +34,56 @@ public struct LogsView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        showingExportAlert = true
+                        Task {
+                            isExporting = true
+                            defer { isExporting = false }
+                            do {
+                                let url = try await environment.exportRedactedLogs()
+                                exportedFileURL = url
+                            } catch {
+                                exportErrorMessage = error.localizedDescription
+                            }
+                        }
                     } label: {
-                        Label("Export", systemImage: "square.and.arrow.up")
+                        if isExporting {
+                            ProgressView()
+                        } else {
+                            Label("Export", systemImage: "square.and.arrow.up")
+                        }
+                    }
+                    .disabled(isExporting)
+                }
+            }
+            #if os(iOS)
+            .sheet(isPresented: Binding(
+                get: { exportedFileURL != nil },
+                set: { if !$0 { cleanupExportFile() } }
+            )) {
+                if let url = exportedFileURL {
+                    ShareSheet(activityItems: [url]) {
+                        cleanupExportFile()
                     }
                 }
             }
-            .alert("Export Redacted Logs", isPresented: $showingExportAlert) {
+            #endif
+            .alert("Export Failed", isPresented: Binding(
+                get: { exportErrorMessage != nil },
+                set: { if !$0 { exportErrorMessage = nil } }
+            )) {
                 Button("OK", role: .cancel) {}
             } message: {
-                if environment.logsState.entries.isEmpty {
-                    Text("No logs are currently recorded to export.")
-                } else {
-                    Text("Redacted diagnostic log export with \(environment.logsState.entries.count) events is ready for inspection.")
-                }
+                Text(exportErrorMessage ?? "Could not export diagnostic logs.")
             }
         }
     }
+
+    private func cleanupExportFile() {
+        if let url = exportedFileURL {
+            try? FileManager.default.removeItem(at: url)
+            exportedFileURL = nil
+        }
+    }
+
 
     private var filtersHeader: some View {
         VStack(spacing: 8) {
@@ -163,3 +198,22 @@ public struct LogRow: View {
         }
     }
 }
+
+#if os(iOS)
+import UIKit
+
+struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    let onDismiss: () -> Void
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        controller.completionWithItemsHandler = { _, _, _, _ in
+            onDismiss()
+        }
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+#endif

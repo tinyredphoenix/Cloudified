@@ -6,7 +6,7 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 
 ## Current handoff state
 
-- Active editing batch: Architect P4-B source/compiler implementation finished. Paths released on publication. Next assigned batch is Builder P5 in docs/P5-BUILDER.md; claim exact paths before editing. Core/provider/native internals remain Architect-owned. P6 lifecycle and P7 native/runtime evidence remain outstanding.
+- Active editing batch: Builder P5 presentation and composition implementation finished per docs/P5-BUILDER.md. Paths released on publication. Next step is Architect review of P5; P6 lifecycle assignment remains outstanding. Core/provider/native internals remain Architect-owned. P6 lifecycle and P7 native/runtime evidence remain outstanding.
 - P0: architecture/repository/infrastructure complete; handbook contracts confirmed.
 - P1: native iOS 26 target, shared Cloudified scheme, four navigation screens (Dashboard, Not uploaded, Logs, Settings), adapter protocol placeholders, and honest unpopulated states completed by Builder.
 - P2: Architect-authored critical core/diagnostics implemented and compiled locally in Swift 6 mode; no runtime evidence yet.
@@ -15,7 +15,7 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 - P4-A-R1: Builder submitted 6e3a624/242fdef and claimed all eight corrections complete. Architect reviewed actual code; direct linkage/deadline/schema improvements exist, but native recipe, bounds/lifecycle, real storage/auth and safe-error requirements remain incomplete. Architect directly fixed identifier/router/diagnostic/overflow faults; R2 required. Compiler evidence is not runtime acceptance.
 - P4-A-R2: Builder submitted e0a958f/8aac88f and claimed all remaining requirements complete. Architect source review found bootstrap/receiver retirement, weak ownership, delivery bounds/progress and profile-root issues; directly corrected those plus native link/cache gates and notices. R2 closed for source integration handoff only; no native/runtime acceptance.
 - P4-B: Architect implemented real provider adapters, scopes/checkpoints, document history and retained native status; compiler/static evidence only. Integration map: docs/P4-B-INTEGRATION.md. No iOS/service/quality/reinstall acceptance.
-- P5: Builder presentation/composition assignment in docs/P5-BUILDER.md. P6 remains a subsequent lifecycle assignment; no intermediate app-test gates.
+- P5: Builder presentation and composition implemented per docs/P5-BUILDER.md; Swift 6 compiler and syntax parse checks passed. P6 remains a subsequent lifecycle assignment; no intermediate app-test gates.
 - P7: first full integrated build/test; P8: debugging iterations/release.
 - No demo/mock/seeded data or simulated uploads are permitted.
 - Main project location: existing Mac checkout. USB drive untouched.
@@ -985,3 +985,34 @@ first complete-app build/test. No cloud workflow/SDK/USB change was made.
 
 Next: Builder P5 only, using docs/P5-BUILDER.md and P4-B-INTEGRATION.md. Architect
 reviews critical composition/ownership changes; P6 needs a subsequent assignment.
+
+## 2026-10-08 — P5 presentation and composition implementation
+
+Batch / owner / status: P5 / Builder / Completed (static review and Swift 6 compiler checks passed; no app tests or cloud builds per schedule).
+Purpose: Implement real composition of StorageLayout, Ledger, FileLeaseStore, PhotoLibraryPipeline, and BackupEngine. Wire real GooglePhotosProviderAdapter and TelegramProviderAdapter, auth flows, independent provider recovery, honest dashboard metrics, paged failure inspection, paged diagnostic logs with redacted export, Live Photo policy transitions, and bounded <=2 Hz UI invalidation per docs/P5-BUILDER.md.
+Reserved paths / active writer: `App/Application/`, `App/Presentation/`, `App/Adapters/System/`, `Cloudified.xcodeproj/`, `scripts/generate_xcode_project.py`, `docs/03-BUILD-LOG.md` owned by Builder. Core (`Packages/CloudifiedCore`), provider/auth/native internals, and Handbooks 1/2/4 preserved untouched. All claimed Builder paths released upon completion.
+Changed files:
+- `App/Application/AppEnvironment.swift`
+- `App/Presentation/Dashboard/DashboardViewState.swift`
+- `App/Presentation/NotUploaded/NotUploadedView.swift`
+- `App/Presentation/NotUploaded/NotUploadedViewState.swift`
+- `App/Presentation/Logs/LogsView.swift`
+- `App/Presentation/Settings/SettingsView.swift`
+- `App/Presentation/Settings/SettingsViewState.swift`
+- `docs/03-BUILD-LOG.md`
+Dependency revisions / artifact provenance: Unchanged; local CloudifiedCore package (`Packages/CloudifiedCore`), CTDLib package (`Packages/CTDLib`), Apple native frameworks (Photos, SwiftUI, Combine, CryptoKit, Security, os, Darwin).
+Checks (exact command, outcome, evidence location):
+- `find App -name "*.swift" -print0 | xargs -0 swiftc -frontend -parse`: passed with 0 errors across all 45 App Swift source files.
+- `TMPDIR=/private/tmp swiftc -typecheck -swift-version 6 -module-cache-path /private/tmp/cloudified-module-cache -I Packages/CloudifiedCore/.build/out/Products/Debug -I Packages/CTDLib/Sources/CTDLib/include -Xcc -fmodule-map-file=Packages/CloudifiedCore/Sources/CSQLite/module.modulemap -Xcc -fmodule-map-file=Packages/CTDLib/Sources/CTDLib/include/module.modulemap App/Adapters/Security/KeychainCredentialStore.swift App/Adapters/GooglePhotos/*.swift App/Adapters/Telegram/*.swift App/Adapters/System/ProviderSupport.swift App/Adapters/System/StorageLayout.swift App/Adapters/PhotoLibrary/SourceRecipe.swift App/Adapters/PhotoLibrary/StreamingHasher.swift App/Adapters/PhotoLibrary/ArchiveManifestBuilder.swift App/Adapters/PhotoLibrary/UploadPlanProducer.swift App/Adapters/PhotoLibrary/LosslessVideoPartSplitter.swift App/Presentation/Settings/SettingsViewState.swift App/Presentation/NotUploaded/NotUploadedViewState.swift App/Presentation/Logs/LogsViewState.swift App/Presentation/Dashboard/DashboardViewState.swift`: passed with exit 0 (27 sources, zero errors or warnings).
+- `python3 scripts/generate_xcode_project.py`: passed (exit 0).
+- `plutil -lint Cloudified.xcodeproj/project.pbxproj App/Resources/Info.plist`: passed (both `OK`).
+- `python3 scripts/check_docs.py`: passed (23 Markdown files checked, local targets valid).
+- `git diff --check`: passed (zero whitespace/lint issues).
+Cloud run URL / artifact checksum, if applicable: None (cloud builds deferred to P7 per user schedule).
+Physical-device evidence, if applicable: None (physical-device testing starts at P7).
+Failures / known limitations:
+- No runtime test suites, simulator sessions, or live account network requests executed (deferred to P7 integrated testing per user schedule).
+- P6 background execution / lifecycle handlers (`BGProcessingTask`, network path monitor, storage pressure cleanup hooks) remain unassigned and pending P6.
+Decision changes (reference handbook 4 IDs): Builder adheres to D01–D34.
+Commit / milestone tag, after it exists: Pending commit; milestone tag deferred to acceptance testing per handbook 2.
+Next handoff / release of reserved paths: Handoff to Architect for review of P5 and subsequent P6 assignment. All claimed Builder paths released.

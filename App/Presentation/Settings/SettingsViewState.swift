@@ -23,6 +23,24 @@ public enum LivePhotoFallbackOption: String, CaseIterable, Identifiable, Sendabl
     }
 }
 
+/// Current step in Telegram TDLib authentication.
+public enum TelegramAuthStep: String, Equatable, Sendable {
+    case unconfigured = "API Credentials Required"
+    case enterPhoneNumber = "Phone Number Required"
+    case enterCode = "Verification Code Required"
+    case enterPassword = "2FA Password Required"
+    case enterEmail = "Email Address Required"
+    case enterEmailCode = "Email Code Required"
+    case otherDeviceConfirmation = "Confirm on Other Device"
+    case registration = "Account Registration Required"
+    case premiumPurchase = "Telegram Premium Required"
+    case readyForChannel = "Ready (Map Channel)"
+    case connected = "Connected"
+    case closing = "Closing"
+    case closed = "Closed"
+    case error = "Error"
+}
+
 /// State representation for the Settings screen.
 public struct SettingsViewState: Equatable, Sendable {
     public var isGoogleEnabled: Bool
@@ -32,10 +50,18 @@ public struct SettingsViewState: Equatable, Sendable {
 
     public var isGoogleConnected: Bool
     public var googleAccountEmail: String?
+    public var isConnectingGoogle: Bool
+    public var googleAuthErrorMessage: String?
+    public var isSettlingGoogle: Bool
 
     public var isTelegramConnected: Bool
     public var telegramAccountName: String?
     public var telegramChannelName: String?
+    public var telegramChatID: Int64?
+    public var telegramAuthStep: TelegramAuthStep
+    public var isConnectingTelegram: Bool
+    public var telegramAuthErrorMessage: String?
+    public var isSettlingTelegram: Bool
 
     public init(
         isGoogleEnabled: Bool = true,
@@ -44,9 +70,17 @@ public struct SettingsViewState: Equatable, Sendable {
         livePhotoFallback: LivePhotoFallbackOption = .nativePair,
         isGoogleConnected: Bool = false,
         googleAccountEmail: String? = nil,
+        isConnectingGoogle: Bool = false,
+        googleAuthErrorMessage: String? = nil,
+        isSettlingGoogle: Bool = false,
         isTelegramConnected: Bool = false,
         telegramAccountName: String? = nil,
-        telegramChannelName: String? = nil
+        telegramChannelName: String? = nil,
+        telegramChatID: Int64? = nil,
+        telegramAuthStep: TelegramAuthStep = .unconfigured,
+        isConnectingTelegram: Bool = false,
+        telegramAuthErrorMessage: String? = nil,
+        isSettlingTelegram: Bool = false
     ) {
         self.isGoogleEnabled = isGoogleEnabled
         self.isTelegramEnabled = isTelegramEnabled
@@ -54,8 +88,16 @@ public struct SettingsViewState: Equatable, Sendable {
         self.livePhotoFallback = livePhotoFallback
         self.isGoogleConnected = isGoogleConnected
         self.googleAccountEmail = googleAccountEmail
+        self.isConnectingGoogle = isConnectingGoogle
+        self.googleAuthErrorMessage = googleAuthErrorMessage
+        self.isSettlingGoogle = isSettlingGoogle
         self.isTelegramConnected = isTelegramConnected
         self.telegramAccountName = telegramAccountName
         self.telegramChannelName = telegramChannelName
+        self.telegramChatID = telegramChatID
+        self.telegramAuthStep = telegramAuthStep
+        self.isConnectingTelegram = isConnectingTelegram
+        self.telegramAuthErrorMessage = telegramAuthErrorMessage
+        self.isSettlingTelegram = isSettlingTelegram
     }
 }

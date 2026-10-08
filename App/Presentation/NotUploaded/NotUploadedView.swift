@@ -1,4 +1,13 @@
 import SwiftUI
+import Photos
+import CloudifiedCore
+#if canImport(UIKit)
+import UIKit
+public typealias PlatformImage = UIImage
+#elseif canImport(AppKit)
+import AppKit
+public typealias PlatformImage = NSImage
+#endif
 
 public struct NotUploadedView: View {
     @ObservedObject public var environment: AppEnvironment
@@ -97,8 +106,8 @@ public struct NotUploadedRow: View {
     public var body: some View {
         Button(action: onTap) {
             HStack(alignment: .top, spacing: 12) {
-                // Error-identification thumbnail placeholder
-                thumbnailPlaceholder
+                // Small error-identification thumbnail (<=100 cached / 16 MiB, cancellable)
+                NotUploadedThumbnailView(localIdentifier: item.localIdentifier, mediaType: item.mediaType)
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
@@ -168,18 +177,6 @@ public struct NotUploadedRow: View {
         .buttonStyle(.plain)
     }
 
-    private var thumbnailPlaceholder: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color(.tertiarySystemFill))
-                .frame(width: 48, height: 48)
-
-            Image(systemName: item.mediaType.localizedCaseInsensitiveContains("Video") ? "video" : "photo")
-                .foregroundColor(.secondary)
-                .font(.caption)
-        }
-    }
-
     private func formatDuration(_ seconds: TimeInterval) -> String {
         let formatter = DateComponentsFormatter()
         formatter.allowedUnits = [.minute, .second]
@@ -188,6 +185,100 @@ public struct NotUploadedRow: View {
         return formatter.string(from: seconds) ?? ""
     }
 }
+
+/// Small cancellable thumbnail view bounded by a <=100 item / 16 MiB cache.
+@MainActor
+final class RowThumbnailLoader: ObservableObject {
+    @Published var image: PlatformImage? = nil
+    private var requestID: PHImageRequestID? = nil
+
+    private static let cache: NSCache<NSString, PlatformImage> = {
+        let c = NSCache<NSString, PlatformImage>()
+        c.countLimit = 100
+        c.totalCostLimit = 16 * 1024 * 1024 // 16 MiB
+        return c
+    }()
+
+    func load(localIdentifier: String) {
+        guard !localIdentifier.isEmpty else { return }
+        if let cached = Self.cache.object(forKey: localIdentifier as NSString) {
+            self.image = cached
+            return
+        }
+        let fetch = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil)
+        guard let asset = fetch.firstObject else { return }
+
+        let options = PHImageRequestOptions()
+        options.isNetworkAccessAllowed = false // Local access only; no cloud preview fetch
+        options.deliveryMode = .fastFormat
+        options.resizeMode = .fast
+        options.isSynchronous = false
+
+        requestID = PHImageManager.default().requestImage(
+            for: asset,
+            targetSize: CGSize(width: 96, height: 96),
+            contentMode: .aspectFill,
+            options: options
+        ) { [weak self] img, _ in
+            guard let img else { return }
+            let bytes = Int(img.size.width * img.size.height * 4)
+            Self.cache.setObject(img, forKey: localIdentifier as NSString, cost: bytes)
+            Task { @MainActor in
+                self?.image = img
+            }
+        }
+    }
+
+    func cancel() {
+        if let req = requestID {
+            PHImageManager.default().cancelImageRequest(req)
+            requestID = nil
+        }
+    }
+}
+
+struct NotUploadedThumbnailView: View {
+    let localIdentifier: String
+    let mediaType: String
+    @StateObject private var loader = RowThumbnailLoader()
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color(.tertiarySystemFill))
+                .frame(width: 48, height: 48)
+
+            if let img = loader.image {
+                #if canImport(UIKit)
+                Image(uiImage: img)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 48, height: 48)
+                    .clipped()
+                    .cornerRadius(6)
+                #elseif canImport(AppKit)
+                Image(nsImage: img)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 48, height: 48)
+                    .clipped()
+                    .cornerRadius(6)
+                #endif
+            } else {
+                Image(systemName: mediaType.localizedCaseInsensitiveContains("Video") ? "video" : "photo")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+            }
+        }
+        .onAppear {
+            loader.load(localIdentifier: localIdentifier)
+        }
+        .onDisappear {
+            loader.cancel()
+        }
+    }
+}
+
 
 /// Detailed inspector sheet for an individual failed asset.
 public struct NotUploadedDetailSheet: View {
@@ -229,7 +320,9 @@ public struct NotUploadedDetailSheet: View {
                 }
             }
             .navigationTitle("Failure Details")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
