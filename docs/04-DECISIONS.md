@@ -198,3 +198,14 @@ space independently of the staging oversized rule. HTTP response bounds and join
 utility hashing keep large media off actor-blocking/full-Data paths. Background
 URLSession injection remains blocked until P6 inventories OS readers properly;
 foreground/compiler evidence is not background acceptance. See P4-B-INTEGRATION.
+
+## D37 — review orchestration before lifecycle integration
+
+2026-10-08. P5 portable-source compilation excluded the newly written coordinator
+and SwiftUI; parsing did not prove type safety or recovery/ownership behavior.
+Architect separated coordinator imports from SwiftUI, corrected actual type/API
+faults, retained cancelled-task ownership, restored persisted scan identity, and
+added bounded recovery/attempt-history queries without a second queue/database.
+The remaining recovery, credential transition, source admission and presentation
+gaps require explicit Builder P5-R1 before P6. Wi-Fi enforcement remains honestly
+unavailable until P6. Compiler/source review is not full-app or service acceptance.

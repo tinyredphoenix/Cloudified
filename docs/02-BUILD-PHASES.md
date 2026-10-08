@@ -12,25 +12,18 @@ simulator/device tests or cloud IPA builds. P7 is the first complete app build/t
 
 ## Current handoff
 
-P0, P1 shell and P2 critical core implementation are complete; P2 has local Swift 6
-compiler/static evidence only. Architect reviewed P3-R2 and directly completed
-critical source/identity/progress corrections. P3 is ready for the next implementation
-handoff; all runtime/device evidence remains P7. **Next batch is Architect P4-B**,
-specified in [critical provider integration](P4-B.md). R2 was reviewed and directly
-completed by Architect for source integration; Builder has no new batch yet.
-Architect owns upload/acceptance/receipt/recovery integration and P2 core.
-Other phases remain planned and become executable after
-their prerequisites pass and the architect assigns the next numbered batch.
-Do not interpret the handbook as permission to implement all phases at once.
+P0/P1 shell and P2 critical Core have implementation/static evidence. Architect
+completed P3 corrections and P4-B provider source integration. Builder submitted P5;
+[Architect review](P5-REVIEW.md) found blocking coordinator/recovery/presentation
+faults. Direct compiler/safety corrections and query APIs are implemented. **Next
+batch is [Builder P5-R1](P5-R1.md)**; P5 is not accepted and P6 is not assigned.
+Compiler checks do not establish service/device/native acceptance; all runtime
+verification remains P7.
 
-Before editing, inspect git status and handbook 3's active-batch/ownership record.
-Claim the assigned batch there. Do not reset another AI's work or edit its reserved
-files. The two AIs share one checkout/branch; no simultaneous Git mutation.
-
-Current handoff: Architect P4-B provider source integration is recorded in
-[P4-B-INTEGRATION](P4-B-INTEGRATION.md). Builder is assigned
-[P5 presentation/composition](P5-BUILDER.md) only. P6 remains separately assigned;
-no service/iOS/runtime acceptance is implied by compiler checks.
+Before editing, inspect Git status and handbook 3 ownership. Claim exact assigned
+paths; do not edit another active writer's paths or mutate Git concurrently. Core/
+provider/native internals remain Architect-owned. The phase table is planning,
+not authorization to implement subsequent batches.
 
 ## Implementation phases, followed by the first complete app test
 

@@ -34,12 +34,11 @@ existing-file cleanup is part of this setup. See [build setup](docs/BUILD-SETUP.
 
 Builder completed P1; Architect directly implemented P2 critical core.
 Builder's P3-R2 implementation was reviewed; Architect completed critical source corrections.
-Architect reviewed Builder P4-A-R2 and directly completed remaining foundation
-corrections. The foundation is ready for source integration; native linking and
-runtime behavior remain unverified. Architect implemented [P4-B provider integration](docs/P4-B-INTEGRATION.md), with
-source/compiler evidence only. Next is [Builder P5 presentation/composition](docs/P5-BUILDER.md);
-P6 lifecycle work and P7 first complete-app verification still remain. [R2 history](docs/P4-R2.md) records
-its correction scope and review status.
+Architect completed [P4-B provider integration](docs/P4-B-INTEGRATION.md) with
+source/compiler evidence only. Builder submitted P5; [Architect review](docs/P5-REVIEW.md)
+found recovery, command ownership and presentation gaps. Focused compiler/safety
+corrections are implemented; **next is [Builder P5-R1](docs/P5-R1.md)**.
+P6 is not assigned. P7 remains the first full iOS/native/app/device verification.
 P3 has source/compiler evidence only; see [review history](docs/P3-REVIEW.md), handbook 2 and
 the [core integration contract](docs/CORE-INTEGRATION.md).
 Application phases are assigned in batches; the handbook is not authorization to
