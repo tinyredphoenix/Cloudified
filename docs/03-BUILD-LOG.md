@@ -1171,9 +1171,10 @@ Checks (exact command, outcome, evidence location):
 - Verified public visibility: `tinyredphoenix/Cloudified` is public; public standard runners (`ubuntu-24.04` and `macos-26`) are free and consume 0 private minutes.
 - Verified free cache allowance: 0 caches present (0 of 10 GB repository cache allowance).
 - Local preflight static check suite: `python3 scripts/check_docs.py` (passed, 26 files), `plutil -lint project.pbxproj App/Resources/Info.plist` (both OK), `git diff --check` (passed), `swiftc -frontend -parse` on all 58 app Swift files (passed), 48-source portable Swift 6 typecheck (passed, exit 0).
-Cloud run URL / artifact checksum, if applicable: Pending manual dispatch.
+- Run 1 (37767053258): preflight passed (5s); build failed at step `Verify or assemble native dependencies` (`ninja: error: unknown target 'tdjson_static'`). Diagnosis: `-DTDUTILS_USE_EXTERNAL_DEPENDENCIES=OFF` in `scripts/assemble_tdlib.sh` triggered TDLib `CMakeLists.txt:213` early return (`Option TDUTILS_MIME_TYPE and TDUTILS_USE_EXTERNAL_DEPENDENCIES must not be disabled: stop TDLib building`). Fixed by setting `TDUTILS_USE_EXTERNAL_DEPENDENCIES=ON` and adding `-DCMAKE_DISABLE_FIND_PACKAGE_Crc32c=TRUE`.
+Cloud run URL / artifact checksum, if applicable: Run 1: https://github.com/tinyredphoenix/Cloudified/actions/runs/37767053258 (failed in native assembly). Run 2: pending dispatch.
 Physical-device evidence, if applicable: None (physical-device testing follows build).
-Failures / known limitations: Work in progress.
+Failures / known limitations: Run 1 native assembly error resolved in script configuration; re-dispatching.
 Decision changes (reference handbook 4 IDs): Builder adheres to D01–D38.
 Commit / milestone tag, after it exists: Pending completion.
 Next handoff / release of reserved paths: Active editing by Builder.
