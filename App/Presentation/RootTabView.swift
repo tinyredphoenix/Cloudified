@@ -17,21 +17,22 @@ public struct RootTabView: View {
 
             NotUploadedView(environment: environment)
                 .tabItem {
-                    Label("Not Uploaded", systemImage: "exclamationmark.triangle")
+                    Label("Issues", systemImage: "exclamationmark.triangle.fill")
                 }
                 .tag(AppTab.notUploaded)
 
             LogsView(environment: environment)
                 .tabItem {
-                    Label("Logs", systemImage: "doc.text")
+                    Label("Logs", systemImage: "doc.text.fill")
                 }
                 .tag(AppTab.logs)
 
             SettingsView(environment: environment)
                 .tabItem {
-                    Label("Settings", systemImage: "gearshape")
+                    Label("Settings", systemImage: "gearshape.fill")
                 }
                 .tag(AppTab.settings)
         }
+        .tint(.blue)
     }
 }
