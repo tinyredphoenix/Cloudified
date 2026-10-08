@@ -36,6 +36,7 @@ public final class AppEnvironment: ObservableObject {
     var telegramObservers: [Task<Void, Never>] = []
     var bootstrapTask: Task<Void, Never>?
     var backupExecutionTask: Task<Void, Never>?
+    var libraryAccessTask: Task<Void, Never>?
     var refreshTask: Task<Void, Never>?
     var policyTask: Task<Void, Never>?
     var retryTask: Task<Void, Never>?
@@ -56,6 +57,7 @@ public final class AppEnvironment: ObservableObject {
     var isScanning = false
     var planningProvider: Provider?
     var backupRequested = false
+    var resumeAfterExpiration = false
     var needsWake = false
     var retryDeadlines: [Provider: Date] = [:]
     var needsFreshScan = false
@@ -141,7 +143,7 @@ public final class AppEnvironment: ObservableObject {
     }
     deinit {
         for task in observers + telegramObservers { task.cancel() }
-        bootstrapTask?.cancel(); backupExecutionTask?.cancel(); refreshTask?.cancel()
+        bootstrapTask?.cancel(); backupExecutionTask?.cancel(); libraryAccessTask?.cancel(); refreshTask?.cancel()
         policyTask?.cancel(); retryTask?.cancel(); cleanupTask?.cancel(); sourceStatusTask?.cancel()
         for task in recoveryTasks.values { task.cancel() }
         failurePageTask?.cancel(); logPageTask?.cancel(); runPageTask?.cancel()

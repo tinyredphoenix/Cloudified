@@ -3,11 +3,23 @@ import Foundation
 import CloudifiedCore
 
 extension AppEnvironment {
+    func refreshPhotosAccess() {
+        switch PHPhotoLibrary.authorizationStatus(for: .readWrite) {
+        case .authorized: dashboardState.photosAccess = .full
+        case .limited: dashboardState.photosAccess = .limited
+        case .denied: dashboardState.photosAccess = .denied
+        case .restricted: dashboardState.photosAccess = .restricted
+        case .notDetermined: dashboardState.photosAccess = .notDetermined
+        @unknown default: dashboardState.photosAccess = .restricted
+        }
+        dashboardState.permissionScopeDescription = dashboardState.photosAccess.description
+    }
     func recipe(_ asset: AssetIdentity) async throws -> SourceRecipe? {
         guard let data = try await ledger?.sourceRecipe(assetID: asset.id) else { return nil }
         return try SourceRecipe.decode(from: data)
     }
     func performUIRefresh() async {
+        refreshPhotosAccess()
         logsState.fallbackEntries = fallback.snapshot().reversed().map {
             DiagnosticLogEntry(id: $0.id.uuidString, timestamp: $0.timestamp, origin: "System", severity: "error",
                 stage: "Diagnostic persistence fallback (memory only)", message: explain($0.failure), safeErrorCode: $0.failure.description)
@@ -52,14 +64,13 @@ extension AppEnvironment {
                     bytesSent: native.uploadedBytes, totalBytes: native.expectedBytes,
                     componentOrPart: resource.map(componentLabel), attemptNumber: job.attempts > 0 ? job.attempts : nil))
             }
-            dashboardState.canPause = backupRequested && !pausedByUser
-            dashboardState.canResume = !backupRequested && durable.scanned
+            let outstanding = durable.providers.contains { $0.enabled && ($0.remaining ?? 0) > 0 }
+            dashboardState.canPause = backupRequested && !pausedByUser && (backupExecutionTask != nil || !nativeWork.isEmpty || outstanding || retryTask != nil)
+            dashboardState.canResume = !backupRequested && durable.scanned && (pausedByUser || resumeAfterExpiration)
             dashboardState.controlsAvailable = bootstrapComplete && commandProvider == nil && !controlTransition
             dashboardState.currentTransfers = transfers
             dashboardState.accessibleLibraryTotal = durable.libraryTotal
             dashboardState.scanTimestamp = durable.scanStartedAt; dashboardState.savedToBothCount = durable.savedToBoth
-            let auth = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-            dashboardState.permissionScopeDescription = auth == .limited ? "Selected Photos only" : (auth == .authorized ? "Full Photos access" : "Photos access required")
             for provider in Provider.allCases {
                 guard let value = durable.providers.first(where: { $0.provider == provider }) else { continue }
                 let error = value.blockedReason ?? snapshot.laneFailures[provider] ?? providerErrors[provider]
@@ -84,8 +95,8 @@ extension AppEnvironment {
                 if provider == .google { dashboardState.googleStatus = card } else { dashboardState.telegramStatus = card }
             }
             let g = durable.providers.first { $0.provider == .google }, t = durable.providers.first { $0.provider == .telegram }
-            dashboardState.photosSection = mediaSection("Photos", kind: .photo, google: g?.photos, telegram: t?.photos, transfers: transfers)
-            dashboardState.videosSection = mediaSection("Videos", kind: .video, google: g?.videos, telegram: t?.videos, transfers: transfers)
+            dashboardState.photosSection = mediaSection("Photos", total: durable.libraryPhotoTotal, kind: .photo, google: g?.photos, telegram: t?.photos, transfers: transfers)
+            dashboardState.videosSection = mediaSection("Videos", total: durable.libraryVideoTotal, kind: .video, google: g?.videos, telegram: t?.videos, transfers: transfers)
             if isScanning { dashboardState.overallState = .scanning }
             else if snapshot.paused || pausedByUser { dashboardState.overallState = .paused }
             else if let cause = snapshot.systemGate { dashboardState.overallState = .waiting(reason: explain(SafeFailure(.connectivity, domain: .core, cause: cause))) }
@@ -121,10 +132,10 @@ extension AppEnvironment {
         }
         return resource.role == .manifest ? "Archive manifest" : resource.role.rawValue.capitalized
     }
-    func mediaSection(_ title: String, kind: MediaKind, google: MediaCounts?, telegram: MediaCounts?, transfers: [CurrentTransferState]) -> MediaSectionState {
+    func mediaSection(_ title: String, total: Int?, kind: MediaKind, google: MediaCounts?, telegram: MediaCounts?, transfers: [CurrentTransferState]) -> MediaSectionState {
         let active = transfers.filter { $0.mediaType == (kind == .photo ? "Photo" : "Video") }
         return MediaSectionState(title: title, subtitle: kind == .photo ? "Live Photo components remain one photo obligation" : "Original video bytes; no conversion",
-            totalCount: google?.total ?? telegram?.total, googleSaved: google?.confirmed, googleRemaining: google?.remaining,
+            totalCount: total, googleSaved: google?.confirmed, googleRemaining: google?.remaining,
             googleFailed: google?.failed, telegramSaved: telegram?.confirmed, telegramRemaining: telegram?.remaining,
             telegramFailed: telegram?.failed, activeOperation: active.isEmpty ? nil : active.map { "\($0.provider): \($0.activity)" }.joined(separator: " · "),
             byteProgress: active.isEmpty ? nil : active.map { "\($0.provider): \($0.byteProgressText)" }.joined(separator: " · "))

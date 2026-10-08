@@ -1,5 +1,19 @@
 import Foundation
 
+public enum PhotosAccessState: Equatable, Sendable {
+    case notDetermined, limited, full, denied, restricted
+    public var canRead: Bool { self == .limited || self == .full }
+    public var description: String {
+        switch self {
+        case .notDetermined: return "Photos access needed"
+        case .limited: return "Selected photos only"
+        case .full: return "Full Photos access"
+        case .denied: return "Photos access denied"
+        case .restricted: return "Photos access restricted by this device"
+        }
+    }
+}
+
 /// Overall activity states for the backup engine, reflecting real operational stages.
 public enum OverallActivityState: Equatable, Sendable {
     case notScanned
@@ -226,6 +240,8 @@ public struct CurrentTransferState: Identifiable, Equatable, Sendable {
 
 /// Immutable snapshot representing the entire Dashboard presentation state.
 public struct DashboardViewState: Equatable, Sendable {
+    public var photosAccess: PhotosAccessState = .notDetermined
+    public var isReadingLibrary = false
     public var overallState: OverallActivityState
     public var waitingOrErrorReason: String?
     public var accessibleLibraryTotal: Int?
@@ -287,6 +303,6 @@ public struct DashboardViewState: Equatable, Sendable {
     }
 
     public var canStartBackup: Bool {
-        return googleStatus.isConnected || telegramStatus.isConnected
+        return (googleStatus.isConnected && googleStatus.isEnabled) || (telegramStatus.isConnected && telegramStatus.isEnabled)
     }
 }

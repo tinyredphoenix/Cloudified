@@ -27,6 +27,8 @@ public struct LedgerSnapshot: Sendable {
     public let scanned: Bool
     public let scanStartedAt: Date?
     public let libraryTotal: Int?
+    public let libraryPhotoTotal: Int?
+    public let libraryVideoTotal: Int?
     public let savedToBoth: Int?
     public let providers: [ProviderSnapshot]
 }
@@ -150,7 +152,8 @@ extension Ledger {
         // Single actor turn, no awaits: state cannot change between these queries.
         let scan = try db.rows("SELECT s.* FROM scans s JOIN meta m ON m.value=s.id WHERE m.key='scan'").first
         let scanned = scan?.int("complete") == 1
-        let total = scanned ? Int(try db.rows("SELECT COUNT(*) AS n FROM assets WHERE scan_id=(SELECT value FROM meta WHERE key='scan')").first!.int("n")) : nil
+        let totals = scanned ? try db.rows("SELECT COUNT(*) AS n, COALESCE(SUM(kind='photo'),0) AS photos, COALESCE(SUM(kind='video'),0) AS videos FROM assets WHERE scan_id=(SELECT value FROM meta WHERE key='scan')").first : nil
+        let total = totals.map { Int($0.int("n")) }
         var providers: [ProviderSnapshot] = []
         for provider in Provider.allCases {
             let row = try db.rows("SELECT * FROM destinations WHERE provider=? AND selected=1", [.text(provider.rawValue)]).first
@@ -176,7 +179,9 @@ extension Ledger {
                 AND EXISTS(SELECT 1 FROM aliases x JOIN jobs j ON j.id=x.job_id JOIN destinations d ON d.id=j.destination_id WHERE x.asset_id=a.id AND j.state='confirmed' AND d.selected=1 AND d.provider='telegram')
                 """).first!.int("n"))
         } else { both = nil }
-        return LedgerSnapshot(scanned: scanned, scanStartedAt: scan?.double("created").map(Date.init(timeIntervalSince1970:)), libraryTotal: total, savedToBoth: both, providers: providers)
+        return LedgerSnapshot(scanned: scanned, scanStartedAt: scan?.double("created").map(Date.init(timeIntervalSince1970:)), libraryTotal: total,
+            libraryPhotoTotal: totals.map { Int($0.int("photos")) }, libraryVideoTotal: totals.map { Int($0.int("videos")) },
+            savedToBoth: both, providers: providers)
     }
     private func counts(destinationID: UUID, kind: MediaKind) throws -> MediaCounts {
         let row = try db.rows("""

@@ -3,10 +3,42 @@ import Foundation
 import CloudifiedCore
 
 extension AppEnvironment {
+    /// Local permission/metadata setup is independent of credentials and network policy.
+    public func requestPhotoLibraryAccess() {
+        guard isForeground, bootstrapComplete, !shuttingDown, commandProvider == nil,
+              !controlTransition, backupExecutionTask == nil, libraryAccessTask == nil else { return }
+        controlTransition = true; isScanning = true; systemError = nil
+        dashboardState.isReadingLibrary = true
+        scheduleThrottledRefresh()
+        libraryAccessTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                self.isScanning = false; self.controlTransition = false
+                self.dashboardState.isReadingLibrary = false; self.libraryAccessTask = nil
+                self.scheduleThrottledRefresh()
+                if self.backupRequested { self.requestDrain() }
+            }
+            do {
+                var status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+                if status == .notDetermined { status = await PHPhotoLibrary.requestAuthorization(for: .readWrite) }
+                self.refreshPhotosAccess()
+                try Task.checkCancellation()
+                guard status == .authorized || status == .limited else {
+                    throw SafeFailure(.accessDenied, domain: .photos, cause: .permissionDenied)
+                }
+                guard let pipeline = self.photoPipeline else { throw CoreError.recoveryRequired }
+                let scan = try await pipeline.scanLibrary()
+                self.activeScanID = scan.scanID; self.planningCursors.removeAll()
+                self.needsFreshScan = false
+            } catch {
+                if !(error is CancellationError) { await self.report(error, provider: nil) }
+            }
+        }
+    }
     public func requestBackup() {
         guard !shuttingDown, commandProvider == nil, !controlTransition, backupExecutionTask == nil else { return }
         controlTransition = true; systemError = nil
-        backupRequested = true; needsFreshScan = true; pausedByUser = false
+        backupRequested = true; needsFreshScan = true; pausedByUser = false; resumeAfterExpiration = false
         UserDefaults.standard.set(false, forKey: "CloudifiedUserPaused")
         if isForeground {
             do { try continuation.request() } catch {
@@ -25,7 +57,7 @@ extension AppEnvironment {
             Task { [weak self] in await self?.backupEngine?.wakeReadyLanes() }
         }
         guard backupRequested, !pausedByUser, bootstrapComplete, commandProvider == nil,
-              backupExecutionTask == nil, !shuttingDown else { return }
+              backupExecutionTask == nil, libraryAccessTask == nil, !shuttingDown else { return }
         backupExecutionTask = Task { [weak self] in await self?.drain() }
     }
     func drain() async {
@@ -114,7 +146,7 @@ extension AppEnvironment {
     public func requestResume() {
         guard !shuttingDown, commandProvider == nil, !controlTransition else { return }
         controlTransition = true
-        systemError = nil; pausedByUser = false; backupRequested = true
+        systemError = nil; pausedByUser = false; backupRequested = true; resumeAfterExpiration = false
         UserDefaults.standard.set(false, forKey: "CloudifiedUserPaused")
         if isForeground { do { try continuation.request() } catch { fallback.record(SafeFailure(.connectivity, domain: .core, cause: .backgroundRestricted)) } }
         Task { [weak self] in

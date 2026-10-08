@@ -46,6 +46,7 @@ extension AppEnvironment {
     }
     public func applicationActive() {
         isForeground = true
+        refreshPhotosAccess()
         schedulePolicyUpdate(); scheduleThrottledRefresh()
         if backupRequested { requestDrain() }
     }
@@ -70,6 +71,7 @@ extension AppEnvironment {
     }
     func backgroundExpired() {
         backupRequested = false; needsWake = false
+        resumeAfterExpiration = true
         retryTask?.cancel(); retryTask = nil
         Task { [weak self] in
             guard let self else { return }
@@ -120,14 +122,14 @@ extension AppEnvironment {
     /// Explicit owner shutdown. Never discard an unresolved native receiver.
     public func shutdown() async {
         shuttingDown = true; backupRequested = false; needsWake = false
-        retryTask?.cancel(); bootstrapTask?.cancel(); policyTask?.cancel()
+        retryTask?.cancel(); bootstrapTask?.cancel(); policyTask?.cancel(); libraryAccessTask?.cancel()
         refreshTask?.cancel(); cleanupTask?.cancel(); sourceStatusTask?.cancel()
         failurePageTask?.cancel(); logPageTask?.cancel(); runPageTask?.cancel()
         for task in recoveryTasks.values { task.cancel() }
         do { try await backupEngine?.pause() } catch { fallback.record(ProviderSupport.safe(error, domain: .core)) }
         if let sourceProducer { _ = await sourceProducer.stop() }
         backupExecutionTask?.cancel(); await backupExecutionTask?.value
-        await bootstrapTask?.value; await policyTask?.value
+        await bootstrapTask?.value; await policyTask?.value; await libraryAccessTask?.value
         for task in recoveryTasks.values { await task.value }
         do { try await telegramAdapter?.close() } catch {
             fallback.record(ProviderSupport.safe(error, domain: .tdlib)); return
