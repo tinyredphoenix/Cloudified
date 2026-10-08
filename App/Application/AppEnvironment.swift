@@ -81,18 +81,13 @@ public final class AppEnvironment: ObservableObject {
     var nextLogCursor: Int64?
 
     public init() {
-        if let raw = UserDefaults.standard.string(forKey: "CloudifiedLivePhotoFallback"),
-           let value = LivePhotoFallbackOption(rawValue: raw) { settingsState.livePhotoFallback = value }
-        if UserDefaults.standard.object(forKey: "CloudifiedWiFiOnly") != nil {
-            settingsState.isWiFiOnlyEnabled = UserDefaults.standard.bool(forKey: "CloudifiedWiFiOnly")
-        }
-        networkPolicy.setCellularAllowed(!settingsState.isWiFiOnlyEnabled)
         let safeFallback = fallback
         var layoutValue: StorageLayout?, ledgerValue: Ledger?, filesValue: FileLeaseStore?
         var pipelineValue: PhotoLibraryPipeline?, engineValue: BackupEngine?
         var exportValue: DiagnosticExportStore?, googleValue: GooglePhotosClientSession?
         var googleAdapterValue: GooglePhotosProviderAdapter?, telegramValue: TDLibClient?
         var telegramAdapterValue: TelegramProviderAdapter?
+        var initialAttentionReason: String? = nil
         var sink: DiagnosticSink = { _, _, _, _, failure, _, _, _ in
             safeFallback.record(failure ?? SafeFailure(.invariant, domain: .sqlite, cause: .persistenceFailed))
             throw CoreError.recoveryRequired
@@ -124,12 +119,21 @@ public final class AppEnvironment: ObservableObject {
             telegramValue = telegram; telegramAdapterValue = TelegramProviderAdapter(client: telegram, ledger: led, files: files)
         } catch {
             let safe = ProviderSupport.safe(error, domain: .core); safeFallback.record(safe)
-            dashboardState.overallState = .needsAttention(reason: safe.description)
+            initialAttentionReason = safe.description
         }
         storageLayout = layoutValue; ledger = ledgerValue; fileLeaseStore = filesValue
         photoPipeline = pipelineValue; backupEngine = engineValue; exportStore = exportValue
         googleSession = googleValue; googleAdapter = googleAdapterValue
         tdlibClient = telegramValue; telegramAdapter = telegramAdapterValue; diagnosticSink = sink
+        if let initialAttentionReason {
+            dashboardState.overallState = .needsAttention(reason: initialAttentionReason)
+        }
+        if let raw = UserDefaults.standard.string(forKey: "CloudifiedLivePhotoFallback"),
+           let value = LivePhotoFallbackOption(rawValue: raw) { settingsState.livePhotoFallback = value }
+        if UserDefaults.standard.object(forKey: "CloudifiedWiFiOnly") != nil {
+            settingsState.isWiFiOnlyEnabled = UserDefaults.standard.bool(forKey: "CloudifiedWiFiOnly")
+        }
+        networkPolicy.setCellularAllowed(!settingsState.isWiFiOnlyEnabled)
         continuation.onChange = { [weak self] in self?.schedulePolicyUpdate(); self?.scheduleThrottledRefresh() }
         continuation.onExpiration = { [weak self] in self?.backgroundExpired() }
         startSubscriptions(); startTelegramSubscriptions()
