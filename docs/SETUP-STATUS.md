@@ -38,7 +38,7 @@ separate from a full Xcode/iOS build and does not prove runtime behavior.
 
 P3 original-media source implementation was reviewed and completed by Architect
 with local macOS Photos SDK typechecking; iOS/runtime behavior remains unverified.
-Next: Builder P4-A-R2 remaining foundation corrections after R1 review, then Architect P4-B
+Next: Architect P4-B after reviewed/directly completed R2 source corrections. Implement
 critical transports, followed by P5 UI wiring and P6 system integration. Hosted
 build caches are configured; native assembly/linkage and cache hits remain untested.
 No cloud build, simulator/device test or real upload has run. The first

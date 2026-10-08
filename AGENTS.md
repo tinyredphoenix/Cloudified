@@ -6,7 +6,7 @@ The root docs are planning contracts, not evidence of working app features.
 
 Start with docs/01-ARCHITECTURE.md and docs/02-BUILD-PHASES.md. Use
 docs/03-BUILD-LOG.md for active ownership/evidence and docs/04-DECISIONS.md for why.
-Architect reviewed P4-A-R1; Builder must complete P4-A-R2 in docs/P4-R2.md before P4-B. Architect completed critical source corrections and directly authors P2 critical
+Architect reviewed R2 and directly completed foundation corrections. Next batch is Architect P4-B in docs/P4-B.md; Builder holds until an assigned integration handoff. Architect completed critical source corrections and directly authors P2 critical
 core and critical protocol corrections. Coordinate ownership before overlapping work.
 
 Latest user direction: no demo/mock/seeded data, fake progress, sample logs or fake
@@ -45,6 +45,7 @@ not postponed until failures occur.
 - Make small commits at coherent batches. Annotated milestone tags must accurately
   describe evidence: plan tags are not app releases. Push history and tags to origin.
 
-Opening these instructions does not authorize every phase. Current Builder handoff
-is P4-A-R2 only in docs/P4-R2.md, following the foundation and cache contracts. Architect owns P4-B critical upload/receipt/recovery integration. P2 core paths remain Architect-owned;
+Opening these instructions does not authorize every phase. R2 is closed for source
+integration handoff; Builder has no new implementation batch. Architect's next
+batch is P4-B in docs/P4-B.md, following foundation and cache contracts. Architect owns P4-B critical upload/receipt/recovery integration. P2 core paths remain Architect-owned;
 later application phases need their prerequisites and an assigned batch.

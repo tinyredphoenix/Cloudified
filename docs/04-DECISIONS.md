@@ -158,3 +158,19 @@ network-policy injection and custom linker-root wiring, recording evidence in
 shared files. Larger receiver/auth/delivery/native assembly work remains R2;
 advancing the phase cannot substitute for those required implementations. Future
 small review fixes should be completed directly when paths are free.
+
+## D34 — finish R2 directly and move to critical integration
+
+2026-10-08. R2 compile success missed a guaranteed bootstrap timeout (pinned ABI
+sends no updates before a first request), discarded receiver task ownership before
+join, weak session lifetime, progress loss and source-independent path overrides.
+Architect directly corrects these, bounds native JSON/value/stream/progress/request
+retention, and retains every actual terminal fact separately from diagnostic faults.
+One mapped Telegram session keeps native ownership/memory bounded while Google's
+worker remains concurrent. P4-B history must use small pages and treat oversized
+responses as uncertainty. Source review closes R2 for implementation handoff only.
+Native assembly switches to the verified ios64-xcrun source target, explicit SDK
+zlib/crypto closure without optional host libraries, and an unexecuted all-member
+device link/platform gate before cache sealing. Exact archive/license/provenance
+validation stays required; native gates/runtime measurements remain unrun until P7.
+Next implementation is Architect P4-B, not another Builder correction cycle.

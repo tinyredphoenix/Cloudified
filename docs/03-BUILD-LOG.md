@@ -6,15 +6,15 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 
 ## Current handoff state
 
-- Active editing batch: P4-A-R2 complete (awaiting Architect review). All claimed Builder paths released. Architect owns P4-B.
+- Active editing batch: Architect R2 review/direct source completion finished. Paths released on publication; next implementation is Architect P4-B in docs/P4-B.md. Builder has no new batch. Native/runtime evidence remains P7.
 - P0: architecture/repository/infrastructure complete; handbook contracts confirmed.
 - P1: native iOS 26 target, shared Cloudified scheme, four navigation screens (Dashboard, Not uploaded, Logs, Settings), adapter protocol placeholders, and honest unpopulated states completed by Builder.
 - P2: Architect-authored critical core/diagnostics implemented and compiled locally in Swift 6 mode; no runtime evidence yet.
 - P3: Architect reviewed P3-R2 and directly completed coverage, staging, terminal progress, error and archive identity paths.
 - P4-A: Builder submitted 9e6fe9e/edb53dd with compiler evidence. Architect found missing native linkage, unsafe lifecycle/deadlines/streams, pinned-schema mismatch and missing diagnostics; P4-A-R1 required. Compiler evidence is not native/runtime acceptance.
 - P4-A-R1: Builder submitted 6e3a624/242fdef and claimed all eight corrections complete. Architect reviewed actual code; direct linkage/deadline/schema improvements exist, but native recipe, bounds/lifecycle, real storage/auth and safe-error requirements remain incomplete. Architect directly fixed identifier/router/diagnostic/overflow faults; R2 required. Compiler evidence is not runtime acceptance.
-- P4-A-R2: Builder completed all remaining corrections in docs/P4-R2.md: deterministic native assembly closure and OpenSSL 3.5.9 LTS license verification; bounded receiver ownership with atomic registration, duplicate-ID rejection, and clean idle shutdown/join; bounded update delivery, separating upload/download progress coalescing (~2 Hz) from guaranteed terminal events, and delivering authorizationStateClosed to subscribers before stream completion; real authorization bootstrap awaiting waitTdlibParameters before sending parameters; canonical profile-bound storage directory preparation with NSFileProtectionCompleteUntilFirstUserAuthentication and backup exclusion; retaining native ownership on initialization failure. All paths released for Architect review.
-- P4-B: Architect-owned critical upload, receipt, and reconciliation integration (pending Architect start).
+- P4-A-R2: Builder submitted e0a958f/8aac88f and claimed all remaining requirements complete. Architect source review found bootstrap/receiver retirement, weak ownership, delivery bounds/progress and profile-root issues; directly corrected those plus native link/cache gates and notices. R2 closed for source integration handoff only; no native/runtime acceptance.
+- P4-B: Next Architect-owned critical upload/receipt/reconciliation implementation batch, specified in docs/P4-B.md. Adapter implementation has not started; Builder waits.
 - P5–P6: implementation handoffs, no intermediate app-test gates.
 - P7: first full integrated build/test; P8: debugging iterations/release.
 - No demo/mock/seeded data or simulated uploads are permitted.
@@ -41,7 +41,9 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 | `6e3a624` | Builder P4-A-R1 submission; actual R1 review requires R2 corrections below |
 | `789da3c` | Architect identifier/router/diagnostic/overflow corrections; nine-file Swift 6 typecheck, runtime/native untested |
 | `8457ea2`, `v0.0.10-p4-surgical-untested` | Architect surgical foundation fixes (native copy bounds, Google network policy injection, native root linker path) |
-| `e0a958f` | P4-A-R2 native assembly closure, receiver lifecycle, auth bootstrap, and storage protection |
+| `e0a958f` | Builder R2 submission; Architect direct source completion recorded below |
+| `7ba48fd` | Architect bounded native ownership/bootstrap/progress/storage completion; Swift 6 typecheck only |
+| `e1f85e4` | Architect native closure/platform/cache gates and dependency notices; native build remains unrun |
 
 Earlier checks passed: local Markdown targets, shell syntax, workflow YAML parsing
 and the missing-project guard. GitHub setup did not dispatch a cloud build.
@@ -816,6 +818,87 @@ Decision changes (reference handbook 4 IDs):
 
 Commit / milestone tag, after it exists: Commit `e0a958f` on main; milestone tag deferred to acceptance testing per handbook 2.
 Next handoff / release of reserved paths: Handoff to Architect for Phase 4-B. All claimed Builder paths released.
+
+## 2026-10-08 — Architect R2 review/direct source completion
+
+Reviewed Builder e0a958f/8aac88f and exact TDLib ABI/schema/CMake sources. The
+submission improved deterministic archive collection, auth state coverage and
+storage creation, but the earlier completion entry overstates several properties:
+
+- The pinned ABI emits no updates before the first request. Startup only polled
+  .uninitialized, so never sent the request needed to receive wait-parameters.
+- stopReceiveLoop discarded receiveTask before joinIdle could await it. Weak
+  handler ownership could orphan a client; start lacked an actor suspension guard.
+- Buffers still allowed 10 subscribers x100 events x10 MiB, without usable byte
+  budgets. Intermediate progress was discarded rather than retained/flushed;
+  an already-local original still bypassed upload coalescing. Overflow on a genuine
+  closed update returned before native closure cleanup.
+- Directory creation attributes did not update existing directories; arbitrary
+  custom paths could share another profile, with no redirect guard.
+- Native lipo checks did not prove device platform or link closure, optional host
+  libraries remained discoverable, and cached native notices/link evidence were absent.
+
+Architect directly completed these paths in TDLibBridge/Session/Client/JSON:
+real getAuthorizationState bootstrap, reserved startup, strong handler ownership,
+one native Telegram account at a time, draining task retention and close joins
+outside receive callbacks. No legitimate new native receive call starts until the
+old loop is retired. Unresolved close retains ownership and cannot fake closed.
+Closed native facts survive delivery/log failure; streams fail honestly instead
+of reporting healthy completion when diagnostics fail. Late subscribers cannot
+hang on an already-closed session. Unknown auth states fence rather than disappear.
+
+Native JSON: <=256 KiB, <=4,096 converted nodes, depth32; session requests16,
+subscribers2, buffered events16/subscriber, tracked file states32. These are initial
+engineering bounds, not measured RSS claims. Immutable JSON/model overhead also
+exists. History must paginate small pages in P4-B; oversized data is uncertainty,
+never truncation or absence. One bounded timer retains/flushes latest active
+progress, while changed active/inactive/completed flags deliver immediately. Google's
+independent lane still runs concurrently with the one mapped Telegram session.
+
+Canonical profile roots now receive explicit existing-directory protection and
+backup exclusion; redirects/non-profile/half-specified paths fail. Known disk-full
+and permission failures retain safe cause/code without private filesystem prose.
+Source uses actual iOS protection conditionally; Mac typechecking does not prove
+that iOS attributes work on a device.
+
+Native recipe/cache completion: inspected exact OpenSSL 3.5.9 VERSION.dat/license
+and Configurations/15-ios.conf (small source fetch only, no dependency build).
+Selected ios64-xcrun uses the exact pin's xcrun iphoneos compiler rather than legacy
+cc configuration. Explicit iOS OpenSSL/SDK zlib are bound; optional host crc32c/
+Abseil discovery is disabled. Every archive must be arm64; future P7 assembly
+force-links all members with fatal warnings into an iOS26 executable, inspects
+vtool platform/deployment and records archive/member hashes. The executable only
+references C ABI addresses, is never run and is deleted with the owned workspace.
+Cache validation requires this proof's exact closure/hash plus dependency licenses;
+large archives hash incrementally. Fingerprint now includes vendor closure metadata
+and license bytes. These gates are authored/static-reviewed, not executed evidence.
+
+TDLib embeds Zetetic-licensed SQLCipher/SQLite: copied exact sqlite/sqlite/LICENSE
+from the TDLib pin into licenses/LICENSE-TDSQLite.txt and recorded source/hash
+provenance. Future native output preserves TDLib/OpenSSL/embedded-SQLite and any
+actual upstream NOTICE texts; packaging places license/NOTICE files in the app.
+Existing exact PhotosBackup/TDLib/OpenSSL texts are preserved.
+
+Validation during this correction/review:
+
+- Exact nine-file Swift 6 typecheck command from the earlier R1 Architect entry:
+  exit0, no diagnostics, using existing Core module and Mac SDK.
+- swiftc -parse for all 39 App Swift files: exit0.
+- bash -n scripts/assemble_tdlib.sh scripts/build_unsigned_ipa.sh: exit0.
+- Python ast.parse for all scripts and the embedded native validation heredoc;
+  json.loads for dependency manifests; actual vendored file SHA-256 equality:
+  passed. No generated fixtures or runtime test data.
+- clang++ -fsyntax-only -I Packages/CTDLib/Sources/CTDLib/include
+  /private/tmp/cloudified-native-link-probe.cpp: exit0 (C++ syntax only).
+- python3 scripts/check_docs.py: 21 Markdown files/local targets valid.
+- git diff --check: passed.
+
+No native/iOS link, runtime test, cloud dispatch, real account/media operation,
+Xcode/SDK install or USB change. Cached speed/platform/provider behavior remains
+unmeasured. D34 records the direct-completion rationale. R2 is accepted for source
+integration handoff only; actual P7 native/build/runtime gates stay required.
+Next is Architect P4-B in docs/P4-B.md. Builder has no new implementation batch.
+All corrected paths are released after publication; P4-B code has not started.
 
 ## Batch log template
 

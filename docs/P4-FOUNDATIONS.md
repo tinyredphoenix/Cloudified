@@ -1,7 +1,7 @@
 # P4-A — pinned dependencies and secure native client foundation
 
-Current handoff: Architect reviewed R1 and completed surgical corrections; remaining
-P4-A-R2 work is specified in P4-R2.md before P4-B. This original
+Current handoff: Architect reviewed/completed R2 source corrections; next is
+Architect P4-B in P4-B.md. Native/runtime evidence remains P7. This original
 assignment remains the foundation contract, not evidence of completion.
 
 Assigned 2026-10-08 by Architect following P3-R2 review/direct completion.
