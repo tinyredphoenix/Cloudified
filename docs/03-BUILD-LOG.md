@@ -41,6 +41,7 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 | `6e3a624` | Builder P4-A-R1 submission; actual R1 review requires R2 corrections below |
 | `789da3c` | Architect identifier/router/diagnostic/overflow corrections; nine-file Swift 6 typecheck, runtime/native untested |
 | `8457ea2`, `v0.0.10-p4-surgical-untested` | Architect surgical foundation fixes (native copy bounds, Google network policy injection, native root linker path) |
+| `e0a958f` | P4-A-R2 native assembly closure, receiver lifecycle, auth bootstrap, and storage protection |
 
 Earlier checks passed: local Markdown targets, shell syntax, workflow YAML parsing
 and the missing-project guard. GitHub setup did not dispatch a cloud build.
@@ -813,7 +814,7 @@ Failures / known limitations:
 Decision changes (reference handbook 4 IDs):
 - Follows D29 (provider foundations before critical transport integration), D31 (public standard runners, validated caches, no fake symbols), D32 (delivery uncertainty and verified crypto selection), and D33 (Architect focused corrections).
 
-Commit / milestone tag, after it exists: Pending commit.
+Commit / milestone tag, after it exists: Commit `e0a958f` on main; milestone tag deferred to acceptance testing per handbook 2.
 Next handoff / release of reserved paths: Handoff to Architect for Phase 4-B. All claimed Builder paths released.
 
 ## Batch log template
