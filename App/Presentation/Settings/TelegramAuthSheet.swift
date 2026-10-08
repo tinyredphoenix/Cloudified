@@ -61,7 +61,7 @@ public struct TelegramAuthSheet: View {
             footer: Text("Obtain your API ID and Hash from my.telegram.org. This allows the app to communicate with Telegram.")
         ) {
             TextField("API ID", text: $apiIdText)
-                .numberKeyboard()
+                .keyboardType(.numberPad)
             SecureField("API Hash", text: $apiHashText)
                 .textContentType(.password)
                 .autocorrectionDisabled()
@@ -92,7 +92,7 @@ public struct TelegramAuthSheet: View {
             footer: Text("Enter your Telegram account phone number in international format (e.g. +1234567890).")
         ) {
             TextField("Phone Number", text: $phoneNumber)
-                .phoneKeyboard()
+                .keyboardType(.phonePad)
                 .textContentType(.telephoneNumber)
 
             Button {
@@ -118,7 +118,7 @@ public struct TelegramAuthSheet: View {
             footer: Text("Enter the verification code sent to your Telegram app or via SMS.")
         ) {
             TextField("Verification Code", text: $verificationCode)
-                .numberKeyboard()
+                .keyboardType(.numberPad)
                 .textContentType(.oneTimeCode)
 
             Button {
@@ -168,7 +168,7 @@ public struct TelegramAuthSheet: View {
     private var emailSection: some View {
         Section(header: Text("Email Address Verification")) {
             TextField("Email Address", text: $email)
-                .emailKeyboard()
+                .keyboardType(.emailAddress).autocapitalization(.none)
                 .autocorrectionDisabled()
 
             Button("Submit Email") {
@@ -185,7 +185,7 @@ public struct TelegramAuthSheet: View {
     private var emailCodeSection: some View {
         Section(header: Text("Email Verification Code")) {
             TextField("Email Code", text: $emailCode)
-                .numberKeyboard()
+                .keyboardType(.numberPad)
 
             Button("Submit Email Code") {
                 let code = emailCode.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -227,7 +227,7 @@ public struct TelegramAuthSheet: View {
         Section(header: Text("Archive channel")) {
             Button("Log Out to Switch Account", role: .destructive) { confirmLogout = true }
                 .disabled(environment.settingsState.isConnectingTelegram || environment.settingsState.isSettlingTelegram)
-            
+
             NavigationLink(destination: TelegramChannelPicker(environment: environment, onChannelSelected: { chatID in
                 Task {
                     do {

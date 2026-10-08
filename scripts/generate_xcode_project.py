@@ -44,6 +44,8 @@ sources = [
     ("AppEnvironment+Recovery.swift", "application"),
     ("AppEnvironment+Presentation.swift", "application"),
     ("AppEnvironment+Pages.swift", "application"),
+    ("AppEnvironment+TelegramChannels.swift", "application"),
+
     ("DemandSourceProducer.swift", "application"),
 
     ("RootTabView.swift", "presentation"),
@@ -59,6 +61,10 @@ sources = [
     ("LogsViewState.swift", "logs"),
     ("SettingsView.swift", "settings"),
     ("GoogleAccountLoginView.swift", "settings"),
+    ("GoogleAuthSheet.swift", "settings"),
+    ("TelegramAuthSheet.swift", "settings"),
+    ("TelegramChannelPicker.swift", "settings"),
+
     ("SettingsViewState.swift", "settings"),
     ("PhotoLibraryAdapterProtocol.swift", "photo_library"),
     ("SourceRecipe.swift", "photo_library"),
@@ -86,6 +92,8 @@ sources = [
     ("TelegramDocumentReference.swift", "telegram"),
     ("TelegramInputFiles.swift", "telegram"),
     ("TelegramProviderAdapter.swift", "telegram"),
+    ("TelegramChannelDiscovery.swift", "telegram"),
+
     ("KeychainCredentialStore.swift", "security"),
     ("SystemAdapterProtocol.swift", "system"),
     ("StorageLayout.swift", "system"),

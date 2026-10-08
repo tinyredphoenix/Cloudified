@@ -15,6 +15,7 @@
 		B58D296CC7FC8392FB34BDDE /* AppEnvironment+Recovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E32A9D4A81F298A576D12D /* AppEnvironment+Recovery.swift */; };
 		9482F4012F0454380E14ECB6 /* AppEnvironment+Presentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AAE215783EC3A8684277B8B /* AppEnvironment+Presentation.swift */; };
 		4DBF835DFD97A69A35B30B5F /* AppEnvironment+Pages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1453A3D8CD8A163A8F9D6937 /* AppEnvironment+Pages.swift */; };
+		33A20D9F100D60B6C62CA8C9 /* AppEnvironment+TelegramChannels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C712433CA8BDBA45E7E169D2 /* AppEnvironment+TelegramChannels.swift */; };
 		F53F75426FDCF4699020B10D /* DemandSourceProducer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A6B44273584493DCE914785 /* DemandSourceProducer.swift */; };
 		4F38044294EA2CF270FD43A9 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E4BAD6D36BD3888E49DDC0C /* RootTabView.swift */; };
 		EDCE87ECD492299D1FE15B64 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5394D176DB4C16BCF4C2ADEE /* DashboardView.swift */; };
@@ -29,6 +30,9 @@
 		60BE2EA5876CCE34A50B4AEC /* LogsViewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 096E5F4D9E3772CE356F849C /* LogsViewState.swift */; };
 		B194B991052625F01EA4C539 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC4B09C61D3A3BE3D1761161 /* SettingsView.swift */; };
 		9B3BC539F764A671FA91B1D8 /* GoogleAccountLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B9F2FB049C506F1CFB84239 /* GoogleAccountLoginView.swift */; };
+		DE01CB5B5503DDA91071B318 /* GoogleAuthSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB97C44A783FFE56B1B234B1 /* GoogleAuthSheet.swift */; };
+		F9EF9F63B5DC7708DC3BF1CD /* TelegramAuthSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97FBF84F927F406BD8CE5C99 /* TelegramAuthSheet.swift */; };
+		3C144913D7605559779A47ED /* TelegramChannelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4CC94A00FF132060135135C /* TelegramChannelPicker.swift */; };
 		D23A58A5CB6A654B58E90AD7 /* SettingsViewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77D8C06D52185A565EC76EF8 /* SettingsViewState.swift */; };
 		5D43F9FD9A912799708A48E0 /* PhotoLibraryAdapterProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8637BE190C9FCAA37C4EFD8 /* PhotoLibraryAdapterProtocol.swift */; };
 		E1E2F6696AF143B0DD415059 /* SourceRecipe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05712AB9382E0C74446DE95B /* SourceRecipe.swift */; };
@@ -56,6 +60,7 @@
 		9EA2D1EB470BA4E1E8D653C8 /* TelegramDocumentReference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92DB83549E862F2BBAA55CB1 /* TelegramDocumentReference.swift */; };
 		02E5A864E8C30F71A1BF82CC /* TelegramInputFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5354BC768200C08D794BDE5 /* TelegramInputFiles.swift */; };
 		B9AC30B0BE338A71399B104A /* TelegramProviderAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CE08026A9EE6DC48DE2CDB3 /* TelegramProviderAdapter.swift */; };
+		46A8B69B7C695307CE938C63 /* TelegramChannelDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1332610EAA8456CF83B41B82 /* TelegramChannelDiscovery.swift */; };
 		6710BCEBA12EDCC6A0ACAA39 /* KeychainCredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3169E7C0DAAA3AE7BE0B0E45 /* KeychainCredentialStore.swift */; };
 		1FE291F70D30B73BB0A75824 /* SystemAdapterProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 650E59105124992406203C6B /* SystemAdapterProtocol.swift */; };
 		B56DB06CD8D86784B62E2BC3 /* StorageLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F483385D2C90581A2E58827 /* StorageLayout.swift */; };
@@ -81,6 +86,7 @@
 		A0E32A9D4A81F298A576D12D /* AppEnvironment+Recovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppEnvironment+Recovery.swift"; sourceTree = "<group>"; };
 		3AAE215783EC3A8684277B8B /* AppEnvironment+Presentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppEnvironment+Presentation.swift"; sourceTree = "<group>"; };
 		1453A3D8CD8A163A8F9D6937 /* AppEnvironment+Pages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppEnvironment+Pages.swift"; sourceTree = "<group>"; };
+		C712433CA8BDBA45E7E169D2 /* AppEnvironment+TelegramChannels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppEnvironment+TelegramChannels.swift"; sourceTree = "<group>"; };
 		5A6B44273584493DCE914785 /* DemandSourceProducer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DemandSourceProducer.swift"; sourceTree = "<group>"; };
 		9E4BAD6D36BD3888E49DDC0C /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RootTabView.swift"; sourceTree = "<group>"; };
 		5394D176DB4C16BCF4C2ADEE /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DashboardView.swift"; sourceTree = "<group>"; };
@@ -95,6 +101,9 @@
 		096E5F4D9E3772CE356F849C /* LogsViewState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LogsViewState.swift"; sourceTree = "<group>"; };
 		FC4B09C61D3A3BE3D1761161 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SettingsView.swift"; sourceTree = "<group>"; };
 		4B9F2FB049C506F1CFB84239 /* GoogleAccountLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GoogleAccountLoginView.swift"; sourceTree = "<group>"; };
+		BB97C44A783FFE56B1B234B1 /* GoogleAuthSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GoogleAuthSheet.swift"; sourceTree = "<group>"; };
+		97FBF84F927F406BD8CE5C99 /* TelegramAuthSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TelegramAuthSheet.swift"; sourceTree = "<group>"; };
+		A4CC94A00FF132060135135C /* TelegramChannelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TelegramChannelPicker.swift"; sourceTree = "<group>"; };
 		77D8C06D52185A565EC76EF8 /* SettingsViewState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SettingsViewState.swift"; sourceTree = "<group>"; };
 		D8637BE190C9FCAA37C4EFD8 /* PhotoLibraryAdapterProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PhotoLibraryAdapterProtocol.swift"; sourceTree = "<group>"; };
 		05712AB9382E0C74446DE95B /* SourceRecipe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SourceRecipe.swift"; sourceTree = "<group>"; };
@@ -122,6 +131,7 @@
 		92DB83549E862F2BBAA55CB1 /* TelegramDocumentReference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TelegramDocumentReference.swift"; sourceTree = "<group>"; };
 		D5354BC768200C08D794BDE5 /* TelegramInputFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TelegramInputFiles.swift"; sourceTree = "<group>"; };
 		1CE08026A9EE6DC48DE2CDB3 /* TelegramProviderAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TelegramProviderAdapter.swift"; sourceTree = "<group>"; };
+		1332610EAA8456CF83B41B82 /* TelegramChannelDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TelegramChannelDiscovery.swift"; sourceTree = "<group>"; };
 		3169E7C0DAAA3AE7BE0B0E45 /* KeychainCredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "KeychainCredentialStore.swift"; sourceTree = "<group>"; };
 		650E59105124992406203C6B /* SystemAdapterProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SystemAdapterProtocol.swift"; sourceTree = "<group>"; };
 		0F483385D2C90581A2E58827 /* StorageLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StorageLayout.swift"; sourceTree = "<group>"; };
@@ -178,6 +188,7 @@
 				A0E32A9D4A81F298A576D12D /* AppEnvironment+Recovery.swift */,
 				3AAE215783EC3A8684277B8B /* AppEnvironment+Presentation.swift */,
 				1453A3D8CD8A163A8F9D6937 /* AppEnvironment+Pages.swift */,
+				C712433CA8BDBA45E7E169D2 /* AppEnvironment+TelegramChannels.swift */,
 				5A6B44273584493DCE914785 /* DemandSourceProducer.swift */,
 			);
 			path = Application; sourceTree = "<group>";
@@ -233,6 +244,9 @@
 			children = (
 				FC4B09C61D3A3BE3D1761161 /* SettingsView.swift */,
 				4B9F2FB049C506F1CFB84239 /* GoogleAccountLoginView.swift */,
+				BB97C44A783FFE56B1B234B1 /* GoogleAuthSheet.swift */,
+				97FBF84F927F406BD8CE5C99 /* TelegramAuthSheet.swift */,
+				A4CC94A00FF132060135135C /* TelegramChannelPicker.swift */,
 				77D8C06D52185A565EC76EF8 /* SettingsViewState.swift */,
 			);
 			path = Settings; sourceTree = "<group>";
@@ -289,6 +303,7 @@
 				92DB83549E862F2BBAA55CB1 /* TelegramDocumentReference.swift */,
 				D5354BC768200C08D794BDE5 /* TelegramInputFiles.swift */,
 				1CE08026A9EE6DC48DE2CDB3 /* TelegramProviderAdapter.swift */,
+				1332610EAA8456CF83B41B82 /* TelegramChannelDiscovery.swift */,
 			);
 			path = Telegram; sourceTree = "<group>";
 		};
@@ -414,6 +429,7 @@
 				B58D296CC7FC8392FB34BDDE /* AppEnvironment+Recovery.swift in Sources */,
 				9482F4012F0454380E14ECB6 /* AppEnvironment+Presentation.swift in Sources */,
 				4DBF835DFD97A69A35B30B5F /* AppEnvironment+Pages.swift in Sources */,
+				33A20D9F100D60B6C62CA8C9 /* AppEnvironment+TelegramChannels.swift in Sources */,
 				F53F75426FDCF4699020B10D /* DemandSourceProducer.swift in Sources */,
 				4F38044294EA2CF270FD43A9 /* RootTabView.swift in Sources */,
 				EDCE87ECD492299D1FE15B64 /* DashboardView.swift in Sources */,
@@ -428,6 +444,9 @@
 				60BE2EA5876CCE34A50B4AEC /* LogsViewState.swift in Sources */,
 				B194B991052625F01EA4C539 /* SettingsView.swift in Sources */,
 				9B3BC539F764A671FA91B1D8 /* GoogleAccountLoginView.swift in Sources */,
+				DE01CB5B5503DDA91071B318 /* GoogleAuthSheet.swift in Sources */,
+				F9EF9F63B5DC7708DC3BF1CD /* TelegramAuthSheet.swift in Sources */,
+				3C144913D7605559779A47ED /* TelegramChannelPicker.swift in Sources */,
 				D23A58A5CB6A654B58E90AD7 /* SettingsViewState.swift in Sources */,
 				5D43F9FD9A912799708A48E0 /* PhotoLibraryAdapterProtocol.swift in Sources */,
 				E1E2F6696AF143B0DD415059 /* SourceRecipe.swift in Sources */,
@@ -455,6 +474,7 @@
 				9EA2D1EB470BA4E1E8D653C8 /* TelegramDocumentReference.swift in Sources */,
 				02E5A864E8C30F71A1BF82CC /* TelegramInputFiles.swift in Sources */,
 				B9AC30B0BE338A71399B104A /* TelegramProviderAdapter.swift in Sources */,
+				46A8B69B7C695307CE938C63 /* TelegramChannelDiscovery.swift in Sources */,
 				6710BCEBA12EDCC6A0ACAA39 /* KeychainCredentialStore.swift in Sources */,
 				1FE291F70D30B73BB0A75824 /* SystemAdapterProtocol.swift in Sources */,
 				B56DB06CD8D86784B62E2BC3 /* StorageLayout.swift in Sources */,

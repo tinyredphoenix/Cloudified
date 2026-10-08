@@ -30,7 +30,7 @@ public struct NotUploadedView: View {
                             }
                         }
                     }
-                    .listStyle(.plain)
+                    .listStyle(.insetGrouped)
                 }
             }
             .safeAreaInset(edge: .bottom) {

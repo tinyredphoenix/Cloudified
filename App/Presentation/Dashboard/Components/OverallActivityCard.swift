@@ -20,20 +20,20 @@ public struct OverallActivityCard: View {
             iconForState
                 .font(.system(size: 48, weight: .light))
                 .padding(.top, 12)
-            
+
             // Title
             VStack(spacing: 6) {
                 Text(state.title)
                     .font(.title3.weight(.semibold))
                     .multilineTextAlignment(.center)
-                
+
                 if let total = libraryTotal, let saved = savedToBoth, total > 0 {
                     let progress = Double(saved) / Double(total)
                     ProgressView(value: progress)
                         .tint(.blue)
                         .padding(.horizontal, 40)
                         .padding(.vertical, 4)
-                    
+
                     Text("\(saved) of \(total) items saved securely")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -45,7 +45,7 @@ public struct OverallActivityCard: View {
                         .monospacedDigit()
                 }
             }
-            
+
             if let reason = waitingReason, !reason.isEmpty {
                 Text(reason)
                     .font(.footnote)
@@ -53,20 +53,20 @@ public struct OverallActivityCard: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
             }
-            
+
             // Primary Action Button
             actionButton
                 .padding(.bottom, 8)
         }
         .frame(maxWidth: .infinity)
     }
-    
+
     @ViewBuilder
     private var iconForState: some View {
         switch state {
-        case .completed:
+        case .complete:
             Image(systemName: "checkmark.seal.fill").foregroundColor(.green)
-        case .runningPhotos, .runningVideos, .runningBoth:
+        case .scanning, .preparing, .checking, .uploading, .finalizing:
             Image(systemName: "arrow.up.circle.fill").foregroundColor(.blue)
         case .paused:
             Image(systemName: "pause.circle.fill").foregroundColor(.yellow)
@@ -76,7 +76,7 @@ public struct OverallActivityCard: View {
             Image(systemName: "cloud.fill").foregroundColor(.blue)
         }
     }
-    
+
     @ViewBuilder
     private var actionButton: some View {
         if canPause {

@@ -21,7 +21,7 @@ public struct DashboardView: View {
                 if needsSetup {
                     setupSection
                 }
-                
+
                 if state.photosAccess.canRead && state.accessibleLibraryTotal != nil {
                     Section {
                         OverallActivityCard(
@@ -77,10 +77,10 @@ public struct DashboardView: View {
                     .font(.system(size: 40))
                     .foregroundStyle(.blue)
                     .padding(.top, 16)
-                    
+
                 Text("Set up Cloudified")
                     .font(.title2.weight(.semibold))
-                    
+
                 Text("Allow Photos access and connect at least one destination to start backing up your library safely.")
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -88,7 +88,7 @@ public struct DashboardView: View {
                     .padding(.bottom, 16)
             }
             .frame(maxWidth: .infinity)
-            
+
             if state.photosAccess == .restricted {
                 Label(state.photosAccess.description, systemImage: "lock")
                     .foregroundStyle(.secondary)
@@ -111,7 +111,7 @@ public struct DashboardView: View {
                     Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
                 }
             }
-            
+
             if !state.googleStatus.isConnected {
                 Button(action: { showingGoogle = true }) {
                     HStack {
@@ -122,7 +122,7 @@ public struct DashboardView: View {
                 }
                 .disabled(!state.controlsAvailable)
             }
-            
+
             if !state.telegramStatus.isConnected {
                 Button(action: { showingTelegram = true }) {
                     HStack {
@@ -133,13 +133,13 @@ public struct DashboardView: View {
                 }
                 .disabled(!state.controlsAvailable)
             }
-            
+
             if let reason = state.waitingOrErrorReason, case .needsAttention = state.overallState {
                 Text(reason).font(.footnote).foregroundStyle(.red)
             }
         }
     }
-    
+
     private var backupDetailsView: some View {
         List {
             Section("Access & Stats") {
@@ -157,7 +157,7 @@ public struct DashboardView: View {
                     LabeledContent("Time remaining", value: Duration.seconds(eta).formatted(.units(allowed: [.hours, .minutes])))
                 }
             }
-            
+
             Section {
                 Button("Scan library again", action: environment.requestPhotoLibraryAccess)
                     .disabled(!state.controlsAvailable || state.canPause)

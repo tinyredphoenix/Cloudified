@@ -33,7 +33,7 @@ public struct LogsView: View {
                             LogRow(entry: entry)
                         }
                     }
-                    .listStyle(.plain)
+                    .listStyle(.insetGrouped)
                 }
             }
             .safeAreaInset(edge: .bottom) {

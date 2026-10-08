@@ -66,7 +66,7 @@ public struct GoogleAuthSheet: View {
                     }
                 }
             }
-            .navigationTitle("Google Photos").inlineNavigationTitle()
+            .navigationTitle("Google Photos").navigationBarTitleDisplayMode(.inline)
             .interactiveDismissDisabled(exchanging)
             .onDisappear { oauthToken = ""; showBrowser = false; loginTask?.cancel() }
             .toolbar {
@@ -92,5 +92,3 @@ public struct GoogleAuthSheet: View {
 }
 
 // MARK: - Telegram Authentication Sheet
-
-@MainActor

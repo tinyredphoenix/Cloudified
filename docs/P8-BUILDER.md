@@ -223,12 +223,12 @@ Claimed by Builder (Antigravity) on 2026-10-08 at 17:30Z.
   - Owned by authenticated user (`chatMemberStatusCreator` and `is_member == true`)
   - Auto-delete disabled (`message_auto_delete_time == 0`)
   - No active usernames (private).
-- Handled offline/error propagation safely up to the caller without exposing raw error data or JSON logs. 
+- Handled offline/error propagation safely up to the caller without exposing raw error data or JSON logs.
 - Created `App/Application/AppEnvironment+TelegramChannels.swift` to securely expose the discovery helper to the presentation layer using the existing authenticated `TDLibClient`.
 
 ### UI changes (Design Rationale):
 - Reimagined Dashboard to feature distinct Google and Telegram components separated by Photos and Videos summaries, preventing cluttered repetition.
-- Centralized Settings and Advanced configuration with straightforward hierarchies. 
+- Centralized Settings and Advanced configuration with straightforward hierarchies.
 - Integrated the Telegram channel picker cleanly into the linking flow, reserving manual ID input for the Advanced section.
 
 ### Checks & Limitations:
