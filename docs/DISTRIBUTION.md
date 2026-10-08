@@ -34,8 +34,21 @@ workflow uses a write-scoped `GITHUB_TOKEN` only for its own staging release;
 the separate source workflow uses its own token for its final release.
 Neither workflow runs cloud-service uploads or signs the app.
 
-The first build after this distribution change must complete before the new
-icon appears inside an IPA and the source has an installable version. Check
-the source URL, release asset URL, SHA-256 and IPA Info.plist after publishing.
-Only then use SideStore to install and start P7 device verification. The
-source icon alone does not prove the installed icon is updated.
+## First published build
+
+Manual build [37785528077](https://github.com/tinyredphoenix/Cloudified/actions/runs/37785528077)
+passed preflight and iOS packaging from commit
+`683668e4f381bb605da420c1315c3e6d8be65c20`. Its compiled Info.plist
+was verified by both publication stages as bundle
+`com.tinyredphoenix.Cloudified`, version `1.0`, build `6`, with that
+source revision and a compiled asset catalog. The
+[app publisher](https://github.com/tinyredphoenix/Cloudified/actions/runs/37785927107)
+and [source publisher](https://github.com/tinyredphoenix/Cloudified-Source/actions/runs/37785965420)
+both passed. The [source prerelease](https://github.com/tinyredphoenix/Cloudified-Source/releases/tag/ci-run-37785528077-untested)
+contains a 17,265,113-byte unsigned IPA with SHA-256
+`a87a9403fd4e9962c06c2046e1a247cb4cdf8d9a3ae5c0a09f56dfaaa0a616f8`.
+The public raw source URL served one app and version `1.0` build `6`.
+
+The installed icon and source behavior still need a SideStore/iPhone check.
+Build compilation and release checksum do not establish account uploads,
+original quality, background reliability or reinstall deduplication.

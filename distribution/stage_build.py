@@ -96,7 +96,12 @@ def main() -> None:
     parser.add_argument("--run-id", required=True, type=int)
     parser.add_argument("--run-number", required=True, type=int)
     parser.add_argument("--head-sha", required=True)
-    parser.add_argument("--conclusion", choices=("success", "failure", "cancelled", "timed_out"), required=True)
+    parser.add_argument(
+        "--conclusion",
+        choices=("success", "failure", "cancelled", "timed_out", "neutral",
+                 "skipped", "stale", "action_required", "startup_failure"),
+        required=True,
+    )
     parser.add_argument("--artifact-dir", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)
     args = parser.parse_args()
