@@ -17,7 +17,7 @@ See [actual setup status](docs/SETUP-STATUS.md).
 
 ## Stack and build location
 
-Swift 6 language mode, SwiftUI, PhotoKit, SQLite, Keychain, background URLSession
+Swift 6 language mode, SwiftUI, PhotoKit, SQLite, Keychain, file-backed URLSession
 and iOS 26 continued processing. C/C++ is limited to the TDLib dependency/bridge.
 Keep source in this small local checkout; use manual GitHub Actions macOS builds
 to avoid installing the full Xcode suite on this Mac.
@@ -36,9 +36,11 @@ Builder completed P1; Architect directly implemented P2 critical core.
 Builder's P3-R2 implementation was reviewed; Architect completed critical source corrections.
 Architect completed [P4-B provider integration](docs/P4-B-INTEGRATION.md) with
 source/compiler evidence only. Builder submitted P5; [Architect review](docs/P5-REVIEW.md)
-found recovery, command ownership and presentation gaps. Focused compiler/safety
-corrections are implemented; **next is [Builder P5-R1](docs/P5-R1.md)**.
-P6 is not assigned. P7 remains the first full iOS/native/app/device verification.
+found recovery, command ownership and presentation gaps. Architect directly implemented
+P5-R1 corrections and critical P6 under the user's subsequent authorization.
+See [integration/evidence](docs/P5-P6-INTEGRATION.md). **Next is P7**, the first full
+iOS/native/app/device verification. Source/compiler evidence does not establish
+service behavior, original quality, quota treatment, reinstall safety or an accepted IPA.
 P3 has source/compiler evidence only; see [review history](docs/P3-REVIEW.md), handbook 2 and
 the [core integration contract](docs/CORE-INTEGRATION.md).
 Application phases are assigned in batches; the handbook is not authorization to

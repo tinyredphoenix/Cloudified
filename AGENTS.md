@@ -7,8 +7,9 @@ The root docs are planning contracts, not evidence of working app features.
 Start with docs/01-ARCHITECTURE.md and docs/02-BUILD-PHASES.md. Use
 docs/03-BUILD-LOG.md for active ownership/evidence and docs/04-DECISIONS.md for why.
 Architect completed P4-B provider source integration and reviewed Builder P5.
-Focused corrections and Core query APIs are implemented. Builder's next batch is
-P5-R1 only in docs/P5-R1.md; P6 is not assigned. Architect owns critical Core,
+User assigned Architect direct P5-R1 and critical P6; source integration is implemented.
+Read docs/P5-P6-INTEGRATION.md for evidence and P7 boundaries. Builder holds until
+an explicit packaging/debugging handoff; no automatic cloud dispatch. Architect owns critical Core,
 provider/native internals. Claim exact paths before editing.
 
 Latest user direction: no demo/mock/seeded data, fake progress, sample logs or fake
@@ -47,7 +48,8 @@ not postponed until failures occur.
 - Make small commits at coherent batches. Annotated milestone tags must accurately
   describe evidence: plan tags are not app releases. Push history and tags to origin.
 
-Opening these instructions does not authorize every phase. Read docs/P5-REVIEW.md
-and execute docs/P5-R1.md only. P5 is not accepted; review findings are source
-findings, not device evidence. Core/provider/native internals remain Architect-owned.
+User explicitly authorized Architect to complete P5 corrections and critical P6.
+Read docs/P5-REVIEW.md and docs/P5-R1.md for correction scope; runtime contracts
+apply to P6. No active Builder assignment. Source findings are not device evidence.
+Core/provider/native internals remain Architect-owned.
 No app/account/runtime tests or cloud IPA builds before P7.

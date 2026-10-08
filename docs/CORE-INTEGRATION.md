@@ -308,3 +308,21 @@ handoffs; every service/native/device/resource claim still needs P7 evidence.
 
 These are read/query/formatting additions, not proof of any runtime behavior.
 P5-R1 must integrate the inventory/history APIs before P6 cleanup wiring.
+
+## P5-R1 / critical P6 source integration — 2026-10-08
+
+[Integration map and evidence](P5-P6-INTEGRATION.md) supersede earlier pending-P6
+handoff text. Core adds SourceWorkProducer demand admission, adapter canAcceptWork
+backpressure, onLaneFinished actual retry results and wakeReadyLanes for idle lanes
+inside the same frozen-destination batch. No additional queue or attempt owner.
+
+Queries add optional closed state/permanence filters, System+Source log origins,
+aliasedJob and hasRetainedTransfers preflight. UI uses bounded page windows and
+real attempt histories. sweepIfInventoried skips cleanup until reader inventory;
+it never relaxes durable hold/reserve checks for newly admitted exports.
+
+The selected P6 process-owned URLSession plus BGContinuedProcessingTask requires
+no persistent OS upload queue; the existing background-transport injection guard
+remains. Startup still inventories native readers and all old retained mappings;
+unknowns fence cleanup, not the healthy provider's bounded export admission.
+Full iOS/native/service/device verification remains P7.

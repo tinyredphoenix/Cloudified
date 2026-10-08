@@ -23,8 +23,10 @@ UI presentation only; hashing, disk I/O and history reconciliation run off it.
 - Queue metadata/identifiers on disk, not arrays of full PHAsset objects or bytes.
   Fetch small pages, release completed page/resource references, and keep only
   active work in memory. Paginate error rows and logs as well as library/history.
-- One media-export/hash worker, one Google transfer, one Telegram transfer initially.
-  Keep at most one small ready resource ahead when the disk budget allows it.
+- One media-export/hash worker, one Google worker, one Telegram worker initially.
+  Demand-source admission has zero speculative prefetch and one planner globally.
+  Telegram retains at most eight uncertain native sends; capacity backpressures
+  only that lane, before another source measurement (D38).
 - Stream data through bounded buffers; begin with 1 MiB file-read/hash chunks.
   Never `Data(contentsOf:)` a photo/video or buffer an entire multipart request.
   Compute SHA-256 and SHA-1 in the same pass where possible.
@@ -73,7 +75,8 @@ when needed, verifying content identity again. If the source later disappears,
 show Source unavailable for the missing obligation. Never delete Apple originals.
 
 Startup reclaims only app-owned orphaned partial files after reconciling PhotoKit
-work, URLSession's live tasks and TDLib pending sends. A persisted reference count
+work, the selected transport's lifetime and TDLib pending sends. The selected
+P6 URLSession is process-owned; no persistent OS upload session is injected. A persisted reference count
 alone is insufficient after a crash. Mark eligible files for deletion, unlink them,
 and finalize that cleanup record; interruption of cleanup must be safe to repeat.
 Unknown/unmatched active tasks protect associated paths until resolved.
@@ -104,7 +107,7 @@ Measure these costs on the device and keep concurrent large resources bounded.
 Generate at most one or a small bounded number of Telegram parts ahead, delete
 unneeded part copies after safe confirmation, and never materialize all parts
 beside a huge video at once. Google still requires a full staged file for its
-existing background upload path. If disk is insufficient, mark Waiting for space
+file-backed upload path. If disk is insufficient, mark Waiting for space
 for that asset and continue other admissible assets; do not compress it to fit.
 
 Device-original size does not imply enough additional staging space. Large-file
@@ -132,13 +135,20 @@ One NWPathMonitor informs policy and shows Waiting for Wi-Fi/connection. A path
 being available is not proof of internet reachability or valid credentials. Do
 not run a polling ping loop or use repeated failing sends as a network detector.
 
-Configure Google's media transport as file-based background URLSession. Use stable
-session identifiers and job IDs mapped to original account identities. Reattach
-to existing tasks on relaunch; never create replacement sends until reconciled.
-Keep authenticated small RPC requests and their response data bounded/redacted.
+P6 selected implementation (D38, superseding the initial background-URLSession
+proposal): use the existing process-owned file-backed URLSession inside the same
+iOS 26 BGContinuedProcessingTask as the TDLib lane. This avoids a second persistent
+transport queue/inventory and preserves the pinned foreground receipt boundaries.
+No OS upload survives process exit in this mode. Relaunch still reconciles saved
+checkpoints/hash/history before any absent-content send; termination is not proof
+of remote rejection. Persistent background URLSession injection remains guarded
+and is not part of this implementation. Keep authenticated small RPC requests and
+their response data bounded/redacted.
 
-Set allowed-cellular and constrained/expensive-network policies on relevant
-URLSession requests/configurations, and enforce the same Wi-Fi decision in TDLib.
+Google requests enforce cellular/expensive preferences and disallow constrained
+networks. One passive path monitor gates both lanes for Wi-Fi/Low Data Mode and
+uses real TDLib setNetworkType(None/WiFi/Mobile) before native initialization and
+on policy changes. A path is eligibility, never proof of internet access.
 Network transitions, settings switches and account changes need coordinated
 cancellation/checkpoints, including any ambiguous outcome after bytes were sent.
 Do not reset attempt budgets on a network change.
@@ -162,13 +172,19 @@ unbounded response memory or logging volume.
 
 ## Battery, temperature and lifecycle
 
-For user-started finite batches, use iOS 26 continued processing with honest progress
-and expiration/cancellation handling. Scheduled work, if authorized later, has its
+For user-started finite batches, register one iOS 26 continued workload and submit
+only on foreground Back Up/Resume with fail (not queued) strategy. Use actual
+confirmed/total destination obligations for progress. If the system declines,
+foreground backup remains available; entering background gates work without a live
+continued task. Expiration stops admission, cancels/joins workers, preserves all
+uncertain inputs and requires explicit Resume. Neither submission nor source-only
+integration proves the system granted background execution. Scheduled work, if authorized later, has its
 own background scheduling. Force-quit and system suspension are test cases, not
 conditions that the app promises to bypass.
 
-Reduce preparation/prefetch under Low Power Mode and serious thermal pressure;
-defer new CPU-intensive work at critical thermal state. Persist and present the
+Zero speculative prefetch is already the conservative Low Power default. Serious
+or critical thermal pressure gates both lanes and new original preparation;
+thermal notifications re-evaluate eligibility without polling. Persist and present the
 waiting reason. Respect completion of system-managed transfers rather than creating
 duplicate tasks. Keep hashing off MainActor and avoid rendering original media.
 

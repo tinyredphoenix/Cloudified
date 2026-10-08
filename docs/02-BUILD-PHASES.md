@@ -15,8 +15,9 @@ simulator/device tests or cloud IPA builds. P7 is the first complete app build/t
 P0/P1 shell and P2 critical Core have implementation/static evidence. Architect
 completed P3 corrections and P4-B provider source integration. Builder submitted P5;
 [Architect review](P5-REVIEW.md) found blocking coordinator/recovery/presentation
-faults. Direct compiler/safety corrections and query APIs are implemented. **Next
-batch is [Builder P5-R1](P5-R1.md)**; P5 is not accepted and P6 is not assigned.
+faults. User subsequently authorized Architect to implement P5-R1 and critical P6
+directly. Those source changes are documented in [integration/evidence](P5-P6-INTEGRATION.md).
+**Next is P7 full integration verification**; no native/device/service acceptance yet.
 Compiler checks do not establish service/device/native acceptance; all runtime
 verification remains P7.
 
@@ -34,8 +35,8 @@ not authorization to implement subsequent batches.
 | P2: critical core and diagnostics | Architect directly | Durable SQLite queue/receipts, account scoping, three-attempt reducer, independent lanes, recovery, counters, file leases and structured logs | Critical code review and documented invariants; runtime behavior remains untested |
 | P3: original media pipeline | Builder; architect reviews | PhotoKit scan, streaming export/hash, metadata, resource roles and bounded staging | Implementation review and diagnostic event coverage |
 | P4: real provider adapters | Builder; architect owns critical protocol corrections | Pinned PhotosBackup original-mode and TDLib document/history bridges | Dependency provenance, real auth/receipt/reconciliation paths and diagnostic coverage |
-| P5: wire all presentation and controls | Builder | Real dashboard snapshots, settings, failures/logs and concurrent dual backup | No simulated records; commands/status wired to real components |
-| P6: complete lifecycle/media behavior | Architect on critical fixes; Builder on assigned wiring | Live Photo coverage/fallback, large-file recovery, iOS 26 background work, memory/cache cleanup | Full feature integration and logging coverage; no unfinished feature stubs |
+| P5: wire all presentation and controls | Builder submission; Architect R1 | Real dashboard snapshots, settings, failures/logs and concurrent dual backup | No simulated records; commands/status wired to real components |
+| P6: complete lifecycle/media behavior | Architect directly (authorized 2026-10-08) | Live Photo coverage/fallback, large-file recovery, iOS 26 background work, memory/cache cleanup | Full feature integration and logging coverage; no unfinished feature stubs |
 | P7: first complete app build and test | Architect directs; Builder packages; user/device performs real use | Full IPA, SideStore install and real Google/Telegram backup with every feature present | Full functional/resource/quality/recovery matrix and persistent diagnostic export |
 | P8: debugging iterations and release | Architect on critical fixes; Builder on assigned fixes | Fix failures from the real test, recheck affected behavior and package accepted release | Evidence of resolved issues; release tag only after acceptance |
 

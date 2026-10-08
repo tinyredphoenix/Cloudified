@@ -1,7 +1,7 @@
 # Cloudified shared handbook 1 — structure and purpose
 
-Updated 2026-10-07. This handbook specifies the target; it does not claim the app
-is implemented. Read this and handbook 2 before starting a batch. Read deeper
+Updated 2026-10-08. This handbook specifies structure; source/compiler evidence is
+separate from native/device/service acceptance. Read this and handbook 2 before starting a batch. Read deeper
 contracts only for the assigned work.
 
 ## Purpose and fixed requirements
@@ -19,7 +19,9 @@ editing or playback. Source stays on the Mac; full Xcode builds use manual cloud
 
 ## Target directory map and ownership
 
-These application/package paths are planned, not present at this milestone.
+The application/package paths below exist. Source implementation through critical
+P6 is documented in [actual integration/evidence](P5-P6-INTEGRATION.md); no working
+IPA or runtime acceptance exists yet.
 
 | Path | Purpose | Author/owner |
 | --- | --- | --- |
@@ -43,7 +45,11 @@ Keep core independent of SwiftUI/PhotoKit presentation for clear ownership and
 direct code review. No controlled/demo adapters in the app. Build all features
 first; the first real app test is P7. Do not invent a large provider-plugin framework.
 
-P1 shell and P2 core are implemented, with static/compiler evidence only. The
+P1–P5 and critical P6 source integration are implemented, with static/compiler evidence only.
+Application composition is split by commands, recovery, backup coordination,
+lifecycle, snapshots and pages; DemandSourceProducer serializes only planning.
+System helpers own passive network monitoring, continued execution, bounded
+fallback diagnostics, export cleanup and cancellable local row thumbnails. The
 [core integration contract](CORE-INTEGRATION.md) maps actual files/public APIs and
 defines the P3 source-producer, P4 adapter and P5/P6 composition responsibilities.
 

@@ -209,3 +209,48 @@ added bounded recovery/attempt-history queries without a second queue/database.
 The remaining recovery, credential transition, source admission and presentation
 gaps require explicit Builder P5-R1 before P6. Wi-Fi enforcement remains honestly
 unavailable until P6. Compiler/source review is not full-app or service acceptance.
+
+## D38 — direct P5-R1 and one P6 execution owner
+
+2026-10-08. User authorized Architect to make P5 corrections and implement critical
+P6 directly. Split the large coordinator into owned commands/recovery/backup/
+lifecycle/presentation/page extensions, preserving one Core ledger/retry budget.
+Each lane asks one demand producer for the next canonical asset only when ready
+work runs out. Zero speculative prefetch and one measurement globally avoid hashing
+the entire library first. Frozen destination/policy plus a joined planner generation
+prevent a remap or Live Photo change from reviving old coverage. Alias invalidation
+immediately removes old Saved coverage; new policy is replanned on demand rather
+than a library-wide hashing barrier before enabling work.
+
+One event-driven deadline uses actual Core retry dates. An idle lane can restart
+inside an existing batch without waiting for its sibling's full library drain.
+Telegram's eight retained native sends backpressure only Telegram before new source
+measurement; real native completion/connection events supply wakeups. Missing
+credentials, unknown native ownership and old deselected mappings never imply
+recovery or permission to unlink credentials/clean inputs. Toggle preference is
+independent of authentication/recovery readiness.
+
+P6 extends the existing process-owned Google file URLSession and TDLib with ONE
+iOS26 BGContinuedProcessingTask. This supersedes the initial separate persistent
+background-URLSession proposal: a second OS queue complicates input/receipt ownership
+without helping the TDLib lane. Register one workload, request only from foreground
+user Back Up/Resume, strategy fail, real ledger progress, expiration cancel/join.
+No queued background surprise, periodic task, fake keepalive or force-quit promise.
+Persistent background transport injection remains rejected. Process death still
+requires remote reconciliation and never proves rejected acceptance.
+
+One passive NWPathMonitor drives both providers. Google request cellular/expensive/
+constrained flags and pinned TDLib setNetworkType(None/WiFi/Mobile) enforce the same
+policy. Low Data Mode and serious/critical thermal state gate work; zero prefetch
+is already conservative for Low Power Mode. Staging cleanup waits for inventory;
+healthy-provider exports can continue within reserve/hold limits while unmatched
+readers keep cleanup fenced. Native optimizeStorage runs only at global no-reader
+idle, never against the auth database or remote messages. Bounded page windows,
+main-actor thumbnail generations, protected export files, visible memory-only
+persistence fallback and actual build revision make P7 diagnostics usable.
+
+API/source evidence: Apple's [continued-task guidance](https://developer.apple.com/documentation/backgroundtasks/performing-long-running-tasks-on-ios-and-ipados/),
+[request API](https://developer.apple.com/documentation/backgroundtasks/bgcontinuedprocessingtaskrequest),
+[WWDC25 continuation session](https://developer.apple.com/videos/play/wwdc2025/227/),
+and the exact pinned TDLib StateManager/ConnectionCreator/td_api.tl source.
+Source decisions and portable compilation are not iOS/native/device/service proof.

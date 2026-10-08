@@ -38,8 +38,9 @@ separate from a full Xcode/iOS build and does not prove runtime behavior.
 
 P3 original-media source implementation was reviewed and completed by Architect
 with local macOS Photos SDK typechecking; iOS/runtime behavior remains unverified.
-Next: Architect P4-B after reviewed/directly completed R2 source corrections. Implement
-critical transports, followed by P5 UI wiring and P6 system integration. Hosted
+Architect completed P4-B and directly implemented P5-R1/critical P6 source integration.
+See [actual integration/evidence](P5-P6-INTEGRATION.md). Next is P7 full integrated
+packaging/verification after an explicit handoff and build allowance check. Hosted
 build caches are configured; native assembly/linkage and cache hits remain untested.
 No cloud build, simulator/device test or real upload has run. The first
 complete-app build/test remains P7. Verify public standard runners and storage

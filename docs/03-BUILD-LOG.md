@@ -6,7 +6,7 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 
 ## Current handoff state
 
-- Active editing batch: none after Architect publication. P5 critical review/direct corrections complete; all reserved paths released. Builder next assignment is docs/P5-R1.md only. P5 is not accepted; P6 is not assigned.
+- Current handoff: Architect completed authorized P5-R1 and critical P6 source integration; final evidence/handbook update below. No active Builder assignment or concurrent writer. Next phase is P7 full integrated packaging/verification, requiring its explicit handoff and allowance check before manual cloud dispatch. No app/account/runtime tests or cloud build were run in this assignment.
 - P0: architecture/repository/infrastructure complete; handbook contracts confirmed.
 - P1: native iOS 26 target, shared Cloudified scheme, four navigation screens (Dashboard, Not uploaded, Logs, Settings), adapter protocol placeholders, and honest unpopulated states completed by Builder.
 - P2: Architect-authored critical core/diagnostics implemented and compiled locally in Swift 6 mode; no runtime evidence yet.
@@ -15,7 +15,7 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 - P4-A-R1: Builder submitted 6e3a624/242fdef and claimed all eight corrections complete. Architect reviewed actual code; direct linkage/deadline/schema improvements exist, but native recipe, bounds/lifecycle, real storage/auth and safe-error requirements remain incomplete. Architect directly fixed identifier/router/diagnostic/overflow faults; R2 required. Compiler evidence is not runtime acceptance.
 - P4-A-R2: Builder submitted e0a958f/8aac88f and claimed all remaining requirements complete. Architect source review found bootstrap/receiver retirement, weak ownership, delivery bounds/progress and profile-root issues; directly corrected those plus native link/cache gates and notices. R2 closed for source integration handoff only; no native/runtime acceptance.
 - P4-B: Architect implemented real provider adapters, scopes/checkpoints, document history and retained native status; compiler/static evidence only. Integration map: docs/P4-B-INTEGRATION.md. No iOS/service/quality/reinstall acceptance.
-- P5: Builder submission reviewed; P5 is NOT accepted. Architect corrected compiler/safety faults; recovery, coordination and bounded presentation still require docs/P5-R1.md. P6 is not assigned. No intermediate app-test gates.
+- P5-R1 / critical P6: Architect directly implemented correction/lifecycle source integration after user authorization. Portable Swift 6/static checks pass; see docs/P5-P6-INTEGRATION.md. This closes source handoff only, not iOS/native/device/service acceptance. No intermediate app-test gates.
 - P7: first full integrated build/test; P8: debugging iterations/release.
 - No demo/mock/seeded data or simulated uploads are permitted.
 - Main project location: existing Mac checkout. USB drive untouched.
@@ -1070,3 +1070,92 @@ this partial source-review/correction handoff, explicitly requiring R1, not a re
 
 Paths released on publication. Builder implements P5-R1, appends actual evidence,
 pushes coherent commits and stops for Architect review before P6.
+
+## 2026-10-08 — Architect direct P5-R1 and critical P6
+
+Authorization: user requested direct P5 corrections and crucial P6 implementation.
+No Builder/subagent was assigned. Reserved Application, Presentation, System,
+focused Core/source/provider safety, project/build stamping and shared docs; paths
+are released after this source handoff. No credentials/media/binaries added.
+
+Commits: `3939b82` critical lane/resource/lifecycle helpers; `01f3ccf` app/UI/source
+coordination and build metadata. Final handbook commit follows. Annotated milestone
+`v0.0.14-p5-p6-untested` describes source/compiler evidence, never an app release.
+Implementation map and P7 limits: [P5-P6-INTEGRATION](P5-P6-INTEGRATION.md). Rationale:
+D38 in handbook 4; runtime contract supersedes the initial separate persistent
+background URLSession proposal with one continued-task execution owner.
+
+Focused findings corrected directly:
+
+- Independent recovery no longer waits for the other provider's history scan.
+  Coalesced native events are not discarded during recovery/commands. Actual
+  selected/deselected retained mappings and enabled preferences remain distinct.
+- One joined, demand-driven original planner, zero speculative prefetch and frozen
+  mapping/policy generations. Slow/failed/capacity-limited providers do not end
+  healthy ready uploads. Idle lanes can wake within an existing batch; due retries
+  no longer await the sibling's whole-library drain. Existing Core attempt/receipt
+  reducer remains authoritative; no blind resend or new automatic attempt budget.
+- Serialized map/link/unlink/channel/logout/policy controls, real native close/join,
+  real pre-map auth updates, unchanged passwords, secure API hash and cleared secrets.
+  Explicit Retry checks its own job's holds; recovery is separate from new cycles.
+- Simultaneous Core/native progress, real activity/attempt/component state, separate
+  photos/videos and provider counts. Nullable unknown metadata stays unknown.
+  Failure/source/log/run/attempt keyset pages replace bounded windows, query filters
+  immediately and reject stale/cancelled generations. System includes Source events.
+- Main-actor thumbnail cache with generations/pixel costs and pressure release;
+  protected/excluded streaming exports with partial/share/stale cleanup; <=50 visible
+  memory-only persistence faults. Actual build HEAD stamps ledger/run metadata.
+- One passive network monitor, real TDLib network policy before native queue startup,
+  matching Google request preferences, Low Data/thermal/background gates, one retry
+  deadline, actual iOS26 continued-task submit/progress/expiration and no-reader idle
+  staging/native-cache maintenance. Known/unmatched inputs retain cleanup protection;
+  healthy exports remain admissible within reserve/hold budgets.
+
+Exact completion evidence (2026-10-08; no runtime execution):
+
+1. `swift build --package-path Packages/CloudifiedCore --disable-sandbox` with
+   TMPDIR/module caches under `/private/tmp`: exit 0. CLT user cache is unavailable
+   in the sandbox; compiler build succeeds. No tests executed.
+2. Real 48-production-source Swift 6 typecheck below: exit 0, zero errors. Seven
+   macOS27 `originalFilename` deprecations remain for iOS26 compatibility. No mock
+   modules/stubs or SwiftUI exclusion presented as whole-app proof.
+3. `rg --files App -g '*.swift' -0 | xargs -0 swiftc -frontend -parse`: exit 0,
+   all 58 app Swift files parsed. iOS-only branches are parsed, not typechecked.
+4. Project regenerated deterministically. `plutil -lint` for Info.plist and
+   project.pbxproj: both OK. Corrected OpenStep quoting for extension filenames
+   containing `+`. Static source-registration inventory: all 58 Swift files once.
+5. Google/TDLib vendor adapted-file SHA-256 inventory matches. Upstream pins remain
+   PhotosBackup `3c88269e18b9d4515e97d846c5816bd836285c3e`, TDLib
+   `42e6a5259551178d1dab54a22ad96d14bd906e20`; licenses retained. GPMC's one-line
+   constrained-network adaptation has refreshed provenance; no dependency update.
+6. Build script `bash -n`, local Markdown targets and `git diff --check`: pass.
+
+Portable typecheck command (run from repository root):
+
+```sh
+TMPDIR=/private/tmp swiftc -typecheck -swift-version 6 \
+  -module-cache-path /private/tmp/cloudified-module-cache \
+  -I Packages/CloudifiedCore/.build/out/Products/Debug \
+  -I Packages/CTDLib/Sources/CTDLib/include \
+  -Xcc -fmodule-map-file=Packages/CloudifiedCore/Sources/CSQLite/module.modulemap \
+  -Xcc -fmodule-map-file=Packages/CTDLib/Sources/CTDLib/include/module.modulemap \
+  App/Adapters/Security/KeychainCredentialStore.swift \
+  App/Adapters/GooglePhotos/*.swift App/Adapters/Telegram/*.swift \
+  App/Adapters/System/*.swift App/Adapters/PhotoLibrary/*.swift \
+  App/Presentation/Settings/SettingsViewState.swift \
+  App/Presentation/NotUploaded/NotUploadedViewState.swift \
+  App/Presentation/Logs/LogsViewState.swift \
+  App/Presentation/Dashboard/DashboardViewState.swift \
+  App/Application/AppEnvironment*.swift App/Application/DemandSourceProducer.swift
+```
+
+Limits: no full Xcode/iOS SDK/native TDLib assembly/link or SwiftUI/UIKit/iOS-only
+BackgroundTasks typecheck; no runtime/unit/simulator/device/account tests, uploads,
+original-byte/metadata/Live Photo/quota/reinstall acceptance, resource measurements,
+cloud workflow or IPA. No local SDK installation; USB remains untouched.
+
+Next: P7 first integrated build/native link and actual SideStore/device verification.
+Preserve current source/pins and cache gates. Verify public standard runner and
+free cache/storage allowance before manual dispatch. Diagnose full-build and real
+service/device failures from safe run/attempt/log evidence, then P8 focused fixes.
+Do not claim no duplicates/unlimited quota/background reliability from compilation.
