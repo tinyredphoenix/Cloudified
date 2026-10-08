@@ -1221,3 +1221,12 @@ Four Settings Binding setters now use explicit closures; the extended real-sourc
 check passes optimized whole-module IR generation as well as parse/typecheck for
 all 64 app sources. Exact run, cache, failure and replacement build evidence live
 in that recovery document. No device/account tests or dependency changes.
+
+Replacement build [37828111234](https://github.com/tinyredphoenix/Cloudified/actions/runs/37828111234)
+passed from `0ebb2e3eb721dfb0e2e6294cc6b6d0633ec5e3f9` (build job 2m39s).
+Both SideStore publishers passed; the source now offers version 1.0 build 8.
+Exact native cache hit verified; compiler cache saved after its miss. Final cache
+usage: 163,235,882 bytes / 10 GB. IPA size/checksum, publication URLs and remaining
+device/service acceptance are recorded in P8-BUILD-RECOVERY.md and DISTRIBUTION.md.
+No binaries, private logs or scratch files enter this commit. Claimed paths release
+after evidence commit/push; no active Builder assignment.

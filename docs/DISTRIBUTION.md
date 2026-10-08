@@ -52,3 +52,21 @@ The public raw source URL served one app and version `1.0` build `6`.
 The installed icon and source behavior still need a SideStore/iPhone check.
 Build compilation and release checksum do not establish account uploads,
 original quality, background reliability or reinstall deduplication.
+
+## Latest published build — P8 corrections
+
+Version **1.0 build 8** is published after the P8 source review and compiler
+recovery. Manual build [37828111234](https://github.com/tinyredphoenix/Cloudified/actions/runs/37828111234)
+passed from exact source `0ebb2e3eb721dfb0e2e6294cc6b6d0633ec5e3f9`.
+The [app publisher](https://github.com/tinyredphoenix/Cloudified/actions/runs/37828500291)
+and [source publisher](https://github.com/tinyredphoenix/Cloudified-Source/actions/runs/37828535144)
+both passed. The [permanent prerelease](https://github.com/tinyredphoenix/Cloudified-Source/releases/tag/ci-run-37828111234-untested)
+contains the 17,412,620-byte unsigned IPA with SHA-256
+`48b42a79b004c025b40ccd14de2460853807ac226d0a380f591a83c9db00c293`.
+Refresh the existing SideStore source, then install/update Cloudified and confirm
+Settings shows version 1.0 build 8. No manual IPA download is required.
+
+Build 7 failed in compiler IR generation and added no installable version. Build 8
+fixes that failure; [recovery evidence](P8-BUILD-RECOVERY.md) distinguishes local
+compiler checks from the successful iPhone build. Real-device/service acceptance
+remains pending; use P8-FIRST-RUN.md and the P7 device/result documents to record it.
