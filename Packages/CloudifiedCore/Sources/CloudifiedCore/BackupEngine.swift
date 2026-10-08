@@ -255,7 +255,7 @@ public actor BackupEngine {
                     if case .retainedByTransport = ownership {
                         classified = UploadFailure(failure.error, disposition: failure.disposition, acceptance: .unknown, retryAfter: failure.retryAfter)
                     } else { classified = failure }
-                    try await ledger.failAttempt(jobID: job.id, failure: classified, runID: runID)
+                    try await ledger.failAttempt(jobID: job.id, failure: classified, runID: runID, resourceID: resource.id, transferID: transferID)
                 }
                 if case .terminal = ownership { try await files.transportFinished(transferID) }
                 try await releasePrepared(prepared)

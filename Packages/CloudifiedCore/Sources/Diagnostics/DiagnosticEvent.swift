@@ -19,7 +19,8 @@ public enum KnownCause: String, Codable, Sendable {
     case unknown, permissionDenied, sourceMissing, insufficientSpace, formatRejected, offline
     case deadlineExceeded, serverRateLimit, loginRequired, quotaExceeded, providerRejected
     case incompleteHistory, outcomeUnknown, interrupted, disabled, paused, contentChanged
-    case persistenceFailed, invalidContract
+    case persistenceFailed, invalidContract, identityUnverified, pairingUnverified, pendingSendUnmatched
+    case privateChannelRequired, accountChanged
 }
 
 /// Whitelisted values only. Never put raw response text, credentials, account names,

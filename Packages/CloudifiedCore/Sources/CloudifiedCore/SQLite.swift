@@ -94,12 +94,12 @@ extension Date { var sql: SQLValue { .real(timeIntervalSince1970) } }
 enum Schema {
     static func install(_ db: SQLite) throws {
         let version = try db.rows("PRAGMA user_version").first?.int("user_version") ?? 0
-        guard version <= 2 else { throw CoreError.invalidContract }
-        guard version < 2 else { return }
+        guard version <= 3 else { throw CoreError.invalidContract }
+        guard version < 3 else { return }
         try db.transaction {
             if version == 0 {
                 for statement in statements { try db.execute(statement) }
-            } else {
+            } else if version == 1 {
                 // Preserve P2 v1 receipts/attempts/transport holds; never reset the
                 // database to install source failures and verified cache metadata.
                 try db.execute(sourceFailureTable)
@@ -112,9 +112,17 @@ enum Schema {
                 if !reservationColumns.contains("derived_from") { try db.execute("ALTER TABLE reservations ADD COLUMN derived_from TEXT") }
                 try db.execute(contentIndex)
             }
-            try db.execute("PRAGMA user_version=2")
+            for statement in providerStatements { try db.execute(statement) }
+            try db.execute("PRAGMA user_version=3")
         }
     }
+    static let providerStatements = [
+        "CREATE TABLE IF NOT EXISTS transport_reservations(id TEXT PRIMARY KEY,bytes INTEGER NOT NULL)",
+        "CREATE TABLE IF NOT EXISTS provider_bindings(destination_id TEXT PRIMARY KEY REFERENCES destinations(id),profile TEXT NOT NULL,scope BLOB NOT NULL)",
+        "CREATE TABLE IF NOT EXISTS provider_checkpoints(destination_id TEXT NOT NULL REFERENCES destinations(id),tag TEXT NOT NULL,transfer_id TEXT NOT NULL,body BLOB NOT NULL,PRIMARY KEY(destination_id,tag))",
+        "CREATE TABLE IF NOT EXISTS remote_scans(destination_id TEXT PRIMARY KEY REFERENCES destinations(id),epoch TEXT NOT NULL,complete INTEGER NOT NULL DEFAULT 0)",
+        "CREATE TABLE IF NOT EXISTS remote_index(destination_id TEXT NOT NULL REFERENCES destinations(id),tag TEXT NOT NULL,reference BLOB NOT NULL,PRIMARY KEY(destination_id,tag))"
+    ]
     static let sourceFailureTable = "CREATE TABLE IF NOT EXISTS source_failures(seq INTEGER PRIMARY KEY AUTOINCREMENT, asset_id TEXT NOT NULL REFERENCES assets(id), destination_id TEXT NOT NULL REFERENCES destinations(id), error BLOB NOT NULL, permanent INTEGER NOT NULL, occurred REAL NOT NULL, UNIQUE(asset_id,destination_id))"
     static let contentIndex = "CREATE INDEX IF NOT EXISTS staged_content ON staged(content_sha256,content_sha1,bytes)"
     static let statements = [

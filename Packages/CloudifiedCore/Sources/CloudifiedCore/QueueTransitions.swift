@@ -103,7 +103,7 @@ extension Ledger {
             try record(.transferStart, context: context(job, runID: runID, resource: resourceID), decision: .proceed)
         }
     }
-    public func confirm(_ receipt: RemoteReceipt, jobID: UUID, resourceID: UUID, runID: UUID) throws {
+    public func confirm(_ receipt: RemoteReceipt, jobID: UUID, resourceID: UUID, runID: UUID? = nil) throws {
         try transaction {
             let job = try loadJob(jobID)
             guard let resource = job.plan.resources.first(where: { $0.id == resourceID }) else { throw CoreError.invalidContract }
@@ -112,7 +112,7 @@ extension Ledger {
             try commitReceipt(receipt, job: job, resource: resource, runID: runID)
         }
     }
-    func commitReceipt(_ receipt: RemoteReceipt, job: JobRecord, resource: ResourceRequirement, runID: UUID) throws {
+    func commitReceipt(_ receipt: RemoteReceipt, job: JobRecord, resource: ResourceRequirement, runID: UUID?) throws {
         guard receipt.destinationID == job.destination.id, receipt.tag == resource.tag,
               !receipt.opaqueReference.isEmpty, receipt.opaqueReference.count <= 64 * 1024 else { throw CoreError.invalidContract }
         // Preserve evidence that this installation uploaded the content when a
@@ -131,10 +131,18 @@ extension Ledger {
     func storeFailure(_ error: SafeFailure, job: JobRecord) throws {
         try db.execute("INSERT INTO failures(job_id,cycle,attempt,occurred,body) VALUES(?,?,?,?,?)", [job.id.sql, job.cycleID.sql, .integer(Int64(job.attempts)), Date().sql, try db.encode(error)])
     }
-    public func failAttempt(jobID: UUID, failure: UploadFailure, runID: UUID, now: Date = Date()) throws {
+    public func failAttempt(jobID: UUID, failure requested: UploadFailure, runID: UUID? = nil, now: Date = Date(), resourceID: UUID? = nil, transferID: UUID? = nil) throws {
         try transaction {
             let job = try loadJob(jobID)
             guard job.state != .confirmed else { return }
+            // A native result can settle while the worker returns its earlier
+            // uncertain outcome. Resolve that race inside this SQLite transaction.
+            var failure = requested
+            if let resourceID, let transferID,
+               let resource = job.plan.resources.first(where: { $0.id == resourceID }),
+               let checkpoint = try providerCheckpoint(destinationID: job.destination.id, tag: resource.tag),
+               checkpoint.transferID == transferID, checkpoint.inputsTerminal, checkpoint.phase == .rejected,
+               let settled = checkpoint.failure { failure = settled }
             let suspended = !failure.didStartTransfer && failure.acceptance == .definitelyNotAccepted
                 && (failure.disposition == .waiting || failure.disposition == .providerWait)
             try storeFailure(failure.error, job: job)

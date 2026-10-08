@@ -23,13 +23,14 @@ public struct ExportFileOwnership: Sendable {
 }
 
 public actor FileLeaseStore {
-    public let root: URL
+    public nonisolated let root: URL
     private let ledger: Ledger
     private var leases: [UUID: UUID] = [:]
     private var deleting: Set<UUID> = []
     private var orphanIterator: FileManager.DirectoryEnumerator?
     private var inventoryReconciled = false
     public init(root: URL, ledger: Ledger) throws {
+        guard root.resolvingSymlinksInPath().path == root.standardizedFileURL.path else { throw CoreError.invalidContract }
         self.root = root.standardizedFileURL; self.ledger = ledger
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         var protectedRoot = root
@@ -199,7 +200,7 @@ extension Ledger {
             throw CoreError.invalidContract
         }
         let safety: Int64 = 536_870_912, soft: Int64 = 1_073_741_824
-        let reserved = try db.rows("SELECT COALESCE(SUM(bytes),0) AS n FROM reservations").first!.int("n")
+        let reserved = try db.rows("SELECT (SELECT COALESCE(SUM(bytes),0) FROM reservations) + (SELECT COALESCE(SUM(bytes),0) FROM transport_reservations) AS n").first!.int("n")
         guard availableBytes >= safety, fixedOverheadBytes <= availableBytes - safety,
               reserved < availableBytes - safety - fixedOverheadBytes else {
             throw SafeFailure(.diskFull, domain: .fileSystem, cause: .insufficientSpace)
@@ -227,7 +228,7 @@ extension Ledger {
         return try transaction {
             let soft: Int64 = 1_073_741_824, safety: Int64 = 536_870_912
             let staged = try db.rows("SELECT COALESCE(SUM(bytes),0) AS n FROM staged WHERE oversized=0 AND derived_from IS NULL").first!.int("n")
-            let reserved = try db.rows("SELECT COALESCE(SUM(bytes),0) AS n FROM reservations WHERE id!=?", [replacing?.sql ?? .text("")]).first!.int("n")
+            let reserved = try db.rows("SELECT (SELECT COALESCE(SUM(bytes),0) FROM reservations WHERE id!=?) + (SELECT COALESCE(SUM(bytes),0) FROM transport_reservations) AS n", [replacing?.sql ?? .text("")]).first!.int("n")
             let normalReserved = try db.rows("SELECT COALESCE(SUM(bytes),0) AS n FROM reservations WHERE id!=? AND oversized=0 AND derived_from IS NULL", [replacing?.sql ?? .text("")]).first!.int("n")
             let remainingWrite = bytes - writtenBytes
             // availableBytes already excludes files actually written. Reserve
@@ -299,6 +300,7 @@ extension Ledger {
         try transaction {
             try db.execute("DELETE FROM holds WHERE transfer_id=?", [id.sql])
             try db.execute("DELETE FROM transfers WHERE id=?", [id.sql])
+            try db.execute("DELETE FROM transport_reservations WHERE id=?", [id.sql])
         }
     }
     func stagedCleanupCandidates(limit: Int) throws -> [StagedRecord] {

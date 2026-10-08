@@ -54,6 +54,19 @@ public actor Ledger {
             return destination
         }
     }
+    /// P5 settings first disables and settles the provider. Replanning a changed
+    /// Live Photo policy must not keep counting an old, smaller coverage as Saved.
+    /// Jobs, receipts and attempt history survive; only current scan bindings reset.
+    public func invalidateCurrentCoverage(destinationID: UUID) throws {
+        try transaction {
+            guard let row = try db.rows("SELECT enabled,selected FROM destinations WHERE id=?", [destinationID.sql]).first,
+                  row.int("enabled") == 0, row.int("selected") == 1,
+                  try db.rows("SELECT id FROM transfers WHERE destination_id=? LIMIT 1", [destinationID.sql]).isEmpty else { throw CoreError.invalidTransition }
+            try db.execute("DELETE FROM aliases WHERE destination_id=? AND asset_id IN (SELECT id FROM assets WHERE scan_id=(SELECT value FROM meta WHERE key='scan'))", [destinationID.sql])
+            try db.execute("DELETE FROM source_failures WHERE destination_id=? AND asset_id IN (SELECT id FROM assets WHERE scan_id=(SELECT value FROM meta WHERE key='scan'))", [destinationID.sql])
+            try record(.mappingChanged, context: EventContext(destinationID: destinationID), decision: .reconcile)
+        }
+    }
     public func selectedDestination(_ provider: Provider) throws -> Destination? {
         try db.rows("SELECT body FROM destinations WHERE provider=? AND selected=1", [.text(provider.rawValue)]).first.map { try db.decode(Destination.self, $0, "body") }
     }

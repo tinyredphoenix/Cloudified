@@ -113,7 +113,7 @@ public enum RemotePresence: Sendable {
     /// pending asset. Pause the lane without spending pending assets' attempts.
     case destinationBlocked(SafeFailure, resumeAt: Date?)
 }
-public struct UploadFailure: Sendable {
+public struct UploadFailure: Codable, Sendable {
     public let error: SafeFailure
     public let disposition: FailureDisposition
     public let acceptance: RemoteAcceptance
