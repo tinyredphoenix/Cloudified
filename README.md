@@ -21,6 +21,9 @@ and copy the [results and bug-report template](docs/P7-TEST-RESULTS-TEMPLATE.md)
 to a private folder before filling it in. The first device attempt found Photos
 permission/setup and presentation blockers before either account was linked;
 see [P8 first-run corrections and linking plan](docs/P8-FIRST-RUN.md).
+The [improvement research and proposed batches](docs/P8-IMPROVEMENT-RESEARCH.md)
+cover Google isolation limits, background/Live Activity choices, efficiency and
+recovery; proposals are separate from implemented or device-verified behavior.
 
 ## Stack and build location
 
