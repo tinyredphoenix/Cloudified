@@ -293,3 +293,21 @@ packaging, preserving agreement with Settings and SideStore's verified metadata.
 Failed-build retries retain the pending version. Existing published artifacts are
 immutable; build 8 stays 1.0. [Distribution policy](DISTRIBUTION.md) is authoritative
 for future release preparation. No new build is authorized merely by this rule.
+
+## D42 — preserve local storage and verify the exact built release version
+
+Telegram linking reuses an Application Support folder the app already creates.
+Treat only the existing-directory error as recoverable, then verify the canonical
+real directory and reapply protection/backup exclusion. Reject files/redirects;
+never erase an account database to work around setup. Retain only safe numeric OS
+codes and closed causes so local failures remain understandable without leaking paths.
+
+Version 1.1 preparation exposed release staging's hard-coded 1.0 check. Compare the
+IPA short version with the source plist at the completed run's SHA, not current
+main, while retaining checksum/bundle/build/revision gates. This implements D41
+without relabeling older artifacts or accepting arbitrary version metadata.
+
+Google's selected EmbeddedSetup/Android master-token route may register a separate
+session/device. No verified equivalent device-less route was established; disclose
+that before sign-in, preserve current wire fields, and do not promise Google will
+avoid prompts or lockout. [Evidence and remaining device checks](P8-LINKING-FIX.md).

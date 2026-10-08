@@ -1244,3 +1244,21 @@ of the same pending release retain its short version; published releases are not
 relabeled. Current published 1.0 build 8 remains unchanged. No build dispatched.
 D41 and the distribution contract record the rule. Claimed paths release after
 documentation checks/commit/push. No active Builder assignment; scratch/ untouched.
+
+## 2026-10-09 — Telegram first-link storage correction, pending 1.1
+
+User clarified that sourceUnavailable/fileSystem/unknown occurred linking Telegram,
+and asked whether Google's device-addition wording can be avoided. Architect's
+exact path ownership and implementation evidence: [linking correction](P8-LINKING-FIX.md).
+The existing-directory create defect reproduces as Cocoa 516; corrected idempotent
+preparation retains real-directory/canonical/protection checks and all native data.
+Safe OS codes/readable storage causes replace the unknown message. Google setup
+discloses the current route's separate-session/device possibility; auth wire and
+isolation remain unchanged. No account/API credential validity claims or secrets.
+
+Pending short version is 1.1 across plist/project/generator. Release staging now
+checks the exact built source's version rather than hard-coded 1.0. Real-source
+Catalyst typecheck and optimized IR, Python syntax, version agreement, plist/project,
+docs and whitespace checks pass. No app/device/account test or cloud dispatch.
+Published SideStore remains 1.0 build 8 until a new authorized build. Claimed paths
+release after commit/push; Builder holds and scratch/ remains untouched.

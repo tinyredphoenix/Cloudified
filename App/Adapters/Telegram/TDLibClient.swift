@@ -75,13 +75,23 @@ public actor TDLibClient {
     private static func prepareDirectory(_ url: URL, fileManager: FileManager) throws {
         do {
             guard url.resolvingSymlinksInPath().path == url.standardizedFileURL.path else {
-                throw TDLibError.invalidParameter("Profile storage cannot be redirected.")
+                throw SafeFailure(.sourceUnavailable, domain: .fileSystem, cause: .storagePathConflict)
             }
-            if fileManager.fileExists(atPath: url.path),
-               try url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == true {
-                throw TDLibError.invalidParameter("Profile storage cannot be redirected.")
+            do {
+                try fileManager.createDirectory(at: url, withIntermediateDirectories: false)
+            } catch {
+                let value = error as NSError
+                // Application Support/Cloudified already exists on first linking;
+                // the native profile also survives launches. Accept only an
+                // existing real directory, including a concurrent creator.
+                guard (value.domain == NSCocoaErrorDomain && value.code == NSFileWriteFileExistsError) ||
+                    (value.domain == NSPOSIXErrorDomain && value.code == Int(EEXIST)) else { throw error }
             }
-            try fileManager.createDirectory(at: url, withIntermediateDirectories: false)
+            let existing = try url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+            guard existing.isDirectory == true, existing.isSymbolicLink != true,
+                  url.resolvingSymlinksInPath().path == url.standardizedFileURL.path else {
+                throw SafeFailure(.sourceUnavailable, domain: .fileSystem, cause: .storagePathConflict)
+            }
             #if os(iOS)
             // Explicitly update existing directories too, not just newly created ones.
             try fileManager.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
@@ -91,7 +101,7 @@ public actor TDLibClient {
             var values = URLResourceValues()
             values.isExcludedFromBackup = true
             try directory.setResourceValues(values)
-        } catch let error as TDLibError { throw error }
+        } catch let failure as SafeFailure { throw failure }
         catch {
             // A private filesystem path must not escape through NSError prose.
             throw storageFailure(error)
@@ -108,7 +118,7 @@ public actor TDLibClient {
             (value.domain == NSCocoaErrorDomain && [NSFileReadNoPermissionError, NSFileWriteNoPermissionError].contains(value.code)) {
             return SafeFailure(.accessDenied, domain: .fileSystem, code: value.code, cause: .permissionDenied)
         }
-        return SafeFailure(.sourceUnavailable, domain: .fileSystem, cause: .unknown)
+        return SafeFailure(.sourceUnavailable, domain: .fileSystem, code: value.code, cause: .storageUnavailable)
     }
 
     /// Initializes and starts the native TDLib session with the given filesystem parameters.

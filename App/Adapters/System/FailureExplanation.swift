@@ -3,6 +3,17 @@ import CloudifiedCore
 
 enum FailureExplanation {
     static func message(_ failure: SafeFailure) -> String {
+        if failure.domain == .fileSystem {
+            switch failure.cause {
+            case .storageUnavailable:
+                return "Cloudified could not prepare its local app storage\(failure.code.map { " (error \($0))" } ?? ""). Close and reopen the app, then retry. If it persists, export diagnostics."
+            case .storagePathConflict:
+                return "Cloudified found a file or redirected path where a local storage folder is required. Setup stopped to protect existing data. Export diagnostics; do not delete the app's database."
+            case .permissionDenied:
+                return "iOS denied access to Cloudified's local storage\(failure.code.map { " (error \($0))" } ?? ""). Unlock the iPhone, reopen the app and retry. This is a local storage error."
+            default: break
+            }
+        }
         switch failure.cause {
         case .identityUnverified: return "Google could not verify this account's identity. Reconnect with a supported PhotosBackup login token."
         case .pairingUnverified: return "Google Live Photo pairing could not be verified. Choose an explicit Google Live Photo option in Settings."
@@ -32,11 +43,15 @@ enum FailureExplanation {
         case .providerRejected: return "The destination rejected this operation. Check the technical code below."
         case .disabled: return "This destination is disabled; its backlog is retained."
         case .paused: return "Backup is paused."
+        case .storageUnavailable, .storagePathConflict: return "Local app storage is unavailable. Export diagnostics before changing stored data."
         case .unknown: return "The cause is unknown (\(failure.category.rawValue), \(failure.domain.rawValue)\(failure.code.map { ", code \($0)" } ?? ""))."
         }
     }
     static func remedy(_ failure: SafeFailure?) -> String {
         guard let failure else { return "Check the pending operation's status before retrying." }
+        if failure.domain == .fileSystem && failure.cause == .permissionDenied {
+            return "Unlock the iPhone, reopen Cloudified and retry. Check the local storage error code."
+        }
         switch failure.cause {
         case .loginRequired, .identityUnverified, .accountChanged: return "Reconnect the correct destination in Settings."
         case .pendingSendUnmatched, .outcomeUnknown, .incompleteHistory: return "Recover the existing destination; do not resend while acceptance is uncertain."
@@ -44,6 +59,8 @@ enum FailureExplanation {
         case .permissionDenied, .sourceMissing: return "Check Photos access and availability of the original."
         case .pairingUnverified: return "Select an explicit Google Live Photo policy."
         case .serverRateLimit, .offline, .wifiRequired: return "Wait for the listed retry time or an allowed network."
+        case .storageUnavailable: return "Unlock the iPhone, reopen Cloudified and retry. Export diagnostics if setup still fails."
+        case .storagePathConflict: return "Export diagnostics for investigation. Keep existing local data intact."
         default: return "Review the safe error code and export diagnostics if the error persists."
         }
     }

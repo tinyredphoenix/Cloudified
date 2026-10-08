@@ -7,10 +7,12 @@ release assets and checks their bytes before publishing them again.
 """
 
 import argparse
+import base64
 import hashlib
 import json
 from pathlib import Path
 import plistlib
+import re
 import subprocess
 import zipfile
 
@@ -40,6 +42,21 @@ def app_info(ipa: Path) -> dict:
     return plistlib.loads(data)
 
 
+def source_version(head_sha: str) -> str:
+    # The publisher may run after main has advanced. Validate against the built
+    # revision, never a hard-coded version or the publisher's current checkout.
+    source = json.loads(run(
+        "gh", "api", f"repos/{APP_REPO}/contents/App/Resources/Info.plist?ref={head_sha}",
+    ).stdout)
+    if source.get("encoding") != "base64":
+        raise ValueError("Source version metadata has an unexpected encoding")
+    info = plistlib.loads(base64.b64decode("".join(source["content"].split()), validate=True))
+    version = info.get("CFBundleShortVersionString")
+    if not isinstance(version, str) or re.fullmatch(r"[1-9][0-9]*\.(?:0|[1-9][0-9]*)", version) is None:
+        raise ValueError("Source short version must use the user's major.minor convention")
+    return version
+
+
 def stage_success(args: argparse.Namespace, manifest: dict) -> None:
     ipa = args.artifact_dir / IPA_NAME
     checksum_file = args.artifact_dir / (IPA_NAME + ".sha256")
@@ -52,7 +69,7 @@ def stage_success(args: argparse.Namespace, manifest: dict) -> None:
     info = app_info(ipa)
     version = str(info.get("CFBundleShortVersionString", ""))
     build = str(info.get("CFBundleVersion", ""))
-    if (info.get("CFBundleIdentifier") != BUNDLE_ID or version != "1.0"
+    if (info.get("CFBundleIdentifier") != BUNDLE_ID or version != source_version(args.head_sha)
             or build != str(args.run_number)
             or info.get("CloudifiedRevision") != args.head_sha):
         raise ValueError("IPA identity, version, build number, or source revision differs from the completed run")

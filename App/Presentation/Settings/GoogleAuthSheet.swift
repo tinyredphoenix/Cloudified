@@ -48,6 +48,8 @@ public struct GoogleAuthSheet: View {
                             Text("Choose your backup account").font(.headline)
                             Text("Sign in with the account you want to back up to. This session is separate from Safari and your other Google apps.")
                                 .foregroundStyle(.secondary)
+                            Text("This PhotosBackup sign-in may appear as a separate device or session in your Google Account. Google controls security checks; Cloudified cannot receive Google verification prompts. Keep another working verification method.")
+                                .font(.footnote).foregroundStyle(.secondary)
                             Button("Sign in to Google") { loading = true; browserError = nil; showBrowser = true }.disabled(!controlsAvailable)
                         }
                         if let error = browserError ?? environment.settingsState.googleAuthErrorMessage {
