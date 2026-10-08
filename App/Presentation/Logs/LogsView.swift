@@ -13,43 +13,46 @@ public struct LogsView: View {
 
     public var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Filters Header
-                DisclosureGroup("Filters") { filtersHeader.padding(.top, 8) }
-                    .padding(.horizontal)
-                    .padding(.vertical, 10)
-
-                // Log entries list or empty state
-                if environment.logsState.filteredEntries.isEmpty && environment.logsState.fallbackEntries.isEmpty {
-                    emptyStateView
-                } else {
-                    List {
-                        if !environment.logsState.fallbackEntries.isEmpty {
-                            Section("Persistence failures — memory only; excluded from export") {
-                                ForEach(environment.logsState.fallbackEntries) { LogRow(entry: $0) }
-                            }
-                        }
-                        ForEach(environment.logsState.filteredEntries) { entry in
-                            LogRow(entry: entry)
+            List {
+                Section {
+                    DisclosureGroup("Filters") { filtersHeader }
+                }
+                if !environment.logsState.fallbackEntries.isEmpty {
+                    Section("Diagnostics not saved to disk") {
+                        Text("These persistence errors are held in memory and excluded from export.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                        ForEach(environment.logsState.fallbackEntries) { entry in
+                            NavigationLink { LogDetail(entry: entry) } label: { LogRow(entry: entry) }
                         }
                     }
-                    .listStyle(.insetGrouped)
                 }
-            }
-            .safeAreaInset(edge: .bottom) {
-                if environment.logsState.pageError != nil || environment.logsState.isLoading || environment.logsState.prunedEventCount > 0 || environment.logsState.hasOlder {
-                VStack {
-                    if let error = environment.logsState.pageError { Text(error).font(.caption).foregroundStyle(.red) }
-                    if environment.logsState.isLoading { ProgressView() }
-                    if environment.logsState.prunedEventCount > 0 {
-                        Text("Routine events pruned: \(environment.logsState.prunedEventCount). Critical records retained.").font(.caption).foregroundStyle(.secondary)
+                Section("Events") {
+                    if environment.logsState.filteredEntries.isEmpty {
+                        if environment.logsState.isLoading { ProgressView("Loading events…") }
+                        else { emptyStateView }
+                    }
+                    ForEach(environment.logsState.filteredEntries) { entry in
+                        NavigationLink { LogDetail(entry: entry) } label: { LogRow(entry: entry) }
+                    }
+                }
+                Section {
+                    if let error = environment.logsState.pageError {
+                        Text(error).foregroundStyle(.red)
+                        Button("Retry page") { environment.reloadLogs() }.disabled(environment.logsState.isLoading)
+                    }
+                    if environment.logsState.isLoading && !environment.logsState.filteredEntries.isEmpty {
+                        ProgressView("Loading events…")
                     }
                     if environment.logsState.hasOlder {
-                        Button("Older page") { environment.olderLogs() }.disabled(environment.logsState.isLoading)
+                        Button("Older events") { environment.olderLogs() }.disabled(environment.logsState.isLoading)
                     }
-                }.padding(.horizontal).padding(.vertical, 8).background(.regularMaterial)
+                } footer: {
+                    if environment.logsState.prunedEventCount > 0 {
+                        Text("\(environment.logsState.prunedEventCount) routine events pruned. Critical records retained.")
+                    }
                 }
             }
+            .listStyle(.insetGrouped)
             .onAppear { environment.reloadLogs(); environment.loadRuns() }
             .onDisappear { if exportedFileURL == nil { exportTask?.cancel() } }
             .onChange(of: environment.logsState.originFilter) { environment.reloadLogs() }
@@ -133,35 +136,23 @@ public struct LogsView: View {
                     Text(filter.rawValue).tag(filter)
                 }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
 
             Picker("Severity", selection: $environment.logsState.severityFilter) {
                 ForEach(LogSeverityFilter.allCases) { filter in
                     Text(filter.rawValue).tag(filter)
                 }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
         }
     }
 
     private var emptyStateView: some View {
-        VStack(spacing: 12) {
-            Spacer()
-            Image(systemName: "doc.text.magnifyingglass")
-                .font(.system(size: 44))
-                .foregroundColor(.secondary)
-            Text("No matching events")
-                .font(.headline)
-                .foregroundColor(.primary)
-            Text("Connection and backup events appear here. Use Export to save diagnostics when reporting a problem.")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ContentUnavailableView("No matching events", systemImage: "doc.text.magnifyingglass",
+            description: Text("Connection and backup events appear here. Adjust filters or export diagnostics to report a problem."))
+            .listRowBackground(Color.clear)
     }
+
 }
 
 /// Row displaying an individual redacted diagnostic log entry.
@@ -169,52 +160,18 @@ public struct LogRow: View {
     public let entry: DiagnosticLogEntry
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                // Severity icon
-                Image(systemName: severityIcon)
-                    .font(.caption2)
-                    .foregroundColor(severityColor)
-
-                Text(entry.origin)
-                    .font(.caption2.bold())
-                    .foregroundColor(.primary)
-
-                Text("•")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-
-                Text(entry.stage)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-
-                if let attempt = entry.attemptNumber {
-                    Text("•")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                    Text("Attempt \(attempt)")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label(entry.origin, systemImage: severityIcon).foregroundStyle(severityColor)
                 Spacer()
-
-                Text(entry.timestamp.formatted(date: .abbreviated, time: .standard))
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
-
-            Text(entry.message)
-                .font(.subheadline)
-                .foregroundColor(.primary)
-
-            if let code = entry.safeErrorCode {
-                Text("Code: \(code)")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
+                Text(entry.timestamp, style: .time).foregroundStyle(.secondary)
+            }.font(.caption)
+            Text(entry.stage).font(.subheadline.weight(.semibold))
+            Text(entry.message).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(entry.severity), \(entry.origin), \(entry.stage), \(entry.message), \(entry.timestamp.formatted())")
     }
 
     private var severityColor: Color {
@@ -237,6 +194,25 @@ public struct LogRow: View {
         default:
             return "info.circle.fill"
         }
+    }
+}
+
+private struct LogDetail: View {
+    let entry: DiagnosticLogEntry
+    var body: some View {
+        List {
+            Section("Event") {
+                Text(entry.message).textSelection(.enabled)
+            }
+            Section("Details") {
+                LabeledContent("Time", value: entry.timestamp.formatted(date: .complete, time: .standard))
+                LabeledContent("Destination", value: entry.origin)
+                LabeledContent("Severity", value: entry.severity)
+                LabeledContent("Stage", value: entry.stage)
+                if let attempt = entry.attemptNumber { LabeledContent("Attempt", value: String(attempt)) }
+                if let code = entry.safeErrorCode { LabeledContent("Safe code", value: code).textSelection(.enabled) }
+            }
+        }.navigationTitle("Event details")
     }
 }
 

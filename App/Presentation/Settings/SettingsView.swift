@@ -4,188 +4,195 @@ import CloudifiedCore
 
 public struct SettingsView: View {
     @ObservedObject public var environment: AppEnvironment
-
+    private enum LinkSheet: String, Identifiable {
+        case google, telegram, channel
+        var id: String { rawValue }
+    }
+    @State private var linkSheet: LinkSheet?
     @State private var showingGoogleDisconnectAlert = false
     @State private var showingTelegramDisconnectAlert = false
     @State private var showingTelegramLogoutAlert = false
+    @State private var actionTask: Task<Void, Never>?
+    @State private var isWorking = false
+    @State private var actionError: String?
 
-    public init(environment: AppEnvironment) {
-        self.environment = environment
-    }
-
+    public init(environment: AppEnvironment) { self.environment = environment }
     private var state: SettingsViewState { environment.settingsState }
+    private var busy: Bool {
+        isWorking || state.isConnectingGoogle || state.isConnectingTelegram || state.isSettlingGoogle || state.isSettlingTelegram
+    }
+    private var controlsAvailable: Bool { environment.dashboardState.controlsAvailable && !busy }
+    private func status(connected: Bool, enabled: Bool) -> String {
+        connected ? (enabled ? "Enabled" : "Disabled") : "Not connected"
+    }
 
     public var body: some View {
         NavigationStack {
             List {
-                Section("Photos") {
+                Section("Destinations") {
+                    NavigationLink { googlePhotosSettings } label: {
+                        destinationRow("Google Photos", symbol: "photo.on.rectangle.angled",
+                            status: status(connected: state.isGoogleConnected, enabled: state.isGoogleEnabled))
+                    }
+                    NavigationLink { telegramSettings } label: {
+                        destinationRow("Telegram", symbol: "paperplane",
+                            status: status(connected: state.isTelegramConnected, enabled: state.isTelegramEnabled))
+                    }
+                }
+                Section("Photos library") {
                     LabeledContent("Access", value: environment.dashboardState.photosAccess.description)
                     if environment.dashboardState.photosAccess == .notDetermined {
-                        Button("Allow Photos access", action: environment.requestPhotoLibraryAccess)
-                            .disabled(!environment.dashboardState.controlsAvailable)
+                        Button("Allow Photos access", action: environment.requestPhotoLibraryAccess).disabled(!controlsAvailable)
                     } else if environment.dashboardState.photosAccess == .restricted {
-                        Text("Photos access is restricted by this device's settings.").font(.footnote).foregroundStyle(.secondary)
+                        Text("Photos access is restricted by this device's settings.").foregroundStyle(.secondary)
                     } else {
                         Link("Change Photos access", destination: URL(string: UIApplication.openSettingsURLString)!)
                         if environment.dashboardState.photosAccess.canRead {
                             Button("Scan library", action: environment.requestPhotoLibraryAccess)
-                                .disabled(!environment.dashboardState.controlsAvailable || environment.dashboardState.canPause)
+                                .disabled(!controlsAvailable || environment.dashboardState.canPause)
                         }
                     }
                 }
-
-                Section("Upload Destinations") {
-                    NavigationLink(destination: googlePhotosSettings) {
-                        HStack {
-                            Image(systemName: "photo.on.rectangle.angled").foregroundColor(.blue).frame(width: 24)
-                            Text("Google Photos")
-                            Spacer()
-                            Text(state.isGoogleConnected ? "Connected" : "Off").foregroundStyle(.secondary)
-                        }
-                    }
-
-                    NavigationLink(destination: telegramSettings) {
-                        HStack {
-                            Image(systemName: "paperplane.fill").foregroundColor(.blue).frame(width: 24)
-                            Text("Telegram")
-                            Spacer()
-                            Text(state.isTelegramConnected ? "Connected" : "Off").foregroundStyle(.secondary)
-                        }
-                    }
+                Section("Upload preferences") {
+                    Toggle("Wi-Fi only", isOn: Binding(get: { state.isWiFiOnlyEnabled }, set: environment.setWiFiOnly))
+                        .disabled(busy)
+                    NavigationLink("Live Photos") { livePhotoSettings }
                 }
-
-                Section(header: Text("Preferences")) {
-                    Toggle("Wi-Fi Only", isOn: Binding(
-                        get: { state.isWiFiOnlyEnabled },
-                        set: { environment.setWiFiOnly($0) }
-                    ))
-
-                    Picker("Live Photo Fallback (Google Only)", selection: Binding(
-                        get: { state.livePhotoFallback },
-                        set: { environment.updateLivePhotoPolicy($0) }
-                    )) {
-                        ForEach(LivePhotoFallbackOption.allCases) { option in
-                            Text(option.rawValue).tag(option)
-                        }
-                    }
-                    .pickerStyle(.menu)
-
-                    Text(state.livePhotoFallback.summaryDescription)
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-
-                    Text("Telegram always uploads both original video and original photo.")
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-                }
-
-                Section("System") {
-                    let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
-                    let revision = Bundle.main.object(forInfoDictionaryKey: "CloudifiedRevision") as? String ?? "unknown"
-                    LabeledContent("Version", value: "\(version) (\(revision))")
+                Section("About") {
+                    LabeledContent("Version", value: bundleValue("CFBundleShortVersionString"))
+                    LabeledContent("Build", value: bundleValue("CFBundleVersion"))
+                    LabeledContent("Revision", value: bundleValue("CloudifiedRevision"))
+                        .font(.footnote).textSelection(.enabled)
                 }
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Settings")
+            .sheet(item: $linkSheet) { sheet in
+                switch sheet {
+                case .google: GoogleAuthSheet(environment: environment)
+                case .telegram: TelegramAuthSheet(environment: environment)
+                case .channel:
+                    NavigationStack {
+                        TelegramChannelPicker(environment: environment) { linkSheet = nil }
+                            .toolbar {
+                                ToolbarItem(placement: .cancellationAction) {
+                                    Button("Cancel") { linkSheet = nil }
+                                        .disabled(state.isConnectingTelegram || state.isSettlingTelegram)
+                                }
+                            }
+                    }
+                    .interactiveDismissDisabled(state.isConnectingTelegram || state.isSettlingTelegram)
+                }
+            }
+            .alert("Account operation failed", isPresented: Binding(
+                get: { actionError != nil }, set: { if !$0 { actionError = nil } }
+            )) { Button("OK", role: .cancel) { } }
+            message: { Text(actionError ?? "") }
+            .onDisappear { actionTask?.cancel() }
         }
     }
 
     private var googlePhotosSettings: some View {
         List {
             Section {
-                Toggle("Enable Google Photos", isOn: Binding(
-                    get: { state.isGoogleEnabled },
-                    set: { environment.setGoogleEnabled($0) }
-                ))
-            }
-
-            Section("Account Details") {
+                Toggle("Enable uploads", isOn: Binding(get: { state.isGoogleEnabled }, set: environment.setGoogleEnabled))
+                    .disabled(!controlsAvailable || !state.isGoogleConnected)
+            } footer: { Text("Google Photos and Telegram upload independently. Disabling one keeps the other running.") }
+            Section("Account") {
                 if state.isGoogleConnected {
-                    LabeledContent("Email", value: state.googleAccountEmail ?? "Unknown").privacySensitive()
-                    NavigationLink("Change Account") {
-                        GoogleAuthSheet(environment: environment)
-                    }
-                    Button("Disconnect", role: .destructive) { showingGoogleDisconnectAlert = true }
-                    .disabled(state.isSettlingGoogle)
-                } else {
-                    NavigationLink("Connect Google Photos") {
-                        GoogleAuthSheet(environment: environment)
-                    }
+                    LabeledContent("Email", value: state.googleAccountEmail ?? "Unavailable").privacySensitive()
                 }
+                Button(state.isGoogleConnected ? "Change account" : "Connect Google Photos") { linkSheet = .google }
+                    .disabled(!controlsAvailable)
             }
-
-            if let error = state.googleAuthErrorMessage {
+            if let error = state.googleAuthErrorMessage { Section("Connection issue") { Text(error).foregroundStyle(.red) } }
+            if isWorking { Section { ProgressView("Updating account…") } }
+            if state.isGoogleConnected {
                 Section {
-                    Text(error).foregroundColor(.red).font(.caption)
+                    Button("Disconnect Google Photos", role: .destructive) { showingGoogleDisconnectAlert = true }
+                        .disabled(!controlsAvailable)
                 }
             }
         }
-        .listStyle(.insetGrouped)
         .navigationTitle("Google Photos")
+        .navigationBarBackButtonHidden(isWorking)
         .alert("Disconnect Google Photos?", isPresented: $showingGoogleDisconnectAlert) {
             Button("Cancel", role: .cancel) { }
-            Button("Disconnect", role: .destructive) {
-                Task { try? await environment.disconnectGoogle() }
-            }
-        }
+            Button("Disconnect", role: .destructive) { perform { try await environment.disconnectGoogle() } }
+        } message: { Text("Uploads to this account stop. Photos already saved in Google Photos remain there.") }
     }
 
     private var telegramSettings: some View {
         List {
             Section {
-                Toggle("Enable Telegram", isOn: Binding(
-                    get: { state.isTelegramEnabled },
-                    set: { environment.setTelegramEnabled($0) }
-                ))
-            }
-
-            Section("Account Details") {
+                Toggle("Enable uploads", isOn: Binding(get: { state.isTelegramEnabled }, set: environment.setTelegramEnabled))
+                    .disabled(!controlsAvailable || !state.isTelegramConnected)
+            } footer: { Text("Original photos and videos are sent as files to your private archive channel.") }
+            Section("Account and channel") {
                 if state.isTelegramConnected {
-                    LabeledContent("Account", value: state.telegramAccountName ?? "Unknown").privacySensitive()
-                    LabeledContent("Channel", value: state.telegramChannelName ?? "Unknown").privacySensitive()
-                    if let chatID = state.telegramChatID {
-                        LabeledContent("Channel ID", value: String(chatID)).privacySensitive()
-                    }
-
-                    NavigationLink("Change Channel") {
-                        TelegramChannelPicker(environment: environment, onChannelSelected: { chatID in
-                            Task {
-                                try? await environment.mapTelegramChannel(chatID: chatID)
-                            }
-                        })
-                    }
-
-                    Button("Disconnect Device", role: .destructive) { showingTelegramDisconnectAlert = true }
-                    .disabled(state.isSettlingTelegram)
-
-                    Button("Log Out Account", role: .destructive) { showingTelegramLogoutAlert = true }
-                    .disabled(state.isSettlingTelegram)
+                    LabeledContent("Account", value: state.telegramAccountName ?? "Unavailable").privacySensitive()
+                    LabeledContent("Channel", value: state.telegramChannelName ?? "Unavailable").privacySensitive()
+                    if let id = state.telegramChatID { LabeledContent("Channel ID", value: String(id)).privacySensitive() }
+                    Button("Change channel") { linkSheet = .channel }.disabled(!controlsAvailable)
                 } else {
-                    NavigationLink("Connect Telegram Account") {
-                        TelegramAuthSheet(environment: environment)
-                    }
+                    Button("Connect Telegram") { linkSheet = .telegram }.disabled(!controlsAvailable)
                 }
             }
-
-            if let error = state.telegramAuthErrorMessage {
+            if let error = state.telegramAuthErrorMessage { Section("Connection issue") { Text(error).foregroundStyle(.red) } }
+            if isWorking { Section { ProgressView("Updating Telegram session…") } }
+            if state.isTelegramConnected || [.readyForChannel, .connected].contains(state.telegramAuthStep) {
                 Section {
-                    Text(error).foregroundColor(.red).font(.caption)
+                    if state.isTelegramConnected {
+                        Button("Disconnect destination", role: .destructive) { showingTelegramDisconnectAlert = true }
+                            .disabled(!controlsAvailable)
+                    }
+                    Button("Log out of this app", role: .destructive) { showingTelegramLogoutAlert = true }
+                        .disabled(!controlsAvailable)
                 }
             }
         }
-        .listStyle(.insetGrouped)
         .navigationTitle("Telegram")
-        .alert("Disconnect from device?", isPresented: $showingTelegramDisconnectAlert) {
+        .navigationBarBackButtonHidden(isWorking)
+        .alert("Disconnect destination?", isPresented: $showingTelegramDisconnectAlert) {
             Button("Cancel", role: .cancel) { }
-            Button("Disconnect", role: .destructive) {
-                Task { try? await environment.disconnectTelegram() }
-            }
-        } message: { Text("This removes the local mapping. You remain logged into Telegram.") }
-        .alert("Log out of Telegram?", isPresented: $showingTelegramLogoutAlert) {
+            Button("Disconnect", role: .destructive) { perform { try await environment.disconnectTelegram() } }
+        } message: { Text("This removes the local channel mapping. Your Telegram session and saved files remain.") }
+        .alert("Log out of this app's Telegram session?", isPresented: $showingTelegramLogoutAlert) {
             Button("Cancel", role: .cancel) { }
-            Button("Log Out", role: .destructive) {
-                Task { try? await environment.logoutTelegram() }
+            Button("Log out", role: .destructive) { perform { try await environment.logoutTelegram() } }
+        } message: { Text("Other Telegram apps and devices stay signed in. This app's current destination will be disconnected.") }
+    }
+
+    private var livePhotoSettings: some View {
+        Form {
+            Section {
+                Picker("Google Photos", selection: Binding(get: { state.livePhotoFallback }, set: environment.updateLivePhotoPolicy)) {
+                    ForEach(LivePhotoFallbackOption.allCases) { Text($0.rawValue).tag($0) }
+                }.pickerStyle(.inline).disabled(!controlsAvailable)
+            } footer: { Text(state.livePhotoFallback.summaryDescription) }
+            Section { Text("Telegram preserves both the original photo and the original motion video for every Live Photo.") }
+        }.navigationTitle("Live Photos")
+    }
+    private func destinationRow(_ title: String, symbol: String, status: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol).foregroundStyle(Color.accentColor).frame(width: 24)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                Text(status).font(.footnote).foregroundStyle(.secondary)
             }
-        } message: { Text("This logs the account out of Telegram completely.") }
+        }.padding(.vertical, 4)
+    }
+    private func bundleValue(_ key: String) -> String {
+        Bundle.main.object(forInfoDictionaryKey: key) as? String ?? "Unavailable"
+    }
+    private func perform(_ operation: @escaping @MainActor () async throws -> Void) {
+        guard controlsAvailable else { return }
+        isWorking = true; actionError = nil
+        actionTask = Task {
+            defer { isWorking = false; actionTask = nil }
+            do { try Task.checkCancellation(); try await operation() }
+            catch is CancellationError { }
+            catch { actionError = FailureExplanation.message(ProviderSupport.safe(error, domain: .core)) }
+        }
     }
 }

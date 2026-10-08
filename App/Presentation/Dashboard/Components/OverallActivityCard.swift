@@ -34,7 +34,7 @@ public struct OverallActivityCard: View {
                         .padding(.horizontal, 40)
                         .padding(.vertical, 4)
 
-                    Text("\(saved) of \(total) items saved securely")
+                    Text("\(saved) of \(total) items saved to both destinations")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .monospacedDigit()

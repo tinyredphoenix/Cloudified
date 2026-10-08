@@ -11,39 +11,35 @@ public struct NotUploadedView: View {
 
     public var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Filters section
-                DisclosureGroup("Filters") { filtersHeader.padding(.top, 8) }
-                    .padding(.horizontal)
-                    .padding(.vertical, 10)
-
-                // Content list or empty state
-                if environment.notUploadedState.filteredItems.isEmpty {
-                    emptyStateView
-                } else {
-                    List {
-                        ForEach(environment.notUploadedState.filteredItems) { item in
-                            NotUploadedRow(item: item) {
-                                selectedItemForDetails = item
-                            } onRetry: {
-                                if item.needsRecovery { environment.recoverItem(item) } else { environment.retryItem(item) }
-                            }
+            List {
+                Section {
+                    DisclosureGroup("Filters") { filtersHeader }
+                }
+                Section("Items needing attention") {
+                    if environment.notUploadedState.filteredItems.isEmpty {
+                        if environment.notUploadedState.isLoading { ProgressView("Loading items…") }
+                        else { emptyStateView }
+                    }
+                    ForEach(environment.notUploadedState.filteredItems) { item in
+                        NotUploadedRow(item: item) {
+                            selectedItemForDetails = item
                         }
                     }
-                    .listStyle(.insetGrouped)
                 }
-            }
-            .safeAreaInset(edge: .bottom) {
-                if environment.notUploadedState.pageError != nil || environment.notUploadedState.isLoading || environment.notUploadedState.hasOlder {
-                VStack {
-                    if let error = environment.notUploadedState.pageError { Text(error).font(.caption).foregroundStyle(.red) }
-                    if environment.notUploadedState.isLoading { ProgressView() }
-                    if environment.notUploadedState.hasOlder {
-                        Button("Older page") { environment.olderFailures() }.disabled(environment.notUploadedState.isLoading)
+                Section {
+                    if let error = environment.notUploadedState.pageError {
+                        Text(error).foregroundStyle(.red)
+                        Button("Retry page") { environment.reloadFailures() }.disabled(environment.notUploadedState.isLoading)
                     }
-                }.padding(.horizontal).padding(.vertical, 8).background(.regularMaterial)
+                    if environment.notUploadedState.isLoading && !environment.notUploadedState.filteredItems.isEmpty {
+                        ProgressView("Loading items…")
+                    }
+                    if environment.notUploadedState.hasOlder {
+                        Button("Older items") { environment.olderFailures() }.disabled(environment.notUploadedState.isLoading)
+                    }
                 }
             }
+            .listStyle(.insetGrouped)
             .onAppear { environment.reloadFailures() }
             .onChange(of: environment.notUploadedState.destinationFilter) { environment.reloadFailures() }
             .onChange(of: environment.notUploadedState.mediaTypeFilter) { environment.reloadFailures() }
@@ -70,138 +66,50 @@ public struct NotUploadedView: View {
                     Text(filter.rawValue).tag(filter)
                 }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
 
-            HStack(spacing: 12) {
-                Picker("Media", selection: $environment.notUploadedState.mediaTypeFilter) {
-                    ForEach(MediaTypeFilter.allCases) { filter in
-                        Text(filter.rawValue).tag(filter)
-                    }
-                }
-                .pickerStyle(.menu)
-
-                Spacer()
-
-                Picker("Status", selection: $environment.notUploadedState.statusFilter) {
-                    ForEach(FailureStatusFilter.allCases) { filter in
-                        Text(filter.rawValue).tag(filter)
-                    }
-                }
-                .pickerStyle(.menu)
-            }
+            Picker("Media", selection: $environment.notUploadedState.mediaTypeFilter) {
+                ForEach(MediaTypeFilter.allCases) { Text($0.rawValue).tag($0) }
+            }.pickerStyle(.menu)
+            Picker("Status", selection: $environment.notUploadedState.statusFilter) {
+                ForEach(FailureStatusFilter.allCases) { Text($0.rawValue).tag($0) }
+            }.pickerStyle(.menu)
         }
     }
 
     private var emptyStateView: some View {
-        VStack(spacing: 12) {
-            Spacer()
-            Image(systemName: "checkmark.circle")
-                .font(.system(size: 44))
-                .foregroundColor(.secondary)
-            Text("No matching items")
-                .font(.headline)
-                .foregroundColor(.primary)
-            Text("No items match these filters. Upload problems appear here after a backup starts.")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ContentUnavailableView("No matching items", systemImage: "tray",
+            description: Text("Upload problems and waiting items appear here. Adjust filters to see other states."))
+            .listRowBackground(Color.clear)
     }
+
 }
 
 /// Row displaying an asset failure or pending item.
 public struct NotUploadedRow: View {
     public let item: NotUploadedItem
     public let onTap: () -> Void
-    public let onRetry: () -> Void
 
     public var body: some View {
-        HStack {
+        Button(action: onTap) {
             HStack(alignment: .top, spacing: 12) {
-                // Small error-identification thumbnail (<=100 cached / 16 MiB, cancellable)
                 NotUploadedThumbnailView(localIdentifier: item.localIdentifier, mediaType: item.mediaType)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(item.filename)
-                            .font(.subheadline.bold())
-                            .foregroundColor(.primary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-
-                        Spacer()
-
-                        Text(item.attemptText)
-                            .font(.caption2.bold())
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.orange.opacity(0.15))
-                            .foregroundColor(.orange)
-                            .clipShape(Capsule())
-                    }
-
-                    HStack(spacing: 6) {
-                        Text(item.provider)
-                            .font(.caption2.bold())
-                            .foregroundColor(.secondary)
-                        Text("•")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                        Text(item.mediaType)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                        if let duration = item.durationSeconds {
-                            Text("•")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                            Text(formatDuration(duration))
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-
-                    Button("Details", action: onTap).frame(minHeight: 44)
-                    Text(item.plainLanguageReason)
-                        .font(.caption)
-                        .foregroundColor(.red)
-                        .lineLimit(2)
-
-                    HStack {
-                        Group { if let date = item.captureDate { Text(date, style: .date) } else { Text("Capture date unavailable") } }
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-
-                        Spacer()
-
-                        Button(action: onRetry) {
-                            Text(item.needsRecovery ? "Recover" : "Retry")
-                                .font(.caption.bold())
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(.accentColor)
-                        .frame(minHeight: 44)
-                        .disabled(!item.canRetry && !item.needsRecovery)
-                    }
-                    .padding(.top, 2)
+                    .privacySensitive()
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(item.filename).font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary).lineLimit(1).truncationMode(.middle).privacySensitive()
+                    Text("\(item.provider) · \(item.status)").font(.caption).foregroundStyle(.secondary)
+                    Text(item.plainLanguageReason).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
                 }
-            }
-            .padding(.vertical, 4)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+            }.padding(.vertical, 6)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens the reason, remedy and attempt history")
     }
 
-    private func formatDuration(_ seconds: TimeInterval) -> String {
-        let formatter = DateComponentsFormatter()
-        formatter.allowedUnits = [.minute, .second]
-        formatter.unitsStyle = .positional
-        formatter.zeroFormattingBehavior = .pad
-        return formatter.string(from: seconds) ?? ""
-    }
 }
 
 struct NotUploadedThumbnailView: View {
@@ -212,7 +120,7 @@ struct NotUploadedThumbnailView: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 6)
-                .fill(Color(.tertiarySystemFill))
+                .fill(.quaternary)
                 .frame(width: 48, height: 48)
 
             if let img = loader.image {
@@ -256,13 +164,25 @@ public struct NotUploadedDetailSheet: View {
     @State private var historyError: String?
     @State private var historyHasOlder = false
     @State private var historyTask: Task<Void, Never>?
+    @State private var historyGeneration = UUID()
+    @State private var historyLoading = false
     @Environment(\.dismiss) private var dismiss
 
     public var body: some View {
         NavigationStack {
             List {
-                Section(header: Text("Asset Details")) {
-                    labeledRow(label: "Filename", value: item.filename)
+                Section("What happened") {
+                    Text(item.plainLanguageReason)
+                    if let remedy = item.suggestedRemedy { Text(remedy).foregroundStyle(.secondary) }
+                    if let date = item.nextRetryDate { LabeledContent("Next retry", value: date.formatted()) }
+                    if item.canRetry || item.needsRecovery {
+                        Button(item.needsRecovery ? "Check existing uploads" : "Retry this item") {
+                            if item.needsRecovery { environment.recoverItem(item) } else { environment.retryItem(item) }
+                        }.disabled(!environment.dashboardState.controlsAvailable)
+                    }
+                }
+                Section(header: Text("Asset")) {
+                    labeledRow(label: "Filename", value: item.filename).privacySensitive()
                     labeledRow(label: "Media Type", value: item.mediaType)
                     labeledRow(label: "Destination", value: item.provider)
                     labeledRow(label: "Capture Date", value: item.captureDate?.formatted() ?? "Unavailable")
@@ -270,6 +190,10 @@ public struct NotUploadedDetailSheet: View {
                 }
 
                 Section("Attempt history (durable)") {
+                    if historyLoading { ProgressView("Loading attempts…") }
+                    if history.isEmpty && !historyLoading && historyError == nil {
+                        Text("No attempts recorded for this item.").foregroundStyle(.secondary)
+                    }
                     ForEach(history, id: \.cursor) { row in
                         VStack(alignment: .leading) {
                             Text("Attempt \(row.number) · cycle \(row.cycleID.uuidString.prefix(8)) · \(row.startedAt.formatted())")
@@ -278,19 +202,14 @@ public struct NotUploadedDetailSheet: View {
                         }
                     }
                     if let historyError { Text(historyError).foregroundStyle(.red) }
-                    if historyHasOlder { Button("Older attempts") { loadHistory(before: history.last?.cursor) } }
-                    Button("Newest attempts") { loadHistory() }
+                    if historyHasOlder { Button("Older attempts") { loadHistory(before: history.last?.cursor) }.disabled(historyLoading) }
+                    Button("Newest attempts") { loadHistory() }.disabled(historyLoading)
                 }
                 Section(header: Text("Diagnostic Information")) {
                     labeledRow(label: "Stage", value: item.stage)
                     labeledRow(label: "Category", value: item.errorCategory)
                     if let code = item.technicalCode {
                         labeledRow(label: "Technical Code", value: code)
-                    }
-                    labeledRow(label: "Reason", value: item.plainLanguageReason)
-                    if let date = item.nextRetryDate { labeledRow(label: "Next retry", value: date.formatted()) }
-                    if let remedy = item.suggestedRemedy {
-                        labeledRow(label: "Suggested Remedy", value: remedy)
                     }
                 }
 
@@ -306,8 +225,8 @@ public struct NotUploadedDetailSheet: View {
                 }
             }
             .onAppear { loadHistory() }
-            .onDisappear { historyTask?.cancel() }
-            .navigationTitle("Failure Details")
+            .onDisappear { historyGeneration = UUID(); historyTask?.cancel() }
+            .navigationTitle("Upload issue")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -323,10 +242,19 @@ public struct NotUploadedDetailSheet: View {
 
     private func loadHistory(before: Int64? = nil) {
         historyTask?.cancel()
+        let generation = UUID(); historyGeneration = generation; historyLoading = true; historyError = nil
         historyTask = Task {
-            do { let page = try await environment.attemptHistory(item, before: before); try Task.checkCancellation(); history = page; historyHasOlder = page.count == 25; historyError = nil }
-            catch is CancellationError { }
-            catch { historyError = FailureExplanation.message(ProviderSupport.safe(error, domain: .sqlite)) }
+            defer { if historyGeneration == generation { historyLoading = false; historyTask = nil } }
+            do {
+                let page = try await environment.attemptHistory(item, before: before)
+                try Task.checkCancellation()
+                guard historyGeneration == generation else { return }
+                history = page; historyHasOlder = page.count == 25
+            } catch is CancellationError { }
+            catch {
+                guard !Task.isCancelled, historyGeneration == generation else { return }
+                historyError = FailureExplanation.message(ProviderSupport.safe(error, domain: .sqlite))
+            }
         }
     }
 
@@ -338,6 +266,7 @@ public struct NotUploadedDetailSheet: View {
             Text(value)
                 .foregroundColor(.primary)
                 .multilineTextAlignment(.trailing)
+                .textSelection(.enabled)
         }
     }
 }

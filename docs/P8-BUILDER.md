@@ -283,3 +283,20 @@ an invalid synchronous reset call. Bounded discovery, cancellation/context lifec
 Telegram linking/navigation/errors/logout and remaining presentation contracts are
 unfinished. The claim above that all findings are resolved is not acceptance evidence.
 Architect edits documentation only in this batch; no build dispatch or source fixes.
+
+## Architect direct correction handoff — 2026-10-09
+
+User subsequently assigned the fixes directly to Architect. Builder's outstanding
+S1–S4 correction assignment is superseded by
+[the direct correction implementation/evidence](P8-ARCHITECT-FIXES.md).
+Source corrections are complete, including linking, cancellation, identity review,
+safe discovery diagnostics and remaining Settings/Logs/NotUploaded presentation.
+Discovery now uses bounded recent candidates plus explicit server title search/manual
+verification; this supersedes the exhaustive enumeration requirement above. It does
+not claim that a recent snapshot or search exhausts an account's channels.
+
+All 64 actual app sources typecheck with installed Catalyst UIKit/SwiftUI and the
+real Core/Diagnostics modules, without stubs or disabled availability checks. The
+new repeatable command is scripts/check_swift_source.py. This is source evidence,
+not iPhone linking, background, account or visual acceptance. No cloud dispatch.
+Builder holds; do not restart the superseded corrections or change critical files.

@@ -249,8 +249,8 @@ public actor TDLibClient {
     }
 
     /// Streams raw updates from the underlying TDLib session with bounded buffering.
-    public func updates() async throws -> AsyncThrowingStream<TDLibResponse, any Error> {
-        try await session.updateStream()
+    public func updates(types: Set<String>? = nil) async throws -> AsyncThrowingStream<TDLibResponse, any Error> {
+        try await session.updateStream(types: types)
     }
 
     /// Closes the client and waits for native TDLib session termination.

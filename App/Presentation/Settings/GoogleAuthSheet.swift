@@ -10,6 +10,8 @@ public struct GoogleAuthSheet: View {
     @State private var exchanging = false
     @State private var connected = false
     @State private var loginTask: Task<Void, Never>?
+    private var busy: Bool { exchanging || environment.settingsState.isConnectingGoogle || environment.settingsState.isSettlingGoogle }
+    private var controlsAvailable: Bool { environment.dashboardState.controlsAvailable && !busy }
     public init(environment: AppEnvironment) { self.environment = environment }
 
     public var body: some View {
@@ -43,10 +45,10 @@ public struct GoogleAuthSheet: View {
                 } else {
                     Form {
                         Section {
-                            Text("Connect Google Photos").font(.title2.weight(.semibold))
+                            Text("Choose your backup account").font(.headline)
                             Text("Sign in with the account you want to back up to. This session is separate from Safari and your other Google apps.")
                                 .foregroundStyle(.secondary)
-                            Button("Continue to Google") { loading = true; browserError = nil; showBrowser = true }
+                            Button("Sign in to Google") { loading = true; browserError = nil; showBrowser = true }.disabled(!controlsAvailable)
                         }
                         if let error = browserError ?? environment.settingsState.googleAuthErrorMessage {
                             Section("Connection issue") { Text(error).font(.footnote).foregroundStyle(.red) }
@@ -58,7 +60,7 @@ public struct GoogleAuthSheet: View {
                                 Button("Connect with token") {
                                     let value = oauthToken.trimmingCharacters(in: .whitespacesAndNewlines)
                                     oauthToken = ""; connect(value)
-                                }.disabled(oauthToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                }.disabled(!controlsAvailable || oauthToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                                 Text("Only for an existing PhotosBackup login token. A normal Google API access token is not compatible.")
                                     .font(.footnote).foregroundStyle(.secondary)
                             }
@@ -67,19 +69,19 @@ public struct GoogleAuthSheet: View {
                 }
             }
             .navigationTitle("Google Photos").navigationBarTitleDisplayMode(.inline)
-            .interactiveDismissDisabled(exchanging)
+            .interactiveDismissDisabled(busy)
             .onDisappear { oauthToken = ""; showBrowser = false; loginTask?.cancel() }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(showBrowser ? "Back" : "Cancel") {
                         if showBrowser { showBrowser = false } else { dismiss() }
-                    }.disabled(exchanging)
+                    }.disabled(busy)
                 }
             }
         }
     }
     private func connect(_ token: String) {
-        guard !exchanging, !token.isEmpty else { return }
+        guard controlsAvailable, !token.isEmpty else { return }
         showBrowser = false; exchanging = true; browserError = nil
         loginTask = Task {
             defer { exchanging = false }
@@ -90,5 +92,3 @@ public struct GoogleAuthSheet: View {
         }
     }
 }
-
-// MARK: - Telegram Authentication Sheet

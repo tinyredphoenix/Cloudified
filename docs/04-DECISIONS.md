@@ -1,6 +1,6 @@
 # Cloudified shared handbook 4 — decisions and reasons
 
-Updated 2026-10-07. This is the decision index; deeper evidence is in RESEARCH.md.
+Updated 2026-10-09. This is the decision index; deeper evidence is in RESEARCH.md.
 Change decisions deliberately and record the impact in handbook 3. Existing
 reference implementations are accepted foundations; verify our integration rather
 than repeatedly reconsider the user's chosen storage services.
@@ -254,3 +254,30 @@ API/source evidence: Apple's [continued-task guidance](https://developer.apple.c
 [WWDC25 continuation session](https://developer.apple.com/videos/play/wwdc2025/227/),
 and the exact pinned TDLib StateManager/ConnectionCreator/td_api.tl source.
 Source decisions and portable compilation are not iOS/native/device/service proof.
+
+## D39 — bounded channel selection instead of false whole-list paging
+
+P8 direct corrections supersede the exhaustive enumeration proposal. Pinned TDLib
+getChats has no cursor and returns a prefix; increasing a fixed limit does not give
+correct paging. Recent main/archive snapshots are explicitly limited to fifty each;
+server title search checks up to fifty matches, with manual numeric verification as
+an alternative. Ten candidate inspections per user page, thirty seconds per operation,
+caller cancellation and bounded retained results keep setup predictable. UI discloses
+coverage instead of claiming no eligible channel exists anywhere in the account.
+Every selection reviews real identity and still uses authoritative mapping/recovery.
+
+Filter the two existing native update streams to each consumer's handled types before
+buffer enqueue. Chat-list metadata must not consume receipt/auth buffers; critical
+updates retain the existing fail-closed overflow policy. No additional native client,
+consumer, mutable receipt path or moving dependency pin. Details and pinned schema:
+[P8 direct correction evidence](P8-ARCHITECT-FIXES.md).
+
+## D40 — use installed Catalyst SDK for broader static UI checks
+
+The local Command Line Tools macOS 27 SwiftUI State macro is unavailable, but the
+already installed 26.5 SDK exposes usable Catalyst UIKit/SwiftUI. Compile real package
+modules and typecheck every actual app source with scripts/check_swift_source.py.
+No mocks, app runs, downloads or availability-check suppression. The correct Catalyst
+platform gate excludes continued-processing APIs unavailable on that platform while
+preserving the iPhone branch. This is stronger source evidence than parse-only checks;
+actual iPhone building, background and visual/account/device evidence remain separate.

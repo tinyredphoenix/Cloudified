@@ -1,5 +1,5 @@
 import Foundation
-#if os(iOS)
+#if os(iOS) && !targetEnvironment(macCatalyst)
 import BackgroundTasks
 #endif
 
@@ -11,12 +11,12 @@ final class BackupContinuation {
     private(set) var state: State = .unavailable
     var onChange: (@MainActor () -> Void)?
     var onExpiration: (@MainActor () -> Void)?
-    #if os(iOS)
+    #if os(iOS) && !targetEnvironment(macCatalyst)
     private let identifier = "com.tinyredphoenix.Cloudified.backup"
     private var task: BGContinuedProcessingTask?
     #endif
     init() {
-        #if os(iOS)
+        #if os(iOS) && !targetEnvironment(macCatalyst)
         let registered = BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: .main) { [weak self] task in
             MainActor.assumeIsolated {
                 guard let self, let continued = task as? BGContinuedProcessingTask,
@@ -36,7 +36,7 @@ final class BackupContinuation {
     }
     /// Called only from explicit Back Up/Resume while foregrounded.
     func request() throws {
-        #if os(iOS)
+        #if os(iOS) && !targetEnvironment(macCatalyst)
         guard state == .idle || state == .expired else { return }
         state = .requested
         let request = BGContinuedProcessingTaskRequest(identifier: identifier, title: "Cloudified backup", subtitle: "Checking originals")
@@ -47,7 +47,7 @@ final class BackupContinuation {
         #endif
     }
     func update(confirmed: Int, total: Int?, subtitle: String) {
-        #if os(iOS)
+        #if os(iOS) && !targetEnvironment(macCatalyst)
         guard let task, state == .running else { return }
         if let total {
             task.progress.totalUnitCount = Int64(max(1, total))
@@ -58,7 +58,7 @@ final class BackupContinuation {
     }
     /// Owner joins actual workers first; retained receipts/inputs are never erased.
     func finish(success: Bool) {
-        #if os(iOS)
+        #if os(iOS) && !targetEnvironment(macCatalyst)
         guard state != .idle && state != .unavailable else { return }
         if let task { task.expirationHandler = nil; task.setTaskCompleted(success: success); self.task = nil }
         else if state == .requested { BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: identifier) }

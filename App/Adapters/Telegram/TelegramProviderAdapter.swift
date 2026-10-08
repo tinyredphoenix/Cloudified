@@ -125,7 +125,10 @@ actor TelegramProviderAdapter: ProviderAdapter {
     }
     private func startConsumer() async throws {
         if consumer != nil { guard streamFailure == nil else { throw streamFailure! }; return }
-        let updates = try await client.updates()
+        let updates = try await client.updates(types: [
+            "updateNewMessage", "updateMessageSendSucceeded", "updateMessageSendFailed", "updateFile",
+            "updateConnectionState", "updateDeleteMessages", "updateMessageContent", "updateMessageEdited"
+        ])
         consumer = Task { [weak self] in
             do {
                 for try await update in updates { guard let self else { return }; try await self.handle(update) }

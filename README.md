@@ -27,9 +27,11 @@ recovery; proposals are separate from implemented or device-verified behavior.
 The current [P8-B2 Builder handoff](docs/P8-BUILDER.md) grants full presentation
 redesign freedom and assigns Telegram destination selection; critical Google/Core/
 background work stays with Architect.
-Builder submission `2c3aada` is partially corrected but still needs the
-[second P8-B2 review corrections](docs/P8-BUILDER-REVIEW-2.md) before the next build.
-Parsing/source registration pass; discovery lifecycle and linking blockers remain.
+Architect directly completed the source corrections from the
+[second P8-B2 review](docs/P8-BUILDER-REVIEW-2.md). See
+[changes, discovery scope and compiler evidence](docs/P8-ARCHITECT-FIXES.md).
+All 64 actual app sources pass the local Catalyst UIKit/SwiftUI typecheck.
+The updated iPhone build, visual flows and real account behavior remain unverified.
 
 ## Stack and build location
 
@@ -80,6 +82,10 @@ app-test/build cycles. Persistent diagnostics are part of the production engine.
 ## Checks
 
 Run `python3 scripts/check_docs.py` for local documentation checks.
+For complete local source parsing and UIKit/SwiftUI typechecking with an existing
+compatible SDK, run `python3 scripts/check_swift_source.py --sdk /path/to/MacOSX26.5.sdk`.
+This downloads nothing and performs no app tests. Catalyst excludes the iPhone-only
+continued-processing branch; the actual iOS build and device checks remain required.
 The manual iOS build workflow first requires a real `Cloudified.xcodeproj` with a
 shared `Cloudified` scheme. It then uses hosted Xcode to build a device app and
 package an unsigned IPA for local SideStore signing. It does not upload signing

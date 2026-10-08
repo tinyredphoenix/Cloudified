@@ -1,4 +1,5 @@
 import SwiftUI
+import CloudifiedCore
 
 public struct TelegramAuthSheet: View {
     @ObservedObject public var environment: AppEnvironment
@@ -15,44 +16,82 @@ public struct TelegramAuthSheet: View {
     @State private var email = ""
     @State private var emailCode = ""
     @State private var confirmLogout = false
+    @State private var showingPicker = false
+    @State private var actionTask: Task<Void, Never>?
+    @State private var isWorking = false
+    @State private var actionError: String?
+
+    private var busy: Bool {
+        isWorking || environment.settingsState.isConnectingTelegram || environment.settingsState.isSettlingTelegram
+    }
+    private var controlsAvailable: Bool { environment.dashboardState.controlsAvailable && !busy }
 
     public init(environment: AppEnvironment) {
         self.environment = environment
     }
 
     public var body: some View {
-        Form {
-            switch environment.settingsState.telegramAuthStep {
-            case .initializing:
-                Section { ProgressView("Starting Telegram…") }
-            case .unconfigured:
-                apiCredentialsSection
-            case .enterPhoneNumber:
-                phoneNumberSection
-            case .enterCode:
-                codeSection
-            case .enterPassword:
-                passwordSection
-            case .enterEmail:
-                emailSection
-            case .enterEmailCode:
-                emailCodeSection
-            case .otherDeviceConfirmation:
-                otherDeviceSection
-            case .registration:
-                registrationSection
-            case .premiumPurchase:
-                premiumSection
-            case .readyForChannel, .connected:
-                channelMappingSection
-            case .closing, .closed, .error:
-                errorOrClosedSection
+        NavigationStack {
+            Form {
+                switch environment.settingsState.telegramAuthStep {
+                case .initializing:
+                    Section { ProgressView("Starting Telegram…") }
+                case .unconfigured:
+                    apiCredentialsSection
+                case .enterPhoneNumber:
+                    phoneNumberSection
+                case .enterCode:
+                    codeSection
+                case .enterPassword:
+                    passwordSection
+                case .enterEmail:
+                    emailSection
+                case .enterEmailCode:
+                    emailCodeSection
+                case .otherDeviceConfirmation:
+                    otherDeviceSection
+                case .registration:
+                    registrationSection
+                case .premiumPurchase:
+                    premiumSection
+                case .readyForChannel, .connected:
+                    channelMappingSection
+                case .closing, .closed, .error:
+                    errorOrClosedSection
+                }
+                if busy { Section { ProgressView("Updating Telegram session…") } }
+                if let message = actionError ?? environment.settingsState.telegramAuthErrorMessage {
+                    Section("Connection issue") { Text(message).foregroundStyle(.red) }
+                }
             }
+            .disabled(busy)
+            .navigationTitle("Connect Telegram")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { clearInputs(); dismiss() }.disabled(busy)
+                }
+            }
+            .interactiveDismissDisabled(busy)
+            .alert("Log out of this app's Telegram session?", isPresented: $confirmLogout) {
+                Button("Cancel", role: .cancel) { }
+                Button("Log out", role: .destructive) { perform { try await environment.logoutTelegram() } }
+            } message: { Text("Other Telegram apps and devices stay signed in. This app's current destination will be disconnected.") }
+            .sheet(isPresented: $showingPicker) {
+                NavigationStack {
+                    TelegramChannelPicker(environment: environment) { showingPicker = false; dismiss() }
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Cancel") { showingPicker = false }.disabled(busy)
+                            }
+                        }
+                }
+                .interactiveDismissDisabled(busy)
+            }
+            .onDisappear { clearInputs(); actionTask?.cancel(); actionTask = nil }
         }
-        .navigationTitle("Connect Telegram")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
     }
 
     private var apiCredentialsSection: some View {
@@ -60,6 +99,7 @@ public struct TelegramAuthSheet: View {
             header: Text("API Credentials"),
             footer: Text("Obtain your API ID and Hash from my.telegram.org. This allows the app to communicate with Telegram.")
         ) {
+            Link("Get Telegram API credentials", destination: URL(string: "https://my.telegram.org/apps")!)
             TextField("API ID", text: $apiIdText)
                 .keyboardType(.numberPad)
             SecureField("API Hash", text: $apiHashText)
@@ -71,10 +111,8 @@ public struct TelegramAuthSheet: View {
                     return
                 }
                 let hash = apiHashText.trimmingCharacters(in: .whitespacesAndNewlines)
-                Task {
-                    defer { apiHashText = "" }
-                    try? await environment.saveTelegramAPICredentials(apiId: id, apiHash: hash)
-                }
+                apiHashText = ""
+                perform { try await environment.saveTelegramAPICredentials(apiId: id, apiHash: hash) }
             } label: {
                 if environment.settingsState.isConnectingTelegram {
                     ProgressView()
@@ -82,14 +120,14 @@ public struct TelegramAuthSheet: View {
                     Text("Continue")
                 }
             }
-            .disabled((Int32(apiIdText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0) <= 0 || apiHashText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || environment.settingsState.isConnectingTelegram)
+            .disabled((Int32(apiIdText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0) <= 0 || apiHashText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !controlsAvailable)
         }
     }
 
     private var phoneNumberSection: some View {
         Section(
             header: Text("Phone Number"),
-            footer: Text("Enter your Telegram account phone number in international format (e.g. +1234567890).")
+            footer: Text("Enter your Telegram account phone number including the country code.")
         ) {
             TextField("Phone Number", text: $phoneNumber)
                 .keyboardType(.phonePad)
@@ -98,9 +136,8 @@ public struct TelegramAuthSheet: View {
             Button {
                 let phone = phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !phone.isEmpty else { return }
-                Task {
-                    try? await environment.submitTelegramPhone(phone)
-                }
+                phoneNumber = ""
+                perform { try await environment.submitTelegramPhone(phone) }
             } label: {
                 if environment.settingsState.isConnectingTelegram {
                     ProgressView()
@@ -108,7 +145,7 @@ public struct TelegramAuthSheet: View {
                     Text("Continue")
                 }
             }
-            .disabled(phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || environment.settingsState.isConnectingTelegram)
+            .disabled(phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !controlsAvailable)
         }
     }
 
@@ -124,10 +161,8 @@ public struct TelegramAuthSheet: View {
             Button {
                 let code = verificationCode.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !code.isEmpty else { return }
-                Task {
-                    defer { verificationCode = "" }
-                    try? await environment.submitTelegramCode(code)
-                }
+                verificationCode = ""
+                perform { try await environment.submitTelegramCode(code) }
             } label: {
                 if environment.settingsState.isConnectingTelegram {
                     ProgressView()
@@ -135,7 +170,7 @@ public struct TelegramAuthSheet: View {
                     Text("Continue")
                 }
             }
-            .disabled(verificationCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || environment.settingsState.isConnectingTelegram)
+            .disabled(verificationCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !controlsAvailable)
         }
     }
 
@@ -150,10 +185,8 @@ public struct TelegramAuthSheet: View {
             Button {
                 let pwd = password
                 guard !pwd.isEmpty else { return }
-                Task {
-                    defer { password = "" }
-                    try? await environment.submitTelegramPassword(pwd)
-                }
+                password = ""
+                perform { try await environment.submitTelegramPassword(pwd) }
             } label: {
                 if environment.settingsState.isConnectingTelegram {
                     ProgressView()
@@ -161,7 +194,7 @@ public struct TelegramAuthSheet: View {
                     Text("Continue")
                 }
             }
-            .disabled(password.isEmpty || environment.settingsState.isConnectingTelegram)
+            .disabled(password.isEmpty || !controlsAvailable)
         }
     }
 
@@ -174,11 +207,10 @@ public struct TelegramAuthSheet: View {
             Button("Submit Email") {
                 let em = email.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !em.isEmpty else { return }
-                Task {
-                    try? await environment.submitTelegramEmail(em)
-                }
+                email = ""
+                perform { try await environment.submitTelegramEmail(em) }
             }
-            .disabled(environment.settingsState.isConnectingTelegram)
+            .disabled(!controlsAvailable)
         }
     }
 
@@ -190,12 +222,10 @@ public struct TelegramAuthSheet: View {
             Button("Submit Email Code") {
                 let code = emailCode.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !code.isEmpty else { return }
-                Task {
-                    defer { emailCode = "" }
-                    try? await environment.submitTelegramEmailCode(code)
-                }
+                emailCode = ""
+                perform { try await environment.submitTelegramEmailCode(code) }
             }
-            .disabled(environment.settingsState.isConnectingTelegram)
+            .disabled(!controlsAvailable)
         }
     }
 
@@ -226,20 +256,11 @@ public struct TelegramAuthSheet: View {
     private var channelMappingSection: some View {
         Section(header: Text("Archive channel")) {
             Button("Log Out to Switch Account", role: .destructive) { confirmLogout = true }
-                .disabled(environment.settingsState.isConnectingTelegram || environment.settingsState.isSettlingTelegram)
+                .disabled(!controlsAvailable)
 
-            NavigationLink(destination: TelegramChannelPicker(environment: environment, onChannelSelected: { chatID in
-                Task {
-                    do {
-                        try await environment.mapTelegramChannel(chatID: chatID)
-                        dismiss()
-                    } catch {
-                        // Error is recorded in environment.settingsState.telegramAuthErrorMessage
-                    }
-                }
-            })) {
-                Text("Select Channel")
-            }
+            Button("Select channel") { showingPicker = true }.disabled(!controlsAvailable)
+            Text("Choose a private channel you own with auto-delete off. Existing uploads are checked before this destination is enabled.")
+                .font(.footnote).foregroundStyle(.secondary)
         }
     }
 
@@ -250,10 +271,23 @@ public struct TelegramAuthSheet: View {
                 .foregroundColor(.secondary)
 
             Button("Re-initialize Client") {
-                Task {
-                    try? await environment.reconnectTelegram()
-                }
-            }
+                perform { try await environment.reconnectTelegram() }
+            }.disabled(!controlsAvailable)
         }
     }
+    private func perform(_ operation: @escaping @MainActor () async throws -> Void) {
+        guard controlsAvailable else { return }
+        isWorking = true; actionError = nil
+        actionTask = Task {
+            defer { isWorking = false; actionTask = nil }
+            do { try Task.checkCancellation(); try await operation() }
+            catch is CancellationError { }
+            catch { actionError = FailureExplanation.message(ProviderSupport.safe(error, domain: .tdlib)) }
+        }
+    }
+    private func clearInputs() {
+        apiIdText = ""; apiHashText = ""; phoneNumber = ""; verificationCode = ""
+        password = ""; email = ""; emailCode = ""
+    }
+
 }

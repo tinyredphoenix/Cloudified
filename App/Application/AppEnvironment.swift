@@ -182,7 +182,7 @@ public final class AppEnvironment: ObservableObject {
         guard let client = tdlibClient, let adapter = telegramAdapter else { return }
         telegramObservers.append(Task { [weak self] in
             do {
-                for try await update in try await client.updates() {
+                for try await update in try await client.updates(types: ["updateAuthorizationState", "updateConnectionState"]) {
                     if update.type == "updateAuthorizationState" {
                         let auth = await client.authorizationState
                         self?.updateTelegramAuthStep(auth)

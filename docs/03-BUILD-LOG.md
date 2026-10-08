@@ -1181,3 +1181,32 @@ Failures / known limitations: Run 4 AppEnvironment init ordering resolved; nativ
 Decision changes (reference handbook 4 IDs): Builder adheres to D01–D38.
 Commit / milestone tag, after it exists: Pending completion.
 Next handoff / release of reserved paths: Active editing by Builder.
+
+## 2026-10-09 — Architect directly fixes P8 re-review
+
+User assigned Architect the remaining corrections after Builder re-review. This
+supersedes the pending Builder correction ownership in P8-BUILDER.md and earlier
+historical active-writer entries. Exact path claims, implementation and evidence:
+[P8 Architect fixes](P8-ARCHITECT-FIXES.md). Starting revision `523e6bb`.
+
+- Corrected bounded Telegram discovery, cancellation/context/result delivery, safe
+  diagnostics, account/channel confirmation and existing-command mapping lifecycle.
+- Fixed Telegram modal navigation, visible auth errors, actual confirmed logout,
+  credential help and input cleanup. Settings uses modal auth/change-channel flows,
+  restores explicit status/actions/gates and version/build/revision reporting.
+- Kept independent provider/transfer details and corrected saved-to-both wording.
+  Simplified Logs/NotUploaded rows, added readable event/remedy details, preserved
+  actual bounded paging/export/retries/history and small thumbnails only.
+- Critical subscription filters protect receipt/auth stream capacity from unrelated
+  discovery updates. No new consumer, changed dependency or Core receipt/retry logic.
+- Added repeatable local source compiler command using the installed 26.5 Catalyst
+  SDK. All 64 actual app sources parse and typecheck, with real Diagnostics/Core
+  modules, no compiler diagnostics, mocks or suppressed availability. Project/plist,
+  source registration, Python syntax, docs targets and whitespace checks pass.
+
+D39/D40 record the bounded discovery tradeoff and compiler-evidence boundary. No
+cloud dispatch, updated IPA, account/device/visual testing, Xcode/SDK install or USB
+changes. iPhone-only background branch still needs actual iOS build/runtime evidence.
+Builder holds; the next build/device session requires the explicit existing manual
+handoff. Commit recorded in repository history; no release tag for source correction.
+Exact claimed paths release after commit/push. Untracked scratch/ preserved untouched.

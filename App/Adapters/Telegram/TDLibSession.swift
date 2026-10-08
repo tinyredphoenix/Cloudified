@@ -116,6 +116,7 @@ public actor TDLibSession {
     private var clientID: Int32?
     private var pendingRequests: [String: PendingRequest] = [:]
     private var updateContinuations: [UUID: AsyncThrowingStream<TDLibResponse, any Error>.Continuation] = [:]
+    private var updateFilters: [UUID: Set<String>] = [:]
     private var processingFailure: (any Error)?
 
     private var currentAuthState: TDLibAuthorizationState = .uninitialized
@@ -187,7 +188,7 @@ public actor TDLibSession {
     }
 
     /// Subscribes to the broadcast stream of TDLib updates with bounded buffer policy.
-    public func updateStream() throws -> AsyncThrowingStream<TDLibResponse, any Error> {
+    public func updateStream(types: Set<String>? = nil) throws -> AsyncThrowingStream<TDLibResponse, any Error> {
         if let processingFailure { throw processingFailure }
         guard !isTerminated else { throw TDLibError.clientClosed }
         guard updateContinuations.count < Self.maxSubscribers else {
@@ -197,6 +198,7 @@ public actor TDLibSession {
         let streamID = UUID()
         return AsyncThrowingStream(bufferingPolicy: .bufferingOldest(Self.maxBufferedUpdates)) { continuation in
             self.registerUpdateContinuation(continuation, id: streamID)
+            self.updateFilters[streamID] = types
             continuation.onTermination = { [weak self] _ in
                 Task { [weak self] in
                     await self?.unregisterUpdateContinuation(id: streamID)
@@ -211,6 +213,7 @@ public actor TDLibSession {
 
     private func unregisterUpdateContinuation(id: UUID) {
         updateContinuations.removeValue(forKey: id)
+        updateFilters.removeValue(forKey: id)
     }
 
     // MARK: - Request Dispatch & Correlation
@@ -302,6 +305,7 @@ public actor TDLibSession {
         fileTransferTracking.removeAll()
         for continuation in updateContinuations.values { continuation.finish(throwing: failure) }
         updateContinuations.removeAll()
+        updateFilters.removeAll()
         // Keep the receiver/native client alive for real close acknowledgement.
     }
 
@@ -361,9 +365,11 @@ public actor TDLibSession {
     private func publish(_ response: TDLibResponse) {
         guard processingFailure == nil else { return }
         for (id, continuation) in Array(updateContinuations) {
+            // Filter before enqueue, never by dropping from a full critical buffer.
+            if let types = updateFilters[id], let type = response.type, !types.contains(type) { continue }
             switch continuation.yield(response) {
             case .enqueued: break
-            case .terminated: updateContinuations.removeValue(forKey: id)
+            case .terminated: unregisterUpdateContinuation(id: id)
             case .dropped:
                 interruptInput(TDLibError.capacityExceeded("Critical update overflow."))
                 return
@@ -553,6 +559,7 @@ public actor TDLibSession {
             else { continuation.finish() }
         }
         updateContinuations.removeAll()
+        updateFilters.removeAll()
     }
 
     private func emitDiagnostic(
