@@ -113,9 +113,11 @@ struct GoogleAccountLoginView: UIViewRepresentable {
             guard !stopped, !captured else { return }
             if (error as NSError).domain == NSURLErrorDomain && (error as NSError).code == NSURLErrorCancelled { return }
             let code = (error as NSError).code
-            let failure = SafeFailure(code == NSURLErrorTimedOut ? .timeout : .connectivity,
-                domain: .urlSession, code: code, cause: code == NSURLErrorNotConnectedToInternet ? .offline : .unknown)
-            fail("Could not load Google sign-in. Check your connection and start again. Network code: \(code).", failure: failure)
+            let isNetwork = (error as NSError).domain == NSURLErrorDomain
+            let failure = isNetwork ? SafeFailure(code == NSURLErrorTimedOut ? .timeout : .connectivity,
+                domain: .urlSession, code: code, cause: code == NSURLErrorNotConnectedToInternet ? .offline : .unknown) :
+                SafeFailure(.authentication, domain: .google, code: code)
+            fail("Could not load Google sign-in. Start again after checking the connection. Page error code: \(code).", failure: failure)
         }
         private func fail(_ message: String, failure: SafeFailure = SafeFailure(.authentication, domain: .google)) {
             guard !stopped, !captured else { return }
