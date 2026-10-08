@@ -99,6 +99,13 @@ echo "3. Host code generation phase (macOS host)..."
 )
 
 echo "4. Cross-compiling TDLib for iOS arm64 (deployment 26.0)..."
+OPENSSL_LIB_DIR="$BUILD_DIR/ios-openssl/lib"
+if [[ ! -d "$OPENSSL_LIB_DIR" && -d "$BUILD_DIR/ios-openssl/lib64" ]]; then
+    OPENSSL_LIB_DIR="$BUILD_DIR/ios-openssl/lib64"
+fi
+OPENSSL_CRYPTO="$OPENSSL_LIB_DIR/libcrypto.a"
+OPENSSL_SSL="$OPENSSL_LIB_DIR/libssl.a"
+
 (
     cd "$BUILD_DIR/ios-td"
     cmake -GNinja "$BUILD_DIR/src-td" \
@@ -109,50 +116,86 @@ echo "4. Cross-compiling TDLib for iOS arm64 (deployment 26.0)..."
         -DCMAKE_OSX_DEPLOYMENT_TARGET="26.0" \
         -DOPENSSL_ROOT_DIR="$BUILD_DIR/ios-openssl" \
         -DOPENSSL_USE_STATIC_LIBS=TRUE \
+        -DOPENSSL_CRYPTO_LIBRARY="$OPENSSL_CRYPTO" \
+        -DOPENSSL_SSL_LIBRARY="$OPENSSL_SSL" \
+        -DOPENSSL_INCLUDE_DIR="$BUILD_DIR/ios-openssl/include" \
+        -DOPENSSL_LIBRARIES="$OPENSSL_CRYPTO;$OPENSSL_SSL" \
         -DCMAKE_INSTALL_PREFIX="$OUTPUT_DIR" \
         -DTD_ENABLE_JNI=OFF \
         -DTD_ENABLE_DOTNET=OFF \
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-    cmake --build . --target tdjson_static -j "$(sysctl -n hw.ncpu || echo 4)"
+    cmake --build . --target tdjson_static tdjson_private tdclient tdcore tdapi tdmtproto tddb tdsqlite tdactor tdnet tdutils tde2e -j "$(sysctl -n hw.ncpu || echo 4)"
 )
 
-echo "5. Combining complete static link closure into unified libtdjson.a..."
-# Find all member static libraries produced by tdjson target closure and openssl
-TD_ARCHIVES=(
-    "$BUILD_DIR/ios-td/td/telegram/libtdjson_static.a"
-    "$BUILD_DIR/ios-td/td/libtdclient.a"
-    "$BUILD_DIR/ios-td/td/libtdcore.a"
-    "$BUILD_DIR/ios-td/tddb/td/db/libtddb.a"
-    "$BUILD_DIR/ios-td/tdactor/td/actor/libtdactor.a"
-    "$BUILD_DIR/ios-td/tdnet/td/net/libtdnet.a"
-    "$BUILD_DIR/ios-td/tdutils/td/utils/libtdutils.a"
-    "$BUILD_DIR/ios-openssl/lib/libcrypto.a"
-    "$BUILD_DIR/ios-openssl/lib/libssl.a"
+echo "5. Combining complete deterministic static link closure into unified libtdjson.a..."
+# Exact deterministic list of required static library targets from pinned td CMake and OpenSSL 3.5.9
+REQUIRED_TARGETS=(
+    "libtdjson_static.a"
+    "libtdjson_private.a"
+    "libtdclient.a"
+    "libtdcore.a"
+    "libtdapi.a"
+    "libtdmtproto.a"
+    "libtddb.a"
+    "libtdsqlite.a"
+    "libtdactor.a"
+    "libtdnet.a"
+    "libtdutils.a"
+    "libtde2e.a"
 )
 
-# Collect existing static libraries
-VALID_ARCHIVES=()
-for arch in "${TD_ARCHIVES[@]}"; do
-    if [[ -f "$arch" ]]; then
-        VALID_ARCHIVES+=("$arch")
+REQUIRED_ARCHIVES=()
+for target_lib in "${REQUIRED_TARGETS[@]}"; do
+    found_matches=()
+    while IFS= read -r -d '' match; do
+        found_matches+=("$match")
+    done < <(find "$BUILD_DIR/ios-td" -name "$target_lib" -type f -print0)
+
+    if [[ ${#found_matches[@]} -eq 0 ]]; then
+        echo "Error: Required TDLib member static library $target_lib was not produced!" >&2
+        exit 5
+    elif [[ ${#found_matches[@]} -gt 1 ]]; then
+        echo "Error: Multiple matches found for member library $target_lib: ${found_matches[*]}" >&2
+        exit 5
     fi
+    REQUIRED_ARCHIVES+=("${found_matches[0]}")
 done
 
-# Also pick up any additional td archives in the build tree
-while IFS= read -r -d '' extra_arch; do
-    if [[ ! " ${VALID_ARCHIVES[*]} " =~ " ${extra_arch} " ]]; then
-        VALID_ARCHIVES+=("$extra_arch")
+# Add OpenSSL static libraries
+if [[ ! -s "$OPENSSL_CRYPTO" ]]; then
+    echo "Error: Required OpenSSL crypto archive $OPENSSL_CRYPTO is missing or empty!" >&2
+    exit 5
+fi
+if [[ ! -s "$OPENSSL_SSL" ]]; then
+    echo "Error: Required OpenSSL ssl archive $OPENSSL_SSL is missing or empty!" >&2
+    exit 5
+fi
+REQUIRED_ARCHIVES+=("$OPENSSL_CRYPTO" "$OPENSSL_SSL")
+
+echo "Deterministic static link closure members (${#REQUIRED_ARCHIVES[@]} total):"
+for arch in "${REQUIRED_ARCHIVES[@]}"; do
+    if [[ ! -s "$arch" ]]; then
+        echo "Error: Archive member $arch is empty or missing!" >&2
+        exit 5
     fi
-done < <(find "$BUILD_DIR/ios-td" -name "libtd*.a" -print0)
+    if ! xcrun lipo -info "$arch" | grep -q "arm64"; then
+        echo "Error: Archive member $arch does not target arm64 architecture!" >&2
+        exit 6
+    fi
+    echo "  - $(basename "$arch") [arm64]"
+done
 
-# Merge into unified static archive using libtool
-libtool -static -o "$OUTPUT_DIR/lib/libtdjson.a" "${VALID_ARCHIVES[@]}"
+# Combine exactly the deterministic 14-archive closure into unified libtdjson.a
+libtool -static -o "$OUTPUT_DIR/lib/libtdjson.a" "${REQUIRED_ARCHIVES[@]}"
 
-# Copy headers
+# Copy headers (both flat and nested paths)
+mkdir -p "$OUTPUT_DIR/include/td/telegram"
 cp "$BUILD_DIR/src-td/td/telegram/td_json_client.h" "$OUTPUT_DIR/include/"
+cp "$BUILD_DIR/src-td/td/telegram/td_json_client.h" "$OUTPUT_DIR/include/td/telegram/"
 cp "$BUILD_DIR/ios-td/td/telegram/tdjson_export.h" "$OUTPUT_DIR/include/"
+cp "$BUILD_DIR/ios-td/td/telegram/tdjson_export.h" "$OUTPUT_DIR/include/td/telegram/"
 
-# Verify arm64 architecture
+# Verify arm64 architecture on the final static closure
 xcrun lipo -info "$OUTPUT_DIR/lib/libtdjson.a"
 
 # Seal cache provenance per BUILD-CACHE.md

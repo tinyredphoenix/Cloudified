@@ -111,6 +111,9 @@ public final class TDLibBridge: Sendable {
 public actor TDLibProcessReceiver {
     public static let shared = TDLibProcessReceiver()
 
+    /// Maximum concurrent active client sessions in the process.
+    public static let maxActiveSessions = 16
+
     private let bridge: TDLibBridge
     private var activeSessions: [Int32: @Sendable (Result<TDLibResponse, TDLibError>) async -> Void] = [:]
     private var receiveTask: Task<Void, Never>?
@@ -120,17 +123,55 @@ public actor TDLibProcessReceiver {
         self.bridge = bridge
     }
 
-    public func registerSession(clientID: Int32, handler: @escaping @Sendable (Result<TDLibResponse, TDLibError>) async -> Void) {
+    /// Atomically creates a native client ID through the bridge and registers its session handler.
+    /// Enforces session capacity limits so unmanaged native clients cannot be orphaned.
+    public func createAndRegisterSession(
+        handler: @escaping @Sendable (Result<TDLibResponse, TDLibError>) async -> Void
+    ) throws -> Int32 {
+        guard activeSessions.count < Self.maxActiveSessions else {
+            throw TDLibError.capacityExceeded("Maximum active TDLib session limit reached (\(Self.maxActiveSessions)).")
+        }
+        let clientID = try bridge.createClientID()
+        activeSessions[clientID] = handler
+        startReceiveLoopIfNeeded()
+        return clientID
+    }
+
+    /// Registers an existing client ID, validating positive non-duplicate ID and capacity limits.
+    public func registerSession(
+        clientID: Int32,
+        handler: @escaping @Sendable (Result<TDLibResponse, TDLibError>) async -> Void
+    ) throws {
+        guard clientID > 0 else {
+            throw TDLibError.invalidParameter("Client ID must be positive.")
+        }
+        guard activeSessions[clientID] == nil else {
+            throw TDLibError.invalidParameter("Client ID \(clientID) is already registered.")
+        }
+        guard activeSessions.count < Self.maxActiveSessions else {
+            throw TDLibError.capacityExceeded("Maximum active TDLib session limit reached (\(Self.maxActiveSessions)).")
+        }
         activeSessions[clientID] = handler
         startReceiveLoopIfNeeded()
     }
 
+    /// Unregisters an active session. If no sessions remain, shuts down the receive loop cleanly.
     public func unregisterSession(clientID: Int32) {
         activeSessions.removeValue(forKey: clientID)
+        if activeSessions.isEmpty {
+            stopReceiveLoop()
+        }
     }
 
     public func hasActiveSessions() -> Bool {
         !activeSessions.isEmpty
+    }
+
+    /// Awaits completion of the idle receive task if one is shutting down.
+    public func joinIdle() async {
+        if let task = receiveTask {
+            _ = await task.value
+        }
     }
 
     private func startReceiveLoopIfNeeded() {
@@ -142,9 +183,8 @@ public actor TDLibProcessReceiver {
                 guard let self else { break }
                 let hasSessions = await self.hasActiveSessions()
                 if !hasSessions {
-                    // Avoid busy-spinning when no sessions are active
-                    try? await Task.sleep(nanoseconds: 200_000_000) // 200ms
-                    continue
+                    await self.stopReceiveLoop()
+                    break
                 }
 
                 do {
@@ -156,6 +196,12 @@ public actor TDLibProcessReceiver {
                 }
             }
         }
+    }
+
+    private func stopReceiveLoop() {
+        isRunning = false
+        receiveTask?.cancel()
+        receiveTask = nil
     }
 
     private func routeIncomingJSON(_ jsonString: String) async {

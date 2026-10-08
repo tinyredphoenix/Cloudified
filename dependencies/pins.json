@@ -25,11 +25,11 @@
       "repository": "https://github.com/openssl/openssl.git",
       "commit": "45e844fa2a14ec92d146bd8f5778ac130b6625fb",
       "version": "openssl-3.5.9",
-      "license": "Apache License 2.0",
+      "license": "Apache License 2.0 (see licenses/LICENSE-OpenSSL.txt)",
       "purpose": "Cryptographic backend for TDLib native network and database encryption on iOS",
-      "licenseVerifiedAtPin": false,
+      "licenseVerifiedAtPin": true,
       "artifactSha256": null,
-      "status": "source tag resolved; source/license/configuration inspection and native build pending P4-A-R2/P7",
+      "status": "exact pin verified; OpenSSL 3.5.9 LTS, license Apache 2.0; native closure/linking remains unbuilt until P7; manifest entries are not artifact evidence.",
       "selectionEvidence": {
         "selectedOn": "2026-10-08",
         "method": "git ls-remote annotated release tag and peeled commit",
@@ -38,5 +38,5 @@
       }
     }
   ],
-  "transitiveStatus": "OpenSSL 3.5.9 LTS exact source pin selected by Architect. License/source/configuration inspection remains P4-A-R2. Native closure/linking remains unbuilt until P7; manifest entries are not artifact evidence."
+  "transitiveStatus": "OpenSSL 3.5.9 LTS exact source pin, license Apache 2.0 and configuration verified in P4-A-R2. Native closure/linking remains unbuilt until P7; manifest entries are not artifact evidence."
 }

@@ -7,7 +7,12 @@ public enum TDLibAuthorizationState: Sendable, Equatable {
     case uninitialized
     case waitTdlibParameters
     case waitPhoneNumber
+    case waitPremiumPurchase
+    case waitEmailAddress
+    case waitEmailCode
     case waitCode
+    case waitOtherDeviceConfirmation
+    case waitRegistration
     case waitPassword
     case ready
     case loggingOut
@@ -117,8 +122,14 @@ public actor TDLibSession {
     private var isTerminated = false
     private var closeTask: Task<Void, any Error>?
 
-    // Progress coalescing state for file updates: file_id -> last emitted uptime
-    private var fileProgressEmittedTimes: [Int64: TimeInterval] = [:]
+    // Progress coalescing state for file transfers: file_id -> tracking record
+    private struct FileTransferTracking: Sendable {
+        var lastEmittedUptime: TimeInterval
+        var lastUploadedSize: Int64
+        var wasUploadingActive: Bool
+        var wasDownloadingActive: Bool
+    }
+    private var fileTransferTracking: [Int64: FileTransferTracking] = [:]
 
     public init(
         bridge: TDLibBridge = TDLibBridge(),
@@ -149,17 +160,16 @@ public actor TDLibSession {
         guard clientID == nil, closeTask == nil else {
             throw TDLibError.executionFailed("TDLibSession is already started.")
         }
-        let id = try bridge.createClientID()
-        self.clientID = id
         self.isTerminated = false
         self.isClosing = false
         self.currentAuthState = .uninitialized
         self.processingFailure = nil
 
-        // Register session handler with the process-global receiver
-        await receiver.registerSession(clientID: id) { [weak self] result in
+        // Atomically create native client ID and register session handler with receiver
+        let id = try await receiver.createAndRegisterSession { [weak self] result in
             await self?.handleIncomingResponse(result)
         }
+        self.clientID = id
 
         try await emitDiagnostic(.appStart, decision: .proceed, severity: .info)
         return id
@@ -302,41 +312,69 @@ public actor TDLibSession {
             return
         }
 
+        var isClosedAcknowledgement = false
         // Process authorization state updates
         if let type = response.type {
             if type == "updateAuthorizationState" {
                 if let stateObj = response.object(forKey: "authorization_state"),
                    let stateType = stateObj.type {
-                    await handleAuthStateUpdate(stateType)
+                    isClosedAcknowledgement = await handleAuthStateUpdate(stateType)
                 }
             } else if type == "updateFile" {
                 // Separate latest-value progress coalescing from guaranteed terminal states
                 if let file = response.object(forKey: "file"),
                    let fileID = file.int64(forKey: "id") {
-                    let isCompleted = file.object(forKey: "local")?.bool(forKey: "is_downloading_completed") == true
-                        || file.object(forKey: "remote")?.bool(forKey: "is_uploading_completed") == true
+                    let remote = file.object(forKey: "remote")
+                    let local = file.object(forKey: "local")
 
-                    if isCompleted {
+                    let isUploadingActive = remote?.bool(forKey: "is_uploading_active") == true
+                    let isUploadingCompleted = remote?.bool(forKey: "is_uploading_completed") == true
+                    let uploadedSize = remote?.int64(forKey: "uploaded_size") ?? 0
+
+                    let isDownloadingActive = local?.bool(forKey: "is_downloading_active") == true
+                    let isDownloadingCompleted = local?.bool(forKey: "is_downloading_completed") == true
+
+                    let prev = fileTransferTracking[fileID]
+                    let wasUploadingActive = prev?.wasUploadingActive ?? false
+                    let wasDownloadingActive = prev?.wasDownloadingActive ?? false
+
+                    // Terminal transitions for upload or download
+                    let isUploadTerminal = isUploadingCompleted || (wasUploadingActive && !isUploadingActive)
+                    let isDownloadTerminal = isDownloadingCompleted || (wasDownloadingActive && !isDownloadingActive)
+
+                    if isUploadTerminal || isDownloadTerminal {
                         // Terminal state: evict from progress tracking and guarantee delivery
-                        fileProgressEmittedTimes.removeValue(forKey: fileID)
-                    } else {
+                        fileTransferTracking.removeValue(forKey: fileID)
+                    } else if isUploadingActive || isDownloadingActive {
                         // Intermediate progress: coalesce to ~2 Hz
                         let now = ProcessInfo.processInfo.systemUptime
-                        let lastTime = fileProgressEmittedTimes[fileID] ?? 0
+                        let lastTime = prev?.lastEmittedUptime ?? 0
                         if now - lastTime < 0.5 {
+                            fileTransferTracking[fileID] = FileTransferTracking(
+                                lastEmittedUptime: lastTime,
+                                lastUploadedSize: uploadedSize,
+                                wasUploadingActive: isUploadingActive,
+                                wasDownloadingActive: isDownloadingActive
+                            )
                             return
                         }
                         // Prune cache if over capacity
-                        if fileProgressEmittedTimes.count >= Self.maxTrackedFiles {
-                            fileProgressEmittedTimes.removeAll(keepingCapacity: true)
+                        if fileTransferTracking.count >= Self.maxTrackedFiles {
+                            fileTransferTracking.removeAll(keepingCapacity: true)
                         }
-                        fileProgressEmittedTimes[fileID] = now
+                        fileTransferTracking[fileID] = FileTransferTracking(
+                            lastEmittedUptime: now,
+                            lastUploadedSize: uploadedSize,
+                            wasUploadingActive: isUploadingActive,
+                            wasDownloadingActive: isDownloadingActive
+                        )
                     }
                 }
             }
         }
 
-        // Broadcast to all active update listeners
+        // Broadcast to all active update listeners FIRST so that authorizationStateClosed
+        // reaches subscribers BEFORE the stream terminates
         for (id, continuation) in Array(updateContinuations) {
             switch continuation.yield(response) {
             case .enqueued: break
@@ -350,17 +388,32 @@ public actor TDLibSession {
                 return
             }
         }
+
+        if isClosedAcknowledgement {
+            await completeClosure()
+        }
     }
 
-    private func handleAuthStateUpdate(_ stateType: String) async {
+    private func handleAuthStateUpdate(_ stateType: String) async -> Bool {
         let oldState = currentAuthState
+        var isClosed = false
         switch stateType {
         case "authorizationStateWaitTdlibParameters":
             currentAuthState = .waitTdlibParameters
         case "authorizationStateWaitPhoneNumber":
             currentAuthState = .waitPhoneNumber
+        case "authorizationStateWaitPremiumPurchase":
+            currentAuthState = .waitPremiumPurchase
+        case "authorizationStateWaitEmailAddress":
+            currentAuthState = .waitEmailAddress
+        case "authorizationStateWaitEmailCode":
+            currentAuthState = .waitEmailCode
         case "authorizationStateWaitCode":
             currentAuthState = .waitCode
+        case "authorizationStateWaitOtherDeviceConfirmation":
+            currentAuthState = .waitOtherDeviceConfirmation
+        case "authorizationStateWaitRegistration":
+            currentAuthState = .waitRegistration
         case "authorizationStateWaitPassword":
             currentAuthState = .waitPassword
         case "authorizationStateReady":
@@ -371,7 +424,7 @@ public actor TDLibSession {
             currentAuthState = .closing
         case "authorizationStateClosed":
             currentAuthState = .closed
-            await completeClosure()
+            isClosed = true
         default:
             break
         }
@@ -380,6 +433,7 @@ public actor TDLibSession {
             do { try await emitDiagnostic(.enabledChanged, decision: .proceed, severity: .info) }
             catch { interruptInput(error) }
         }
+        return isClosed
     }
 
     // MARK: - Close Handling
@@ -444,20 +498,21 @@ public actor TDLibSession {
         }
         pendingRequests.removeAll()
 
-        // Terminate all update streams
+        // Terminate all update streams now that authorizationStateClosed has been delivered
         for continuation in updateContinuations.values {
             continuation.finish()
         }
         updateContinuations.removeAll()
-        fileProgressEmittedTimes.removeAll()
+        fileTransferTracking.removeAll()
 
         if let cid = clientID {
             await receiver.unregisterSession(clientID: cid)
         }
         clientID = nil
 
+        // Attempt persistent diagnostic logging; failure must not alter genuine native closed fact
         do { try await emitDiagnostic(.finalization, decision: .proceed, severity: .info) }
-        catch { interruptInput(error) }
+        catch { /* Native close remains acknowledged fact */ }
     }
 
     private func emitDiagnostic(

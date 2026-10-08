@@ -41,23 +41,107 @@ public actor TDLibClient {
         get async { await session.requiresReconciliation }
     }
 
+    /// Resolves and creates canonical disjoint, profile-bound database and files directories
+    /// with NSFileProtectionCompleteUntilFirstUserAuthentication and backup exclusion.
+    public static func storageURLs(forProfile profileID: String) throws -> (databaseURL: URL, filesURL: URL) {
+        try KeychainCredentialStore.validateProfileID(profileID)
+        let fileManager = FileManager.default
+        let baseDir = try fileManager.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        ).appendingPathComponent("Cloudified/Telegram/\(profileID)", isDirectory: true)
+
+        let dbDir = baseDir.appendingPathComponent("database", isDirectory: true)
+        let filesDir = baseDir.appendingPathComponent("files", isDirectory: true)
+
+        let dirAttributes: [FileAttributeKey: Any] = [
+            .protectionKey: FileProtectionType.completeUntilFirstUserAuthentication
+        ]
+
+        try fileManager.createDirectory(at: dbDir, withIntermediateDirectories: true, attributes: dirAttributes)
+        try fileManager.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: dirAttributes)
+
+        var resourceValues = URLResourceValues()
+        resourceValues.isExcludedFromBackup = true
+        var mutableDbDir = dbDir
+        var mutableFilesDir = filesDir
+        try mutableDbDir.setResourceValues(resourceValues)
+        try mutableFilesDir.setResourceValues(resourceValues)
+
+        return (databaseURL: dbDir, filesURL: filesDir)
+    }
+
     /// Initializes and starts the native TDLib session with the given filesystem parameters.
     /// Strictly matches pinned td_api.tl `setTdlibParameters` schema with base64 encryption key.
+    /// Prepares disjoint roots with complete-until-first-user-authentication protection and backup exclusion,
+    /// bootstraps authorization state awaiting waitTdlibParameters before sending parameters,
+    /// and retains native ownership on failure so the client can be cleanly closed.
     public func start(
-        databaseDirectory: String,
-        filesDirectory: String,
+        databaseDirectory: String? = nil,
+        filesDirectory: String? = nil,
         appVersion: String = "1.0.0"
     ) async throws {
+        let dbPath: String
+        let filesPath: String
+
+        if let databaseDirectory, let filesDirectory {
+            let dbURL = URL(fileURLWithPath: databaseDirectory).standardizedFileURL
+            let filesURL = URL(fileURLWithPath: filesDirectory).standardizedFileURL
+            guard dbURL != filesURL,
+                  !dbURL.path.hasPrefix(filesURL.path + "/"),
+                  !filesURL.path.hasPrefix(dbURL.path + "/") else {
+                throw TDLibError.invalidParameter("databaseDirectory and filesDirectory must be disjoint distinct paths.")
+            }
+            let fileManager = FileManager.default
+            let dirAttributes: [FileAttributeKey: Any] = [
+                .protectionKey: FileProtectionType.completeUntilFirstUserAuthentication
+            ]
+            try fileManager.createDirectory(at: dbURL, withIntermediateDirectories: true, attributes: dirAttributes)
+            try fileManager.createDirectory(at: filesURL, withIntermediateDirectories: true, attributes: dirAttributes)
+
+            var resourceValues = URLResourceValues()
+            resourceValues.isExcludedFromBackup = true
+            var mutableDbURL = dbURL
+            var mutableFilesURL = filesURL
+            try mutableDbURL.setResourceValues(resourceValues)
+            try mutableFilesURL.setResourceValues(resourceValues)
+
+            dbPath = dbURL.path
+            filesPath = filesURL.path
+        } else {
+            let roots = try Self.storageURLs(forProfile: profileID)
+            dbPath = roots.databaseURL.path
+            filesPath = roots.filesURL.path
+        }
+
         let cred = try credentialStore.loadTelegramCredential(forProfile: profileID)
         let dbKey = try credentialStore.getOrCreateTDLibDatabaseKey(forProfile: profileID)
 
         _ = try await session.start()
 
+        // Bootstrap real authorization state: await waitTdlibParameters before sending parameters
+        let startWait = ProcessInfo.processInfo.systemUptime
+        while await session.authState == .uninitialized && (ProcessInfo.processInfo.systemUptime - startWait) < 10.0 {
+            try await Task.sleep(nanoseconds: 50_000_000) // 50ms
+        }
+        let authState = await session.authState
+        guard authState == .waitTdlibParameters else {
+            if authState == .ready {
+                return // already initialized
+            }
+            let failure = TDLibError.executionFailed("TDLib did not transition to waitTdlibParameters (current: \(authState)).")
+            let classified = Self.classify(failure)
+            try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
+            throw classified
+        }
+
         let params = TDLibParameters(
             apiId: cred.apiId,
             apiHash: cred.apiHash,
-            databaseDirectory: databaseDirectory,
-            filesDirectory: filesDirectory,
+            databaseDirectory: dbPath,
+            filesDirectory: filesPath,
             databaseEncryptionKey: dbKey,
             useFileDatabase: true,
             useChatInfoDatabase: true,

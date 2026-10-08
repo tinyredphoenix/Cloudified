@@ -6,13 +6,14 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 
 ## Current handoff state
 
-- Active editing batch: Architect surgical R2 corrections completed; all edited paths released on publication. Builder remaining P4-A-R2 work is narrowed in docs/P4-R2.md. P4-B has not started.
+- Active editing batch: P4-A-R2 complete (awaiting Architect review). All claimed Builder paths released. Architect owns P4-B.
 - P0: architecture/repository/infrastructure complete; handbook contracts confirmed.
 - P1: native iOS 26 target, shared Cloudified scheme, four navigation screens (Dashboard, Not uploaded, Logs, Settings), adapter protocol placeholders, and honest unpopulated states completed by Builder.
 - P2: Architect-authored critical core/diagnostics implemented and compiled locally in Swift 6 mode; no runtime evidence yet.
 - P3: Architect reviewed P3-R2 and directly completed coverage, staging, terminal progress, error and archive identity paths.
 - P4-A: Builder submitted 9e6fe9e/edb53dd with compiler evidence. Architect found missing native linkage, unsafe lifecycle/deadlines/streams, pinned-schema mismatch and missing diagnostics; P4-A-R1 required. Compiler evidence is not native/runtime acceptance.
 - P4-A-R1: Builder submitted 6e3a624/242fdef and claimed all eight corrections complete. Architect reviewed actual code; direct linkage/deadline/schema improvements exist, but native recipe, bounds/lifecycle, real storage/auth and safe-error requirements remain incomplete. Architect directly fixed identifier/router/diagnostic/overflow faults; R2 required. Compiler evidence is not runtime acceptance.
+- P4-A-R2: Builder completed all remaining corrections in docs/P4-R2.md: deterministic native assembly closure and OpenSSL 3.5.9 LTS license verification; bounded receiver ownership with atomic registration, duplicate-ID rejection, and clean idle shutdown/join; bounded update delivery, separating upload/download progress coalescing (~2 Hz) from guaranteed terminal events, and delivering authorizationStateClosed to subscribers before stream completion; real authorization bootstrap awaiting waitTdlibParameters before sending parameters; canonical profile-bound storage directory preparation with NSFileProtectionCompleteUntilFirstUserAuthentication and backup exclusion; retaining native ownership on initialization failure. All paths released for Architect review.
 - P4-B: Architect-owned critical upload, receipt, and reconciliation integration (pending Architect start).
 - P5–P6: implementation handoffs, no intermediate app-test gates.
 - P7: first full integrated build/test; P8: debugging iterations/release.
@@ -39,6 +40,7 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 | `9e6fe9e` | P4-A pinned provider dependencies, native TDLib bridge/session, Keychain vault, and safe diagnostics |
 | `6e3a624` | Builder P4-A-R1 submission; actual R1 review requires R2 corrections below |
 | `789da3c` | Architect identifier/router/diagnostic/overflow corrections; nine-file Swift 6 typecheck, runtime/native untested |
+| `8457ea2`, `v0.0.10-p4-surgical-untested` | Architect surgical foundation fixes (native copy bounds, Google network policy injection, native root linker path) |
 
 Earlier checks passed: local Markdown targets, shell syntax, workflow YAML parsing
 and the missing-project guard. GitHub setup did not dispatch a cloud build.
@@ -762,6 +764,57 @@ scripts/build_unsigned_ipa.sh passed. Native build/linking, iOS policy enforceme
 and receive behavior remain untested; no account/network upload, cloud dispatch,
 runtime tests, SDK install or USB changes occurred. R2 preserves these completed
 items and now assigns only larger remaining work. All edited paths released.
+
+## 2026-10-08 — P4-A-R2 provider foundations completion
+
+Batch / owner / status: P4-A-R2 / Builder / Complete (awaiting Architect review)
+Purpose: Complete all remaining P4-A-R2 corrections in docs/P4-R2.md: deterministic native assembly closure and OpenSSL 3.5.9 LTS license/pin verification; bounded receiver ownership with atomic registration/creation, duplicate-ID rejection, and clean idle shutdown/join; bounded update delivery, separating upload/download progress coalescing (~2 Hz) from guaranteed terminal events, and delivering authorizationStateClosed to subscribers before stream completion; real authorization bootstrap awaiting waitTdlibParameters before sending parameters; canonical profile-bound storage directory preparation with NSFileProtectionCompleteUntilFirstUserAuthentication and backup exclusion; retaining native ownership on initialization failure; and integration API map for P4-B.
+
+Reserved paths / active writer: None (all claimed Builder paths released for Architect review)
+
+Changed files:
+- `dependencies/pins.json`: Updated OpenSSL 3.5.9 LTS pin status, recording verified Apache 2.0 license.
+- `dependencies/tdlib-vendor.json`: Recorded complete deterministic 16-member static link closure inventory (12 TDLib targets + 2 OpenSSL archives + 2 Apple SDK libraries) and documented flat and nested include headers.
+- `licenses/LICENSE-OpenSSL.txt`: Exact upstream Apache License 2.0 text at verified pin commit 45e844fa2a14ec92d146bd8f5778ac130b6625fb.
+- `Packages/CTDLib/Sources/CTDLib/include/td/telegram/td_json_client.h`: Nested include header copy matching upstream directory hierarchy <td/telegram/td_json_client.h>.
+- `scripts/assemble_tdlib.sh`: Multi-stage assembly recipe updated with explicit 14-archive member resolution, lipo arm64 architecture checks on each member, failure on missing/empty/duplicate members, and removal of wildcard scans.
+- `App/Adapters/Telegram/TDLibBridge.swift`: TDLibProcessReceiver updated with maxActiveSessions (16), duplicate client-ID rejection, atomic createAndRegisterSession, clean idle shutdown (exiting loop instead of busy/sleep polling), and joinIdle().
+- `App/Adapters/Telegram/TDLibSession.swift`: Expanded TDLibAuthorizationState enum to cover all 13 states from pinned td_api.tl; implemented FileTransferTracking separating upload and download state transitions from local download status; guaranteed terminal event delivery on upload completion, failure, or cancellation; delivered authorizationStateClosed to all update continuations before stream completion; and preserved genuine closed status even if diagnostic logging fails.
+- `App/Adapters/Telegram/TDLibClient.swift`: Added storageURLs(forProfile:) creating disjoint database and files directories with completeUntilFirstUserAuthentication and isExcludedFromBackup; updated start() to validate disjoint paths, ensure filesystem protection, bootstrap real authorization state awaiting waitTdlibParameters before sending parameters, and retain native ownership on failure.
+- `docs/03-BUILD-LOG.md`: Recorded batch claim, verification results, limitations, and path release.
+
+Dependency revisions / artifact provenance:
+- Google Photos GPMC: `github.com/g8row/PhotosBackup.git` pinned at commit `3c88269e18b9d4515e97d846c5816bd836285c3e` (MIT license).
+- Telegram TDLib: `github.com/tdlib/td.git` pinned at commit `42e6a5259551178d1dab54a22ad96d14bd906e20` (Boost 1.0 license).
+- OpenSSL: `github.com/openssl/openssl.git` pinned at tag `openssl-3.5.9` (commit `45e844fa2a14ec92d146bd8f5778ac130b6625fb`, tag object `d0ca66a1abe52545f14eca635c648932fcde5615`, Apache 2.0 license).
+- Vendor metadata: Documented in `dependencies/tdlib-vendor.json` and `dependencies/google-vendor.json`.
+
+Checks (exact command, outcome, evidence location):
+- `TMPDIR=/private/tmp SWIFT_MODULE_CACHE_PATH=/private/tmp/cloudified-module-cache CLANG_MODULE_CACHE_PATH=/private/tmp/cloudified-module-cache swift build --package-path Packages/CTDLib --disable-sandbox`: passed (exit 0 in 0.37s).
+- `TMPDIR=/private/tmp SWIFT_MODULE_CACHE_PATH=/private/tmp/cloudified-module-cache CLANG_MODULE_CACHE_PATH=/private/tmp/cloudified-module-cache swift build --package-path Packages/CloudifiedCore --disable-sandbox`: passed (exit 0 in 0.22s).
+- `TMPDIR=/private/tmp SWIFT_MODULE_CACHE_PATH=/private/tmp/cloudified-module-cache CLANG_MODULE_CACHE_PATH=/private/tmp/cloudified-module-cache swiftc -typecheck -swift-version 6 -module-cache-path /private/tmp/cloudified-module-cache -I Packages/CloudifiedCore/.build/out/Products/Debug -I Packages/CTDLib/Sources/CTDLib/include -Xcc '-fmodule-map-file=Packages/CloudifiedCore/Sources/CSQLite/module.modulemap' -Xcc '-fmodule-map-file=Packages/CTDLib/Sources/CTDLib/include/module.modulemap' App/Adapters/Security/KeychainCredentialStore.swift App/Adapters/GooglePhotos/Protobuf.swift App/Adapters/GooglePhotos/GPMCClient.swift App/Adapters/GooglePhotos/GoogleTokenExchange.swift App/Adapters/GooglePhotos/GooglePhotosClientSession.swift App/Adapters/Telegram/TDLibBridge.swift App/Adapters/Telegram/TDLibJSON.swift App/Adapters/Telegram/TDLibSession.swift App/Adapters/Telegram/TDLibClient.swift`: passed (exit 0, zero errors, zero warnings).
+- `TMPDIR=/private/tmp SWIFT_MODULE_CACHE_PATH=/private/tmp/cloudified-module-cache CLANG_MODULE_CACHE_PATH=/private/tmp/cloudified-module-cache swiftc -parse -module-cache-path /private/tmp/cloudified-module-cache -I Packages/CloudifiedCore/.build/out/Products/Debug -I Packages/CTDLib/Sources/CTDLib/include $(find App -name "*.swift")`: passed (exit 0 across all 38 App Swift files).
+- `bash -n scripts/assemble_tdlib.sh scripts/build_unsigned_ipa.sh`: passed (exit 0).
+- `python3 -m py_compile scripts/generate_xcode_project.py scripts/build_cache.py scripts/check_docs.py`: passed (exit 0).
+- `python3 -c "import json; json.load(open('dependencies/pins.json')); json.load(open('dependencies/tdlib-vendor.json')); json.load(open('dependencies/google-vendor.json'))"`: passed (exit 0).
+- `plutil -lint Cloudified.xcodeproj/project.pbxproj App/Resources/Info.plist`: passed (both `OK`).
+- `python3 scripts/check_docs.py`: passed (20 Markdown files checked, local targets valid).
+- `git diff --check`: passed (zero whitespace/lint issues).
+
+Cloud run URL / artifact checksum, if applicable: None (cloud builds deferred to P7 per user schedule).
+Physical-device evidence, if applicable: None (physical-device testing starts at P7).
+
+Failures / known limitations:
+- P4-B critical upload, receipt, and reconciliation integration is Architect-owned and pending Architect start.
+- Native library `build/tdlib/lib/libtdjson.a` remains intentionally unbuilt locally; full cross-compilation is executed via `scripts/assemble_tdlib.sh` on standard hosted runners during manual cloud CI before P7 testing. The removal of fake shims guarantees that missing native symbols fail link clearly if linkage is attempted without assembly.
+- No live network requests or active user accounts tested (per schedule; acceptance testing starts at P7).
+- No cloud IPA build dispatched; SideStore/device verification deferred to P7.
+
+Decision changes (reference handbook 4 IDs):
+- Follows D29 (provider foundations before critical transport integration), D31 (public standard runners, validated caches, no fake symbols), D32 (delivery uncertainty and verified crypto selection), and D33 (Architect focused corrections).
+
+Commit / milestone tag, after it exists: Pending commit.
+Next handoff / release of reserved paths: Handoff to Architect for Phase 4-B. All claimed Builder paths released.
 
 ## Batch log template
 
