@@ -24,6 +24,8 @@ see [P8 first-run corrections and linking plan](docs/P8-FIRST-RUN.md).
 The [improvement research and proposed batches](docs/P8-IMPROVEMENT-RESEARCH.md)
 cover Google isolation limits, background/Live Activity choices, efficiency and
 recovery; proposals are separate from implemented or device-verified behavior.
+The current [P8-B2 Builder handoff](docs/P8-BUILDER.md) assigns Telegram destination
+selection and setup clarity; critical Google/Core/background work stays with Architect.
 
 ## Stack and build location
 
