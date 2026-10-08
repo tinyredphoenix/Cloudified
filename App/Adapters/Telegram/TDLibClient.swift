@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import CloudifiedCore
 
 /// High-level client coordinating TDLib session lifecycle, credentials, and authentication flows.
@@ -6,6 +7,7 @@ import CloudifiedCore
 public actor TDLibClient {
     private let profileID: String
     private let credentialStore: KeychainCredentialStore
+    private var isStarting = false
     private let session: TDLibSession
     private let diagnosticSink: (@Sendable (EventOperation, EventContext, EventDecision, EventSeverity, SafeFailure?, TimeInterval?, Int64?, Int64?) async throws -> Void)?
 
@@ -46,31 +48,61 @@ public actor TDLibClient {
     public static func storageURLs(forProfile profileID: String) throws -> (databaseURL: URL, filesURL: URL) {
         try KeychainCredentialStore.validateProfileID(profileID)
         let fileManager = FileManager.default
-        let baseDir = try fileManager.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        ).appendingPathComponent("Cloudified/Telegram/\(profileID)", isDirectory: true)
+        let support: URL
+        do {
+            support = try fileManager.url(for: .applicationSupportDirectory,
+                                          in: .userDomainMask, appropriateFor: nil, create: true)
+                .resolvingSymlinksInPath()
+        } catch { throw storageFailure(error) }
+        var parent = support
+        for name in ["Cloudified", "Telegram", profileID] {
+            parent.appendPathComponent(name, isDirectory: true)
+            try prepareDirectory(parent, fileManager: fileManager)
+        }
+        let database = parent.appendingPathComponent("database", isDirectory: true)
+        let files = parent.appendingPathComponent("files", isDirectory: true)
+        try prepareDirectory(database, fileManager: fileManager)
+        try prepareDirectory(files, fileManager: fileManager)
+        return (database, files)
+    }
 
-        let dbDir = baseDir.appendingPathComponent("database", isDirectory: true)
-        let filesDir = baseDir.appendingPathComponent("files", isDirectory: true)
+    private static func prepareDirectory(_ url: URL, fileManager: FileManager) throws {
+        do {
+            guard url.resolvingSymlinksInPath().path == url.standardizedFileURL.path else {
+                throw TDLibError.invalidParameter("Profile storage cannot be redirected.")
+            }
+            if fileManager.fileExists(atPath: url.path),
+               try url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == true {
+                throw TDLibError.invalidParameter("Profile storage cannot be redirected.")
+            }
+            try fileManager.createDirectory(at: url, withIntermediateDirectories: false)
+            #if os(iOS)
+            // Explicitly update existing directories too, not just newly created ones.
+            try fileManager.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                                          ofItemAtPath: url.path)
+            #endif
+            var directory = url
+            var values = URLResourceValues()
+            values.isExcludedFromBackup = true
+            try directory.setResourceValues(values)
+        } catch let error as TDLibError { throw error }
+        catch {
+            // A private filesystem path must not escape through NSError prose.
+            throw storageFailure(error)
+        }
+    }
 
-        let dirAttributes: [FileAttributeKey: Any] = [
-            .protectionKey: FileProtectionType.completeUntilFirstUserAuthentication
-        ]
-
-        try fileManager.createDirectory(at: dbDir, withIntermediateDirectories: true, attributes: dirAttributes)
-        try fileManager.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: dirAttributes)
-
-        var resourceValues = URLResourceValues()
-        resourceValues.isExcludedFromBackup = true
-        var mutableDbDir = dbDir
-        var mutableFilesDir = filesDir
-        try mutableDbDir.setResourceValues(resourceValues)
-        try mutableFilesDir.setResourceValues(resourceValues)
-
-        return (databaseURL: dbDir, filesURL: filesDir)
+    private static func storageFailure(_ error: any Error) -> SafeFailure {
+        let value = error as NSError
+        if (value.domain == NSPOSIXErrorDomain && [Int(ENOSPC), Int(EDQUOT)].contains(value.code)) ||
+            (value.domain == NSCocoaErrorDomain && value.code == NSFileWriteOutOfSpaceError) {
+            return SafeFailure(.diskFull, domain: .fileSystem, code: value.code, cause: .insufficientSpace)
+        }
+        if (value.domain == NSPOSIXErrorDomain && [Int(EACCES), Int(EPERM)].contains(value.code)) ||
+            (value.domain == NSCocoaErrorDomain && [NSFileReadNoPermissionError, NSFileWriteNoPermissionError].contains(value.code)) {
+            return SafeFailure(.accessDenied, domain: .fileSystem, code: value.code, cause: .permissionDenied)
+        }
+        return SafeFailure(.sourceUnavailable, domain: .fileSystem, cause: .unknown)
     }
 
     /// Initializes and starts the native TDLib session with the given filesystem parameters.
@@ -83,65 +115,38 @@ public actor TDLibClient {
         filesDirectory: String? = nil,
         appVersion: String = "1.0.0"
     ) async throws {
-        let dbPath: String
-        let filesPath: String
-
-        if let databaseDirectory, let filesDirectory {
-            let dbURL = URL(fileURLWithPath: databaseDirectory).standardizedFileURL
-            let filesURL = URL(fileURLWithPath: filesDirectory).standardizedFileURL
-            guard dbURL != filesURL,
-                  !dbURL.path.hasPrefix(filesURL.path + "/"),
-                  !filesURL.path.hasPrefix(dbURL.path + "/") else {
-                throw TDLibError.invalidParameter("databaseDirectory and filesDirectory must be disjoint distinct paths.")
-            }
-            let fileManager = FileManager.default
-            let dirAttributes: [FileAttributeKey: Any] = [
-                .protectionKey: FileProtectionType.completeUntilFirstUserAuthentication
-            ]
-            try fileManager.createDirectory(at: dbURL, withIntermediateDirectories: true, attributes: dirAttributes)
-            try fileManager.createDirectory(at: filesURL, withIntermediateDirectories: true, attributes: dirAttributes)
-
-            var resourceValues = URLResourceValues()
-            resourceValues.isExcludedFromBackup = true
-            var mutableDbURL = dbURL
-            var mutableFilesURL = filesURL
-            try mutableDbURL.setResourceValues(resourceValues)
-            try mutableFilesURL.setResourceValues(resourceValues)
-
-            dbPath = dbURL.path
-            filesPath = filesURL.path
-        } else {
-            let roots = try Self.storageURLs(forProfile: profileID)
-            dbPath = roots.databaseURL.path
-            filesPath = roots.filesURL.path
-        }
-
+        guard !isStarting else { throw TDLibError.executionFailed("Client initialization is in progress.") }
+        isStarting = true
+        defer { isStarting = false }
+        try Task.checkCancellation()
         let cred = try credentialStore.loadTelegramCredential(forProfile: profileID)
         let dbKey = try credentialStore.getOrCreateTDLibDatabaseKey(forProfile: profileID)
+        let roots = try Self.storageURLs(forProfile: profileID)
+        // Optional legacy arguments may only name this profile's canonical roots;
+        // accepting arbitrary disjoint paths could share another account database.
+        switch (databaseDirectory, filesDirectory) {
+        case (nil, nil): break
+        case let (database?, files?):
+            guard URL(fileURLWithPath: database).standardizedFileURL == roots.databaseURL,
+                  URL(fileURLWithPath: files).standardizedFileURL == roots.filesURL else {
+                throw TDLibError.invalidParameter("Directories must belong to the mapped profile.")
+            }
+        default: throw TDLibError.invalidParameter("Both directory arguments must be supplied together.")
+        }
 
         _ = try await session.start()
-
-        // Bootstrap real authorization state: await waitTdlibParameters before sending parameters
-        let startWait = ProcessInfo.processInfo.systemUptime
-        while await session.authState == .uninitialized && (ProcessInfo.processInfo.systemUptime - startWait) < 10.0 {
-            try await Task.sleep(nanoseconds: 50_000_000) // 50ms
-        }
-        let authState = await session.authState
-        guard authState == .waitTdlibParameters else {
-            if authState == .ready {
-                return // already initialized
-            }
-            let failure = TDLibError.executionFailed("TDLib did not transition to waitTdlibParameters (current: \(authState)).")
-            let classified = Self.classify(failure)
-            try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
-            throw classified
+        // The pinned ABI emits no updates until its first request. This genuine
+        // query starts delivery; session applies its auth response before resuming.
+        _ = try await session.sendRequest(["@type": "getAuthorizationState"], timeout: 10)
+        guard await session.authState == .waitTdlibParameters else {
+            throw TDLibError.executionFailed("Unexpected authorization state during initialization.")
         }
 
         let params = TDLibParameters(
             apiId: cred.apiId,
             apiHash: cred.apiHash,
-            databaseDirectory: dbPath,
-            filesDirectory: filesPath,
+            databaseDirectory: roots.databaseURL.path,
+            filesDirectory: roots.filesURL.path,
             databaseEncryptionKey: dbKey,
             useFileDatabase: true,
             useChatInfoDatabase: true,

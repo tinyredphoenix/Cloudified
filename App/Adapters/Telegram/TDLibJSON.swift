@@ -105,8 +105,9 @@ public struct TDLibResponse: Sendable, Equatable {
 /// Strictly validates 64-bit integer IDs (chat_id, message_id, user_id), rejects rounded/fractional values,
 /// enforces size and depth limits, and preserves Sendable value models.
 public enum TDLibJSON {
-    public static let maxJSONBytes: Int = 10 * 1024 * 1024 // 10 MiB limit
-    public static let maxRecursionDepth: Int = 64
+    public static let maxJSONBytes: Int = 256 * 1024 // Small history pages; oversized input fences, never truncates.
+    public static let maxRecursionDepth: Int = 32
+    public static let maxValueNodes = 4096
 
     /// Parses a JSON string into an immutable Sendable TDLibResponse.
     public static func parse(_ jsonString: String) throws -> TDLibResponse {
@@ -125,12 +126,15 @@ public enum TDLibJSON {
         guard let dict = jsonObject as? [String: Any] else {
             throw TDLibError.malformedResponse
         }
-        let converted = try convertDictionary(dict, depth: 0)
+        var remainingNodes = maxValueNodes
+        let converted = try convertDictionary(dict, depth: 0, remainingNodes: &remainingNodes)
         return TDLibResponse(fields: converted)
     }
 
     /// Converts Foundation object tree into TDLibValue with depth protection.
-    public static func convertValue(_ value: Any, depth: Int) throws -> TDLibValue {
+    private static func convertValue(_ value: Any, depth: Int, remainingNodes: inout Int) throws -> TDLibValue {
+        guard remainingNodes > 0 else { throw TDLibError.malformedResponse }
+        remainingNodes -= 1
         guard depth <= maxRecursionDepth else {
             throw TDLibError.malformedResponse
         }
@@ -155,14 +159,15 @@ public enum TDLibJSON {
         }
         if let arr = value as? [Any] {
             var items: [TDLibValue] = []
-            items.reserveCapacity(min(arr.count, 10_000))
+            guard arr.count <= remainingNodes else { throw TDLibError.malformedResponse }
+            items.reserveCapacity(arr.count)
             for item in arr {
-                items.append(try convertValue(item, depth: depth + 1))
+                items.append(try convertValue(item, depth: depth + 1, remainingNodes: &remainingNodes))
             }
             return .array(items)
         }
         if let dict = value as? [String: Any] {
-            return .object(try convertDictionary(dict, depth: depth + 1))
+            return .object(try convertDictionary(dict, depth: depth + 1, remainingNodes: &remainingNodes))
         }
         if value is NSNull {
             return .null
@@ -170,10 +175,11 @@ public enum TDLibJSON {
         throw TDLibError.malformedResponse
     }
 
-    public static func convertDictionary(_ dict: [String: Any], depth: Int) throws -> [String: TDLibValue] {
+    private static func convertDictionary(_ dict: [String: Any], depth: Int, remainingNodes: inout Int) throws -> [String: TDLibValue] {
+        guard depth <= maxRecursionDepth, dict.count <= remainingNodes else { throw TDLibError.malformedResponse }
         var result: [String: TDLibValue] = [:]
         for (k, v) in dict {
-            result[k] = try convertValue(v, depth: depth)
+            result[k] = try convertValue(v, depth: depth, remainingNodes: &remainingNodes)
         }
         return result
     }

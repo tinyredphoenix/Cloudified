@@ -110,116 +110,90 @@ public final class TDLibBridge: Sendable {
 /// routing updates by `@client_id` to registered session actors without busy-spinning.
 public actor TDLibProcessReceiver {
     public static let shared = TDLibProcessReceiver()
+    // One mapped Telegram account executes at a time; Google is independent.
+    public static let maxActiveSessions = 1
 
-    /// Maximum concurrent active client sessions in the process.
-    public static let maxActiveSessions = 16
-
-    private let bridge: TDLibBridge
+    private let bridge = TDLibBridge()
     private var activeSessions: [Int32: @Sendable (Result<TDLibResponse, TDLibError>) async -> Void] = [:]
     private var receiveTask: Task<Void, Never>?
-    private var isRunning: Bool = false
+    private var receiveGeneration: UUID?
+    private var draining = false
 
-    private init(bridge: TDLibBridge = TDLibBridge()) {
-        self.bridge = bridge
-    }
+    private init() {}
 
-    /// Atomically creates a native client ID through the bridge and registers its session handler.
-    /// Enforces session capacity limits so unmanaged native clients cannot be orphaned.
+    /// Recheck reservations after every suspension. Never create an unowned native ID.
     public func createAndRegisterSession(
         handler: @escaping @Sendable (Result<TDLibResponse, TDLibError>) async -> Void
-    ) throws -> Int32 {
-        guard activeSessions.count < Self.maxActiveSessions else {
-            throw TDLibError.capacityExceeded("Maximum active TDLib session limit reached (\(Self.maxActiveSessions)).")
+    ) async throws -> Int32 {
+        while draining, let oldTask = receiveTask, let generation = receiveGeneration {
+            await oldTask.value
+            releaseJoinedTask(generation: generation)
         }
-        let clientID = try bridge.createClientID()
-        activeSessions[clientID] = handler
+        try Task.checkCancellation()
+        guard activeSessions.count < Self.maxActiveSessions else {
+            throw TDLibError.capacityExceeded("A Telegram session still owns the native client.")
+        }
+        let id = try bridge.createClientID()
+        activeSessions[id] = handler
         startReceiveLoopIfNeeded()
-        return clientID
+        return id
     }
 
-    /// Registers an existing client ID, validating positive non-duplicate ID and capacity limits.
-    public func registerSession(
-        clientID: Int32,
-        handler: @escaping @Sendable (Result<TDLibResponse, TDLibError>) async -> Void
-    ) throws {
-        guard clientID > 0 else {
-            throw TDLibError.invalidParameter("Client ID must be positive.")
-        }
-        guard activeSessions[clientID] == nil else {
-            throw TDLibError.invalidParameter("Client ID \(clientID) is already registered.")
-        }
-        guard activeSessions.count < Self.maxActiveSessions else {
-            throw TDLibError.capacityExceeded("Maximum active TDLib session limit reached (\(Self.maxActiveSessions)).")
-        }
-        activeSessions[clientID] = handler
-        startReceiveLoopIfNeeded()
-    }
-
-    /// Unregisters an active session. If no sessions remain, shuts down the receive loop cleanly.
-    public func unregisterSession(clientID: Int32) {
+    // Called only after a genuine native closed acknowledgement. Do not join from
+    // its handler: the receive task is awaiting that handler and must first return.
+    func unregisterSession(clientID: Int32) {
         activeSessions.removeValue(forKey: clientID)
-        if activeSessions.isEmpty {
-            stopReceiveLoop()
-        }
+        if activeSessions.isEmpty { draining = true }
     }
 
-    public func hasActiveSessions() -> Bool {
-        !activeSessions.isEmpty
-    }
+    public func hasActiveSessions() -> Bool { !activeSessions.isEmpty }
 
-    /// Awaits completion of the idle receive task if one is shutting down.
+    /// Close callers join outside receive callbacks; retain the task until it exits.
     public func joinIdle() async {
-        if let task = receiveTask {
-            _ = await task.value
-        }
+        guard activeSessions.isEmpty, let task = receiveTask, let generation = receiveGeneration else { return }
+        await task.value
+        releaseJoinedTask(generation: generation)
     }
+
+    private func shouldReceive() -> Bool { !draining && !activeSessions.isEmpty }
 
     private func startReceiveLoopIfNeeded() {
-        guard !isRunning else { return }
-        isRunning = true
-
-        receiveTask = Task.detached(priority: .userInitiated) { [weak self, bridge] in
-            while !Task.isCancelled {
-                guard let self else { break }
-                let hasSessions = await self.hasActiveSessions()
-                if !hasSessions {
-                    await self.stopReceiveLoop()
-                    break
-                }
-
+        guard receiveTask == nil else { return }
+        draining = false
+        receiveGeneration = UUID()
+        receiveTask = Task.detached(priority: .userInitiated) { [self, bridge] in
+            while await shouldReceive() {
                 do {
-                    if let jsonString = try bridge.receive(timeout: 1.0) {
-                        await self.routeIncomingJSON(jsonString)
+                    if let json = try bridge.receive(timeout: 0.25) {
+                        await routeIncomingJSON(json)
                     }
-                } catch {
-                    await self.reportProtocolFailure()
-                }
+                } catch { await reportProtocolFailure() }
             }
+            // Leave the completed task retained until an external caller joins it.
         }
     }
 
-    private func stopReceiveLoop() {
-        isRunning = false
-        receiveTask?.cancel()
+    private func releaseJoinedTask(generation: UUID) {
+        // Multiple joiners may resume after a replacement is registered.
+        guard receiveGeneration == generation else { return }
         receiveTask = nil
+        receiveGeneration = nil
+        draining = false
     }
 
-    private func routeIncomingJSON(_ jsonString: String) async {
+    private func routeIncomingJSON(_ json: String) async {
         let response: TDLibResponse
-        do { response = try TDLibJSON.parse(jsonString) }
+        do { response = try TDLibJSON.parse(json) }
         catch { await reportProtocolFailure(); return }
-        guard let targetClientID = response.clientID, targetClientID > 0 else {
+        guard let id = response.clientID, id > 0 else {
             await reportProtocolFailure()
             return
         }
-        guard let handler = activeSessions[targetClientID] else { return }
-        // An unknown/old client cannot change another account's auth or close state.
+        guard let handler = activeSessions[id] else { return }
         await handler(.success(response))
     }
 
     private func reportProtocolFailure() async {
-        // Corrupt routing cannot establish the affected account; fence all owned
-        // sessions instead of losing a possible acceptance/close confirmation.
         for handler in Array(activeSessions.values) {
             await handler(.failure(.malformedResponse))
         }

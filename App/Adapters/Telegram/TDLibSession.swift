@@ -99,9 +99,10 @@ public struct TDLibParameters: Sendable {
 /// coalesces file progress and fences critical delivery overflow,
 /// and manages deterministic native close acknowledgement.
 public actor TDLibSession {
-    public static let maxPendingRequests = 100
-    public static let maxSubscribers = 10
-    public static let maxTrackedFiles = 1000
+    public static let maxPendingRequests = 16
+    public static let maxSubscribers = 2
+    public static let maxBufferedUpdates = 16
+    public static let maxTrackedFiles = 32
 
     private struct PendingRequest {
         let continuation: CheckedContinuation<TDLibResponse, any Error>
@@ -118,18 +119,25 @@ public actor TDLibSession {
     private var processingFailure: (any Error)?
 
     private var currentAuthState: TDLibAuthorizationState = .uninitialized
+    private var isStarting = false
     private var isClosing = false
     private var isTerminated = false
     private var closeTask: Task<Void, any Error>?
 
-    // Progress coalescing state for file transfers: file_id -> tracking record
+    private struct FileTransferFlags: Sendable, Equatable {
+        let uploading: Bool
+        let uploaded: Bool
+        let downloading: Bool
+        let downloaded: Bool
+        var active: Bool { uploading || downloading }
+    }
     private struct FileTransferTracking: Sendable {
+        var flags: FileTransferFlags
         var lastEmittedUptime: TimeInterval
-        var lastUploadedSize: Int64
-        var wasUploadingActive: Bool
-        var wasDownloadingActive: Bool
+        var latest: TDLibResponse?
     }
     private var fileTransferTracking: [Int64: FileTransferTracking] = [:]
+    private var progressFlushTask: Task<Void, Never>?
 
     public init(
         bridge: TDLibBridge = TDLibBridge(),
@@ -157,17 +165,19 @@ public actor TDLibSession {
 
     /// Initializes and starts the owned TDLib client and registers with the process receiver.
     public func start() async throws -> Int32 {
-        guard clientID == nil, closeTask == nil else {
+        guard clientID == nil, closeTask == nil, !isStarting else {
             throw TDLibError.executionFailed("TDLibSession is already started.")
         }
+        isStarting = true
+        defer { isStarting = false }
         self.isTerminated = false
         self.isClosing = false
         self.currentAuthState = .uninitialized
         self.processingFailure = nil
 
         // Atomically create native client ID and register session handler with receiver
-        let id = try await receiver.createAndRegisterSession { [weak self] result in
-            await self?.handleIncomingResponse(result)
+        let id = try await receiver.createAndRegisterSession { [self] result in
+            await handleIncomingResponse(result)
         }
         self.clientID = id
 
@@ -178,12 +188,13 @@ public actor TDLibSession {
     /// Subscribes to the broadcast stream of TDLib updates with bounded buffer policy.
     public func updateStream() throws -> AsyncThrowingStream<TDLibResponse, any Error> {
         if let processingFailure { throw processingFailure }
+        guard !isTerminated else { throw TDLibError.clientClosed }
         guard updateContinuations.count < Self.maxSubscribers else {
             throw TDLibError.capacityExceeded("Maximum subscriber limit reached (\(Self.maxSubscribers)).")
         }
 
         let streamID = UUID()
-        return AsyncThrowingStream(bufferingPolicy: .bufferingOldest(100)) { continuation in
+        return AsyncThrowingStream(bufferingPolicy: .bufferingOldest(Self.maxBufferedUpdates)) { continuation in
             self.registerUpdateContinuation(continuation, id: streamID)
             continuation.onTermination = { [weak self] _ in
                 Task { [weak self] in
@@ -212,7 +223,7 @@ public actor TDLibSession {
         guard timeout.isFinite, timeout > 0, timeout <= 300.0 else {
             throw TDLibError.invalidParameter("Timeout must be finite positive number <= 300 seconds.")
         }
-        guard let clientID, !isTerminated, !isClosing else {
+        guard let clientID, !isStarting, !isTerminated, !isClosing else {
             throw TDLibError.clientClosed
         }
         guard pendingRequests.count < Self.maxPendingRequests else {
@@ -285,6 +296,9 @@ public actor TDLibSession {
         for id in Array(pendingRequests.keys) {
             resolvePendingRequest(id: id, result: .failure(failure))
         }
+        progressFlushTask?.cancel()
+        progressFlushTask = nil
+        fileTransferTracking.removeAll()
         for continuation in updateContinuations.values { continuation.finish(throwing: failure) }
         updateContinuations.removeAll()
         // Keep the receiver/native client alive for real close acknowledgement.
@@ -307,6 +321,12 @@ public actor TDLibSession {
                 let message = response.errorMessage ?? "TDLib error"
                 await resolveFailure(id: extra, error: TDLibError.tdlibError(code: code, message: message))
             } else {
+                // Bootstrap query is a real first request: TDLib emits no updates
+                // before that request. Apply its auth snapshot before resuming.
+                if let type = response.type, type.hasPrefix("authorizationState") {
+                    let closed = await handleAuthStateUpdate(type)
+                    if closed { await completeClosure() }
+                }
                 resolvePendingRequest(id: extra, result: .success(response))
             }
             return
@@ -321,77 +341,87 @@ public actor TDLibSession {
                     isClosedAcknowledgement = await handleAuthStateUpdate(stateType)
                 }
             } else if type == "updateFile" {
-                // Separate latest-value progress coalescing from guaranteed terminal states
-                if let file = response.object(forKey: "file"),
-                   let fileID = file.int64(forKey: "id") {
-                    let remote = file.object(forKey: "remote")
-                    let local = file.object(forKey: "local")
-
-                    let isUploadingActive = remote?.bool(forKey: "is_uploading_active") == true
-                    let isUploadingCompleted = remote?.bool(forKey: "is_uploading_completed") == true
-                    let uploadedSize = remote?.int64(forKey: "uploaded_size") ?? 0
-
-                    let isDownloadingActive = local?.bool(forKey: "is_downloading_active") == true
-                    let isDownloadingCompleted = local?.bool(forKey: "is_downloading_completed") == true
-
-                    let prev = fileTransferTracking[fileID]
-                    let wasUploadingActive = prev?.wasUploadingActive ?? false
-                    let wasDownloadingActive = prev?.wasDownloadingActive ?? false
-
-                    // Terminal transitions for upload or download
-                    let isUploadTerminal = isUploadingCompleted || (wasUploadingActive && !isUploadingActive)
-                    let isDownloadTerminal = isDownloadingCompleted || (wasDownloadingActive && !isDownloadingActive)
-
-                    if isUploadTerminal || isDownloadTerminal {
-                        // Terminal state: evict from progress tracking and guarantee delivery
-                        fileTransferTracking.removeValue(forKey: fileID)
-                    } else if isUploadingActive || isDownloadingActive {
-                        // Intermediate progress: coalesce to ~2 Hz
-                        let now = ProcessInfo.processInfo.systemUptime
-                        let lastTime = prev?.lastEmittedUptime ?? 0
-                        if now - lastTime < 0.5 {
-                            fileTransferTracking[fileID] = FileTransferTracking(
-                                lastEmittedUptime: lastTime,
-                                lastUploadedSize: uploadedSize,
-                                wasUploadingActive: isUploadingActive,
-                                wasDownloadingActive: isDownloadingActive
-                            )
-                            return
-                        }
-                        // Prune cache if over capacity
-                        if fileTransferTracking.count >= Self.maxTrackedFiles {
-                            fileTransferTracking.removeAll(keepingCapacity: true)
-                        }
-                        fileTransferTracking[fileID] = FileTransferTracking(
-                            lastEmittedUptime: now,
-                            lastUploadedSize: uploadedSize,
-                            wasUploadingActive: isUploadingActive,
-                            wasDownloadingActive: isDownloadingActive
-                        )
-                    }
-                }
+                if !processFileProgress(response) { return }
             }
         }
 
-        // Broadcast to all active update listeners FIRST so that authorizationStateClosed
-        // reaches subscribers BEFORE the stream terminates
+        // Even if publishing overflows, a genuine native close still releases
+        // native ownership. A delivery failure remains a separate sticky fact.
+        publish(response)
+        if isClosedAcknowledgement { await completeClosure() }
+    }
+
+    private func publish(_ response: TDLibResponse) {
+        guard processingFailure == nil else { return }
         for (id, continuation) in Array(updateContinuations) {
             switch continuation.yield(response) {
             case .enqueued: break
             case .terminated: updateContinuations.removeValue(forKey: id)
             case .dropped:
-                let failure = TDLibError.capacityExceeded("Critical update delivery overflow; reconciliation required.")
-                interruptInput(failure)
+                interruptInput(TDLibError.capacityExceeded("Critical update overflow."))
                 return
             @unknown default:
                 interruptInput(TDLibError.malformedResponse)
                 return
             }
         }
+    }
 
-        if isClosedAcknowledgement {
-            await completeClosure()
+    /// Retain only the latest intermediate sample, flush even if callbacks stop.
+    /// Every active/inactive/completed transition passes immediately.
+    private func processFileProgress(_ response: TDLibResponse) -> Bool {
+        guard processingFailure == nil else { return false }
+        guard let file = response.object(forKey: "file"), let id = file.int64(forKey: "id"),
+              let remote = file.object(forKey: "remote"), let local = file.object(forKey: "local"),
+              let uploading = remote.bool(forKey: "is_uploading_active"),
+              let uploaded = remote.bool(forKey: "is_uploading_completed"),
+              let downloading = local.bool(forKey: "is_downloading_active"),
+              let downloaded = local.bool(forKey: "is_downloading_completed") else {
+            interruptInput(TDLibError.malformedResponse)
+            return false
         }
+        let flags = FileTransferFlags(uploading: uploading, uploaded: uploaded,
+                                      downloading: downloading, downloaded: downloaded)
+        let now = ProcessInfo.processInfo.systemUptime
+        let old = fileTransferTracking[id]
+        let immediate = old == nil || old?.flags != flags || now - (old?.lastEmittedUptime ?? 0) >= 0.5
+        guard flags.active else {
+            fileTransferTracking.removeValue(forKey: id)
+            return true
+        }
+        guard old != nil || fileTransferTracking.count < Self.maxTrackedFiles else {
+            interruptInput(TDLibError.capacityExceeded("File progress capacity exceeded."))
+            return false
+        }
+        fileTransferTracking[id] = FileTransferTracking(
+            flags: flags, lastEmittedUptime: immediate ? now : old!.lastEmittedUptime,
+            latest: immediate ? nil : response)
+        if !immediate { startProgressFlushIfNeeded() }
+        return immediate
+    }
+
+    private func startProgressFlushIfNeeded() {
+        guard progressFlushTask == nil else { return }
+        progressFlushTask = Task { [weak self] in
+            while !Task.isCancelled {
+                do { try await Task.sleep(nanoseconds: 500_000_000) }
+                catch { return }
+                guard let self, await self.flushProgress() else { return }
+            }
+        }
+    }
+
+    private func flushProgress() -> Bool {
+        for (id, record) in Array(fileTransferTracking) {
+            guard let latest = record.latest else { continue }
+            fileTransferTracking[id]?.latest = nil
+            fileTransferTracking[id]?.lastEmittedUptime = ProcessInfo.processInfo.systemUptime
+            publish(latest)
+            if processingFailure != nil { return false }
+        }
+        // All latest values were flushed; a later sample starts a fresh timer.
+        progressFlushTask = nil
+        return false
     }
 
     private func handleAuthStateUpdate(_ stateType: String) async -> Bool {
@@ -426,7 +456,8 @@ public actor TDLibSession {
             currentAuthState = .closed
             isClosed = true
         default:
-            break
+            currentAuthState = .uncertain
+            interruptInput(TDLibError.malformedResponse)
         }
 
         if oldState != currentAuthState {
@@ -441,7 +472,7 @@ public actor TDLibSession {
     /// Closes the client session and awaits terminal closed acknowledgement from native TDLib.
     /// All concurrent close callers await the same closure Task.
     public func close() async throws {
-        if isTerminated { return }
+        guard !isStarting else { throw TDLibError.unresolvedClose("Session creation is still in progress.") }
         if let existing = closeTask {
             return try await existing.value
         }
@@ -455,14 +486,14 @@ public actor TDLibSession {
     }
 
     private func performClose() async throws {
-        guard let clientID, !isTerminated else { return }
-        self.isClosing = true
-        self.currentAuthState = .closing
-
-        // Send close command to TDLib
-        let closeReq: [String: Any] = ["@type": "close"]
-        let closeJSON = try TDLibJSON.serializeRequest(closeReq)
-        bridge.send(clientID: clientID, jsonRequest: closeJSON)
+        if let clientID, !isTerminated {
+            self.isClosing = true
+            self.currentAuthState = .closing
+            let closeJSON = try TDLibJSON.serializeRequest(["@type": "close"])
+            bridge.send(clientID: clientID, jsonRequest: closeJSON)
+        } else if clientID == nil, !isTerminated {
+            return // Never started: no native owner to retire.
+        }
 
         // Await native confirmation with finite bounded deadline (10 seconds)
         let maxWaitSeconds: TimeInterval = 10.0
@@ -474,7 +505,7 @@ public actor TDLibSession {
 
         if !isTerminated || self.clientID != nil {
             // Unresolved close deadline: do NOT fabricate closed state
-            currentAuthState = .uncertain
+            if !isTerminated { currentAuthState = .uncertain }
             try await emitDiagnostic(
                 .failure,
                 decision: .wait,
@@ -483,6 +514,7 @@ public actor TDLibSession {
             )
             throw TDLibError.unresolvedClose("TDLib did not acknowledge authorizationStateClosed within \(maxWaitSeconds)s.")
         }
+        await receiver.joinIdle()
         if let processingFailure { throw processingFailure }
     }
 
@@ -498,21 +530,22 @@ public actor TDLibSession {
         }
         pendingRequests.removeAll()
 
-        // Terminate all update streams now that authorizationStateClosed has been delivered
-        for continuation in updateContinuations.values {
-            continuation.finish()
-        }
-        updateContinuations.removeAll()
+        progressFlushTask?.cancel()
+        progressFlushTask = nil
         fileTransferTracking.removeAll()
 
-        if let cid = clientID {
-            await receiver.unregisterSession(clientID: cid)
-        }
+        // Persist before completing streams; error remains sticky even though
+        // native closure is factual. Never await the receive-task join here.
+        do { try await emitDiagnostic(.finalization, decision: .proceed, severity: .info) }
+        catch { interruptInput(error) }
+        if let cid = clientID { await receiver.unregisterSession(clientID: cid) }
         clientID = nil
 
-        // Attempt persistent diagnostic logging; failure must not alter genuine native closed fact
-        do { try await emitDiagnostic(.finalization, decision: .proceed, severity: .info) }
-        catch { /* Native close remains acknowledged fact */ }
+        for continuation in updateContinuations.values {
+            if let processingFailure { continuation.finish(throwing: processingFailure) }
+            else { continuation.finish() }
+        }
+        updateContinuations.removeAll()
     }
 
     private func emitDiagnostic(
