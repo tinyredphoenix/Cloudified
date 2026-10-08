@@ -27,6 +27,11 @@ Before editing, inspect git status and handbook 3's active-batch/ownership recor
 Claim the assigned batch there. Do not reset another AI's work or edit its reserved
 files. The two AIs share one checkout/branch; no simultaneous Git mutation.
 
+Current handoff: Architect P4-B provider source integration is recorded in
+[P4-B-INTEGRATION](P4-B-INTEGRATION.md). Builder is assigned
+[P5 presentation/composition](P5-BUILDER.md) only. P6 remains separately assigned;
+no service/iOS/runtime acceptance is implied by compiler checks.
+
 ## Implementation phases, followed by the first complete app test
 
 | Phase | Owner | Deliverable | Handoff / completion record |

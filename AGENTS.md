@@ -45,7 +45,8 @@ not postponed until failures occur.
 - Make small commits at coherent batches. Annotated milestone tags must accurately
   describe evidence: plan tags are not app releases. Push history and tags to origin.
 
-Opening these instructions does not authorize every phase. R2 is closed for source
-integration handoff; Builder has no new implementation batch. Architect's next
-batch is P4-B in docs/P4-B.md, following foundation and cache contracts. Architect owns P4-B critical upload/receipt/recovery integration. P2 core paths remain Architect-owned;
-later application phases need their prerequisites and an assigned batch.
+Opening these instructions does not authorize every phase. Architect completed P4-B
+provider source/compiler integration, recorded in docs/P4-B-INTEGRATION.md. Builder's
+next assigned batch is P5 only in docs/P5-BUILDER.md. Claim paths before editing.
+Core/provider/native internals remain Architect-owned; P6 lifecycle needs its own
+assignment. No app/account/runtime tests or cloud IPA builds before P7.

@@ -275,3 +275,15 @@ but are not license/build/runtime evidence. P5 also needs an explicit current-co
 binding change API so an old confirmed alias cannot mask failure to plan newly requested
 coverage. Settle that provider before policy changes; retain historical jobs/receipts.
 All iOS/background/cache/metadata/recovery/byte preservation evidence remains P7.
+
+
+## P4-B source integration — 2026-10-08
+
+Real adapters, scopes/checkpoints, explicit native-pair coverage, retained native
+status and history APIs are mapped in [P4-B-INTEGRATION](P4-B-INTEGRATION.md).
+Ledger v3 preserves durable history. Late native rejection resolves atomically
+against its checkpoint before an earlier uncertain worker outcome is applied.
+P5 must disable/settle before invalidateCurrentCoverage and freeze/replan changed
+coverage; old current aliases cannot stand in for the new policy. P6 must inventory
+OS/native readers before background injection/cleanup. These are source/compiler
+handoffs; every service/native/device/resource claim still needs P7 evidence.

@@ -6,8 +6,8 @@ reinstall recovery. No gallery, editing or playback.
 
 ## Project status
 
-P1 native app shell and P2 critical core are implemented. The core has compiler
-evidence; the full iOS app, real adapters and device behavior remain unverified.
+P1 native app shell and P2 critical core are implemented. The core and real provider adapter sources have compiler
+evidence; the full iOS app, provider service/device behavior remain unverified.
 No working IPA exists yet. PhotosBackup supplies the chosen Google implementation reference;
 TDLib supplies Telegram's native transport. Reference projects inform implementation
 only; the interface is designed independently for this app's upload/status tasks.
@@ -36,8 +36,9 @@ Builder completed P1; Architect directly implemented P2 critical core.
 Builder's P3-R2 implementation was reviewed; Architect completed critical source corrections.
 Architect reviewed Builder P4-A-R2 and directly completed remaining foundation
 corrections. The foundation is ready for source integration; native linking and
-runtime behavior remain unverified. Next is [Architect P4-B critical integration](docs/P4-B.md).
-Builder waits for the subsequent assigned handoff. [R2 history](docs/P4-R2.md) records
+runtime behavior remain unverified. Architect implemented [P4-B provider integration](docs/P4-B-INTEGRATION.md), with
+source/compiler evidence only. Next is [Builder P5 presentation/composition](docs/P5-BUILDER.md);
+P6 lifecycle work and P7 first complete-app verification still remain. [R2 history](docs/P4-R2.md) records
 its correction scope and review status.
 P3 has source/compiler evidence only; see [review history](docs/P3-REVIEW.md), handbook 2 and
 the [core integration contract](docs/CORE-INTEGRATION.md).

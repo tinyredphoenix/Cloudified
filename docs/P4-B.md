@@ -4,7 +4,8 @@ Assigned to Architect after R2 source review/direct corrections, 2026-10-08.
 Builder has no new implementation assignment. No R3 handoff is required for the
 completed foundation fixes. R2 is closed for implementation handoff only: iOS/native
 linking, services, originals, runtime bounds and reinstall behavior remain untested
-until P7. This file is the next implementation contract, not completed adapter code.
+until P7. This file records the assigned implementation contract. Architect source/compiler
+completion and P5/P6 integration limits are recorded in [P4-B-INTEGRATION](P4-B-INTEGRATION.md).
 
 ## Foundation APIs and limits
 

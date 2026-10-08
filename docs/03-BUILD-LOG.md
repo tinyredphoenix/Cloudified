@@ -6,7 +6,7 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 
 ## Current handoff state
 
-- Active editing batch: Architect R2 review/direct source completion finished. Paths released on publication; next implementation is Architect P4-B in docs/P4-B.md. Builder has no new batch. Native/runtime evidence remains P7.
+- Active editing batch: Architect P4-B source/compiler implementation finished. Paths released on publication. Next assigned batch is Builder P5 in docs/P5-BUILDER.md; claim exact paths before editing. Core/provider/native internals remain Architect-owned. P6 lifecycle and P7 native/runtime evidence remain outstanding.
 - P0: architecture/repository/infrastructure complete; handbook contracts confirmed.
 - P1: native iOS 26 target, shared Cloudified scheme, four navigation screens (Dashboard, Not uploaded, Logs, Settings), adapter protocol placeholders, and honest unpopulated states completed by Builder.
 - P2: Architect-authored critical core/diagnostics implemented and compiled locally in Swift 6 mode; no runtime evidence yet.
@@ -14,8 +14,8 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 - P4-A: Builder submitted 9e6fe9e/edb53dd with compiler evidence. Architect found missing native linkage, unsafe lifecycle/deadlines/streams, pinned-schema mismatch and missing diagnostics; P4-A-R1 required. Compiler evidence is not native/runtime acceptance.
 - P4-A-R1: Builder submitted 6e3a624/242fdef and claimed all eight corrections complete. Architect reviewed actual code; direct linkage/deadline/schema improvements exist, but native recipe, bounds/lifecycle, real storage/auth and safe-error requirements remain incomplete. Architect directly fixed identifier/router/diagnostic/overflow faults; R2 required. Compiler evidence is not runtime acceptance.
 - P4-A-R2: Builder submitted e0a958f/8aac88f and claimed all remaining requirements complete. Architect source review found bootstrap/receiver retirement, weak ownership, delivery bounds/progress and profile-root issues; directly corrected those plus native link/cache gates and notices. R2 closed for source integration handoff only; no native/runtime acceptance.
-- P4-B: Next Architect-owned critical upload/receipt/reconciliation implementation batch, specified in docs/P4-B.md. Adapter implementation has not started; Builder waits.
-- P5–P6: implementation handoffs, no intermediate app-test gates.
+- P4-B: Architect implemented real provider adapters, scopes/checkpoints, document history and retained native status; compiler/static evidence only. Integration map: docs/P4-B-INTEGRATION.md. No iOS/service/quality/reinstall acceptance.
+- P5: Builder presentation/composition assignment in docs/P5-BUILDER.md. P6 remains a subsequent lifecycle assignment; no intermediate app-test gates.
 - P7: first full integrated build/test; P8: debugging iterations/release.
 - No demo/mock/seeded data or simulated uploads are permitted.
 - Main project location: existing Mac checkout. USB drive untouched.
@@ -922,3 +922,66 @@ Next handoff / release of reserved paths:
 Do not fill successful results in advance. If a check cannot run, record why and
 what remains unverified. A generated IPA without SideStore/device verification
 is a build artifact, not an accepted release.
+
+
+## 2026-10-08 — Architect P4-B provider source integration
+
+Owner: Architect. User authorized start of direct critical P4-B implementation.
+Builder had no active editing assignment. Paths reserved at start and released on
+publication; no subagents, external chat messages, user accounts or media used.
+
+Commits: `eb7f162` adds Core recovery persistence; `e295622` implements provider
+integration and source/project support. Milestone `v0.0.12-p4-providers-untested`
+records this source/compiler handoff, not a native build, working backup or release.
+
+Changed scope:
+
+- SQLite v3 private profile/checkpoint/index/copy-reservation tables preserve prior
+  receipts, cycles, attempts and source recipes. Bounded transfer inventory, late
+  rejection race resolution and explicit current-coverage invalidation are Core APIs.
+- Real Google ProviderAdapter verifies the same-token OpenID subject and retains
+  PhotosBackup original/non-quota wire behavior. Joined utility SHA-256/SHA-1 hashing,
+  bounded HTTP/file callbacks, request deadlines, server Retry-After, preparation,
+  component receipts, commit fences and exact-scope reconciliation are implemented.
+- Real Telegram ProviderAdapter verifies actual creator/private-channel scope and
+  synchronized connection, owns one update consumer/<=8 pending sends, correlates
+  before native dispatch, persists final message/readback receipts and late failures,
+  and retains unknown ownership. Exact pinned nested document input and explicit
+  remote-history cursor pagination replace invented request/completion assumptions.
+- Original filenames use protected app-owned hard links; transport copy promises
+  survive crashes. Source hashing now drains Foundation autoreleases per <=1 MiB
+  chunk. Trusted OS storage bases are canonicalized before owned-child symlink checks.
+- Native-pair Google Live Photo coverage is an explicit new frozen policy; all
+  fallback choices remain explicit and Telegram keeps all originals. Changed
+  coverage cannot leave old aliases falsely counted as Saved.
+- Telegram strict caption/reference parsing, bounded manifest recipe/part/reference
+  validation, SQL history epochs, local pending-path recovery and native status/event
+  APIs support P5 without a gallery or whole-library in-memory index.
+- Project generator includes all six new app source files. Exact dependency pins
+  and licenses remain unchanged; Google adaptation digests/provenance are refreshed.
+- P4-B-INTEGRATION maps real APIs/limits; P5-BUILDER assigns composition/UI only.
+  Handbooks/README/AGENTS record actual phase/evidence boundaries.
+
+Validation after relevant source corrections (compiler/static only):
+
+- `TMPDIR=/private/tmp SWIFT_MODULE_CACHE_PATH=/private/tmp/cloudified-module-cache CLANG_MODULE_CACHE_PATH=/private/tmp/cloudified-module-cache swift build --package-path Packages/CloudifiedCore --disable-sandbox`: passed, final exit 0 (1.92 s). CLT environment warnings remain: unavailable user-level SwiftPM caches/read-only manifest cache and missing CommandLineTools Developer/Library/Frameworks search path. No Swift source errors. This is a local macOS library compile/link, not an app/native/device test.
+- `TMPDIR=/private/tmp swiftc -typecheck -swift-version 6 -module-cache-path /private/tmp/cloudified-module-cache -I Packages/CloudifiedCore/.build/out/Products/Debug -I Packages/CTDLib/Sources/CTDLib/include -Xcc -fmodule-map-file=Packages/CloudifiedCore/Sources/CSQLite/module.modulemap -Xcc -fmodule-map-file=Packages/CTDLib/Sources/CTDLib/include/module.modulemap App/Adapters/Security/KeychainCredentialStore.swift App/Adapters/GooglePhotos/*.swift App/Adapters/Telegram/*.swift App/Adapters/System/ProviderSupport.swift App/Adapters/System/StorageLayout.swift App/Adapters/PhotoLibrary/SourceRecipe.swift App/Adapters/PhotoLibrary/StreamingHasher.swift App/Adapters/PhotoLibrary/ArchiveManifestBuilder.swift App/Adapters/PhotoLibrary/UploadPlanProducer.swift App/Adapters/PhotoLibrary/LosslessVideoPartSplitter.swift App/Presentation/Settings/SettingsViewState.swift`: passed, exit 0, zero errors/warnings (24 actual sources).
+- `rg --files App -g '*.swift' -0 | xargs -0 swiftc -frontend -parse`: passed, all 45 app Swift sources; syntax only, no iOS typecheck/link evidence.
+- `python3 scripts/generate_xcode_project.py` and `plutil -lint Cloudified.xcodeproj/project.pbxproj`: passed; new sources registered.
+- `python3 scripts/check_docs.py`: passed, 23 Markdown files/local targets.
+- `git diff --check` and staged diff check: passed. Pinned TD request, connection,
+  cursor, document/file/send-state schemas and synchronous enqueue source inspected
+  directly; OpenID subject semantics checked against Google's primary documentation.
+- Vendor SHA-256 bytes refreshed; unchanged upstream revisions/licenses retained.
+
+Known limits: no iOS/native build, app/runtime/unit/simulator/account/device test,
+real upload, Google identity/pairing/storage accounting, crash/reinstall outcome,
+server freshness guarantee, hard-link/cache behavior or resource measurement has
+been demonstrated. Unsupported Google identity or pairing, an unmatched unknown
+native send, incomplete history and inconsistent cache paths deliberately block
+rather than invent proofs. P6 must supply real lifecycle/network/cache integration
+and OS-reader inventory before any background-URLSession injection. P7 remains the
+first complete-app build/test. No cloud workflow/SDK/USB change was made.
+
+Next: Builder P5 only, using docs/P5-BUILDER.md and P4-B-INTEGRATION.md. Architect
+reviews critical composition/ownership changes; P6 needs a subsequent assignment.

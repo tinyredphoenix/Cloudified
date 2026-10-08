@@ -174,3 +174,27 @@ zlib/crypto closure without optional host libraries, and an unexecuted all-membe
 device link/platform gate before cache sealing. Exact archive/license/provenance
 validation stays required; native gates/runtime measurements remain unrun until P7.
 Next implementation is Architect P4-B, not another Builder correction cycle.
+
+## D35 — provider receipts, scope and bounded recovery
+
+2026-10-08. Architect implements P4-B directly. Private SQLite v3 checkpoints,
+verified profile bindings and a disk-backed paginated Telegram index keep final
+acceptance independent of bytes sent and survive process restart. Google scope
+uses the same Photos token's verified OpenID subject; unsupported identity proof
+blocks. Telegram initially requires an owned private channel without auto-delete,
+with actual synchronized native connection before absence. Unknown sends protect
+input and never become retries merely because a timeout, restart or short history
+page occurred. Native finalization/rejection can settle the original job after
+its worker returns; the ledger resolves late-result races atomically.
+
+## D36 — originals, explicit Live Photo policy and transport ownership
+
+2026-10-08. New native-pair coverage requests pinned Google pairing and requires
+both original hashes to identify the same final media; failure offers an explicit
+fallback, never silent conversion. Existing separate policies remain unchanged.
+Telegram original-name hard links avoid an app-created large copy, with protected
+paths retained until native ownership ends. Both lanes reserve additional copy
+space independently of the staging oversized rule. HTTP response bounds and joined
+utility hashing keep large media off actor-blocking/full-Data paths. Background
+URLSession injection remains blocked until P6 inventories OS readers properly;
+foreground/compiler evidence is not background acceptance. See P4-B-INTEGRATION.
