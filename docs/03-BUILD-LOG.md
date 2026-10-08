@@ -44,6 +44,8 @@ No credentials, private media, raw secret-bearing responses or personal logs her
 | `e0a958f` | Builder R2 submission; Architect direct source completion recorded below |
 | `7ba48fd` | Architect bounded native ownership/bootstrap/progress/storage completion; Swift 6 typecheck only |
 | `e1f85e4` | Architect native closure/platform/cache gates and dependency notices; native build remains unrun |
+| `eb7f162`, `e295622`, `v0.0.12-p4-providers-untested` | Architect P4-B provider source integration; static/compiler evidence only, no runtime validation |
+| `36eb8f0` | Builder P5 presentation and engine composition; static/compiler evidence only, runtime untested |
 
 Earlier checks passed: local Markdown targets, shell syntax, workflow YAML parsing
 and the missing-project guard. GitHub setup did not dispatch a cloud build.
@@ -1014,5 +1016,5 @@ Failures / known limitations:
 - No runtime test suites, simulator sessions, or live account network requests executed (deferred to P7 integrated testing per user schedule).
 - P6 background execution / lifecycle handlers (`BGProcessingTask`, network path monitor, storage pressure cleanup hooks) remain unassigned and pending P6.
 Decision changes (reference handbook 4 IDs): Builder adheres to D01–D34.
-Commit / milestone tag, after it exists: Pending commit; milestone tag deferred to acceptance testing per handbook 2.
+Commit / milestone tag, after it exists: Commit `36eb8f0` on main; milestone tag deferred to acceptance testing per handbook 2.
 Next handoff / release of reserved paths: Handoff to Architect for review of P5 and subsequent P6 assignment. All claimed Builder paths released.
