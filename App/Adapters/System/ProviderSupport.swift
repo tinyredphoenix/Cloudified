@@ -37,7 +37,9 @@ enum ProviderSupport {
             case .corrupt, .invalidProfile: return SafeFailure(.invariant, domain: domain, cause: .invalidContract)
             }
         }
-        if error is GoogleTokenExchange.Failure { return SafeFailure(.authentication, domain: .google, cause: .loginRequired) }
+        if let failure = error as? GoogleTokenExchange.Failure { return failure.failure ?? SafeFailure(.authentication, domain: .google, cause: .loginRequired) }
+        if error is TDLibError { return TDLibClient.classify(error) }
+        if let error = error as? GPMCError { return GooglePhotosClientSession.classify(error) }
         let cocoa = error as NSError
         if cocoa.domain == NSCocoaErrorDomain && cocoa.code == NSFileWriteOutOfSpaceError { return SafeFailure(.diskFull, domain: .fileSystem, code: cocoa.code, cause: .insufficientSpace) }
         if cocoa.domain == NSCocoaErrorDomain && [NSFileReadNoPermissionError, NSFileWriteNoPermissionError].contains(cocoa.code) { return SafeFailure(.accessDenied, domain: .fileSystem, code: cocoa.code, cause: .permissionDenied) }
@@ -51,7 +53,7 @@ enum ProviderSupport {
             case .timedOut: cause = .deadlineExceeded
             case .notConnectedToInternet, .networkConnectionLost: cause = .offline
             case .cancelled: cause = .interrupted
-            default: cause = .unknown
+            default: cause = .networkRequestFailed
             }
             return SafeFailure(error.code == .timedOut ? .timeout : .connectivity, domain: .urlSession, code: error.errorCode, cause: cause)
         }

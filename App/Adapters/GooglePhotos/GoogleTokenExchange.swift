@@ -3,13 +3,19 @@
 // Vendored and adapted for Cloudified under the MIT License. See licenses/LICENSE-PhotosBackup.txt.
 
 import Foundation
+import CloudifiedCore
 
 /// OAuth token -> Android master token -> Google Photos credential.
 /// Wire format corresponds to gotohp @ 0637c745 (backend/googleauth.go).
 public enum GoogleTokenExchange {
+    public typealias DiagnosticCallback = @Sendable (DiagnosticDetail, SafeFailure?, TimeInterval?) async -> Void
     public struct Failure: LocalizedError, Sendable, Equatable {
         public let stage: String
         public let message: String
+        public let failure: SafeFailure?
+        public init(stage: String, message: String, failure: SafeFailure? = nil) {
+            self.stage = stage; self.message = message; self.failure = failure
+        }
         public var errorDescription: String? { "\(stage): \(message)" }
     }
 
@@ -49,17 +55,18 @@ public enum GoogleTokenExchange {
         oauthToken: String,
         androidId: String = randomAndroidId(),
         session: URLSession = .shared,
-        requestPolicy: @Sendable (inout URLRequest) -> Void = { _ in }
+        requestPolicy: @Sendable (inout URLRequest) -> Void = { _ in },
+        onDiagnostic: DiagnosticCallback? = nil
     ) async throws -> Result {
         let (masterToken, email, enc1) = try await exchangeOAuthToken(
             oauthToken: oauthToken,
             androidId: androidId,
             session: session,
-            requestPolicy: requestPolicy
+            requestPolicy: requestPolicy, onDiagnostic: onDiagnostic
         )
 
         let cred = googlePhotosCredentialBody(androidId: androidId, email: email, masterToken: masterToken)
-        let (accessToken, expiry, enc2) = try await redeemCredential(body: cred, session: session, requestPolicy: requestPolicy)
+        let (accessToken, expiry, enc2) = try await redeemCredential(body: cred, session: session, requestPolicy: requestPolicy, onDiagnostic: onDiagnostic)
 
         return Result(
             androidId: androidId,
@@ -109,23 +116,27 @@ public enum GoogleTokenExchange {
         oauthToken: String,
         androidId: String,
         session: URLSession,
-        requestPolicy: @Sendable (inout URLRequest) -> Void
+        requestPolicy: @Sendable (inout URLRequest) -> Void,
+        onDiagnostic: DiagnosticCallback?
     ) async throws -> (String, String, Bool) {
         var req = makeRequest(formPairs: oauthExchangeBody(oauthToken: oauthToken, androidId: androidId))
         requestPolicy(&req)
-        let (data, _) = try await send(req, session: session, stage: "master token")
+        let (data, _) = try await send(req, session: session, stage: .googleMasterToken, onDiagnostic: onDiagnostic)
         let fields = parseAuthResponse(data)
 
         if let err = fields["Error"] {
+            await authTrace(.googleMasterToken, .failed, reason: DiagnosticGoogleError(rawValue: err) ?? .other, callback: onDiagnostic)
             throw Failure(stage: "master token",
                           message: googleError(err, url: fields["Url"], detail: fields["ErrorDetail"]))
         }
         guard let token = fields["Token"], !token.isEmpty else {
+            await authTrace(.googleMasterToken, .failed, reason: .missingToken, callback: onDiagnostic)
             throw Failure(stage: "master token",
                           message: "Google accepted the request but returned no master token.")
         }
         let email = fields["Email"].flatMap(normaliseEmail) ?? "unknown"
         let encrypted = fields["TokenEncrypted"] == "1"
+        await authTrace(.googleMasterToken, .succeeded, callback: onDiagnostic)
         return (token, email, encrypted)
     }
 
@@ -156,7 +167,8 @@ public enum GoogleTokenExchange {
     private static func redeemCredential(
         body: String,
         session: URLSession,
-        requestPolicy: @Sendable (inout URLRequest) -> Void
+        requestPolicy: @Sendable (inout URLRequest) -> Void,
+        onDiagnostic: DiagnosticCallback?
     ) async throws -> (String, Date?, Bool) {
         var req = URLRequest(url: authURL)
         req.httpMethod = "POST"
@@ -166,51 +178,57 @@ public enum GoogleTokenExchange {
         req.httpBody = Data(body.utf8)
         req.timeoutInterval = 60
         requestPolicy(&req)
-        let (data, _) = try await send(req, session: session, stage: "photos token")
+        let (data, _) = try await send(req, session: session, stage: .googlePhotosToken, onDiagnostic: onDiagnostic)
         let fields = parseAuthResponse(data)
 
         if let err = fields["Error"] {
+            await authTrace(.googlePhotosToken, .failed, reason: DiagnosticGoogleError(rawValue: err) ?? .other, callback: onDiagnostic)
             throw Failure(stage: "photos token", message: googleError(err, url: fields["Url"], detail: fields["ErrorDetail"]))
         }
         if fields["TokenEncrypted"] == "1" {
+            await authTrace(.googlePhotosToken, .failed, reason: .tokenBound, callback: onDiagnostic)
             throw Failure(stage: "photos token",
                           message: "Google returned TokenEncrypted=1 (token binding). This build requires unbound tokens.")
         }
         guard let auth = fields["Auth"], !auth.isEmpty else {
+            await authTrace(.googlePhotosToken, .failed, reason: .missingToken, callback: onDiagnostic)
             throw Failure(stage: "photos token", message: "No Auth field in the response.")
         }
         let expiry = fields["Expiry"].flatMap(TimeInterval.init).map { Date(timeIntervalSince1970: $0) }
+        await authTrace(.googlePhotosToken, .succeeded, callback: onDiagnostic)
         return (auth, expiry, false)
     }
 
-    private static func send(
-        _ req: URLRequest,
-        session: URLSession,
-        stage: String
-    ) async throws -> (Data, HTTPURLResponse) {
-        let (data, response): (Data, URLResponse)
+    private static func authTrace(_ stage: DiagnosticStage, _ status: DiagnosticStatus,
+                                  reason: DiagnosticGoogleError? = nil, callback: DiagnosticCallback?) async {
+        await callback?(DiagnosticDetail(stage: stage, status: status, correlationID: UUID(), googleError: reason),
+            status == .failed ? SafeFailure(.authentication, domain: .google, cause: .loginRequired) : nil, nil)
+    }
+
+    private static func send(_ req: URLRequest, session: URLSession, stage: DiagnosticStage,
+                             onDiagnostic: DiagnosticCallback?) async throws -> (Data, HTTPURLResponse) {
+        let id = UUID(), started = ProcessInfo.processInfo.systemUptime
+        await onDiagnostic?(DiagnosticDetail(stage: stage, status: .started, correlationID: id), nil, nil)
         do {
-            (data, response) = try await ForegroundFileUploadTransport(configuration: session.configuration).requestData(req)
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch let error as URLError where error.code == .cancelled {
-            throw CancellationError()
-        } catch {
-            throw Failure(stage: stage, message: "Could not reach Google authentication service.")
-        }
-        guard let http = response as? HTTPURLResponse else {
-            throw Failure(stage: stage, message: "Non-HTTP response.")
-        }
-        if (300..<400).contains(http.statusCode) {
-            throw Failure(stage: stage, message: "Google redirected the auth request (HTTP \(http.statusCode)); token rejected.")
-        }
-        if http.statusCode == 200 || http.statusCode == 403 {
+            let (data, response) = try await ForegroundFileUploadTransport(configuration: session.configuration).requestData(req)
+            guard let http = response as? HTTPURLResponse else {
+                throw Failure(stage: stage.rawValue, message: "Authentication service returned a non-HTTP response.")
+            }
+            guard http.statusCode == 200 || http.statusCode == 403 else {
+                throw Failure(stage: stage.rawValue, message: "Authentication service rejected the request.",
+                    failure: SafeFailure(.authentication, domain: .google, code: http.statusCode, cause: .providerRejected))
+            }
+            await onDiagnostic?(DiagnosticDetail(stage: stage, status: .changed, correlationID: id,
+                httpStatus: http.statusCode, responseBytes: data.count), nil,
+                ProcessInfo.processInfo.systemUptime - started)
             return (data, http)
+        } catch {
+            let failure = ProviderSupport.safe(error, domain: .google)
+            await onDiagnostic?(DiagnosticDetail(stage: stage, status: .failed, correlationID: id), failure,
+                ProcessInfo.processInfo.systemUptime - started)
+            if error is CancellationError { throw error }
+            throw Failure(stage: stage.rawValue, message: "Google authentication request failed. See its stage and code in Logs.", failure: failure)
         }
-        guard (200..<300).contains(http.statusCode) else {
-            throw Failure(stage: stage, message: "Authentication service returned HTTP \(http.statusCode).")
-        }
-        return (data, http)
     }
 
     static func parseAuthResponse(_ data: Data) -> [String: String] {

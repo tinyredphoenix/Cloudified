@@ -27,13 +27,18 @@ public final class StorageLayout: Sendable {
 
     /// Prepares directory with intermediate paths, backup exclusion, and complete file protection.
     /// Throws classified SafeFailure on creation or attribute failure.
-    private static func prepareDirectory(_ url: URL, fileManager: FileManager) throws {
+    static func prepareDirectory(_ url: URL, fileManager: FileManager) throws {
         guard url.resolvingSymlinksInPath().path == url.standardizedFileURL.path else {
             throw SafeFailure(.invariant, domain: .fileSystem, cause: .invalidContract)
         }
         do {
             try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
+            let values = try url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+            guard values.isDirectory == true, values.isSymbolicLink != true else {
+                throw SafeFailure(.sourceUnavailable, domain: .fileSystem, cause: .storagePathConflict)
+            }
         } catch {
+            if let safe = error as? SafeFailure { throw safe }
             throw Self.classify(error)
         }
 

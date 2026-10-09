@@ -107,6 +107,8 @@ public actor TDLibSession {
     private struct PendingRequest {
         let continuation: CheckedContinuation<TDLibResponse, any Error>
         let timeoutTask: Task<Void, Never>
+        let method: DiagnosticNativeMethod
+        let started: TimeInterval
     }
 
     private let bridge: TDLibBridge
@@ -159,6 +161,7 @@ public actor TDLibSession {
     public var isClosed: Bool {
         isTerminated
     }
+    var hasNativeClient: Bool { clientID != nil }
     /// A delivery/log gap fences new commands; it is not remote rejection/absence.
     public var requiresReconciliation: Bool { processingFailure != nil }
     public private(set) var connectionReady = false
@@ -236,6 +239,17 @@ public actor TDLibSession {
 
         var mutableReq = request
         let extraID = UUID().uuidString
+        let started = ProcessInfo.processInfo.systemUptime
+        let method = DiagnosticNativeMethod(rawValue: request["@type"] as? String ?? "") ?? .other
+        try await diagnosticSink?(.nativeRequest, EventContext(origin: .telegram,
+            diagnostic: DiagnosticDetail(stage: .nativeRequest, status: .started,
+                correlationID: UUID(uuidString: extraID)!, nativeMethod: method)),
+            .proceed, .info, nil, nil, nil, nil)
+        // The sink is an actor suspension point; validate native ownership again.
+        try Task.checkCancellation()
+        if let processingFailure { throw processingFailure }
+        guard self.clientID == clientID, !isStarting, !isTerminated, !isClosing else { throw TDLibError.clientClosed }
+        guard pendingRequests.count < Self.maxPendingRequests else { throw TDLibError.capacityExceeded("Pending request capacity.") }
         mutableReq["@extra"] = extraID
 
         let jsonString = try TDLibJSON.serializeRequest(mutableReq)
@@ -255,7 +269,8 @@ public actor TDLibSession {
 
                 self.pendingRequests[extraID] = PendingRequest(
                     continuation: continuation,
-                    timeoutTask: timeoutTask
+                    timeoutTask: timeoutTask,
+                    method: method, started: started
                 )
 
                 // Dispatch to C ABI
@@ -283,6 +298,7 @@ public actor TDLibSession {
         // The deadline task must not cancel itself before persisting its event.
         if (error as? TDLibError) != .timeout { pending.timeoutTask.cancel() }
         do {
+            try await requestTrace(id: id, pending: pending, status: .failed, failure: TDLibClient.classify(error))
             try await emitDiagnostic(.failure, decision: .wait, severity: .error,
                                      failure: error is CancellationError
                                         ? SafeFailure(.transfer, domain: .tdlib, cause: .interrupted)
@@ -292,6 +308,15 @@ public actor TDLibSession {
             pending.continuation.resume(throwing: error)
             interruptInput(error)
         }
+    }
+
+    private func requestTrace(id: String, pending: PendingRequest, status: DiagnosticStatus,
+                              failure: SafeFailure? = nil) async throws {
+        try await diagnosticSink?(.nativeRequest, EventContext(origin: .telegram,
+            diagnostic: DiagnosticDetail(stage: .nativeRequest, status: status,
+                correlationID: UUID(uuidString: id) ?? UUID(), nativeMethod: pending.method)),
+            failure == nil ? .proceed : .wait, failure == nil ? .info : .error, failure,
+            max(0, ProcessInfo.processInfo.systemUptime - pending.started), nil, nil)
     }
 
     private func interruptInput(_ error: any Error) {
@@ -332,7 +357,15 @@ public actor TDLibSession {
                     let closed = await handleAuthStateUpdate(type)
                     if closed { await completeClosure() }
                 }
-                resolvePendingRequest(id: extra, result: .success(response))
+                if let pending = pendingRequests.removeValue(forKey: extra) {
+                    pending.timeoutTask.cancel()
+                    do {
+                        try await requestTrace(id: extra, pending: pending, status: .succeeded)
+                        pending.continuation.resume(returning: response)
+                    } catch {
+                        pending.continuation.resume(throwing: error); interruptInput(error)
+                    }
+                }
             }
             return
         }
@@ -474,7 +507,12 @@ public actor TDLibSession {
         }
 
         if oldState != currentAuthState {
-            do { try await emitDiagnostic(.enabledChanged, decision: .proceed, severity: .info) }
+            do {
+                try await diagnosticSink?(.setupTrace, EventContext(origin: .telegram,
+                    diagnostic: DiagnosticDetail(stage: .telegramAuthState, status: .changed,
+                        correlationID: UUID(), authState: DiagnosticAuthState(rawValue: String(describing: currentAuthState)))),
+                    .proceed, .info, nil, nil, nil, nil)
+            }
             catch { interruptInput(error) }
         }
         return isClosed

@@ -39,11 +39,12 @@ extension Ledger {
         try transaction {
             try record(operation, context: context, severity: severity, decision: decision, failure: failure,
                        duration: duration, bytes: bytes, expectedBytes: expectedBytes,
-                       critical: operation != .progress && operation != .scanPage)
+                       critical: failure != nil || severity == .error ||
+                        ![.progress, .scanPage, .setupTrace, .nativeRequest].contains(operation))
         }
         // Bounded rotation is active in production, not only an unused API. The
         // persisted byte counter avoids scanning the entire events table per tick.
-        if operation == .progress || operation == .appStart { _ = try pruneDiagnostics() }
+        if [.progress, .appStart, .setupTrace, .nativeRequest].contains(operation) { _ = try pruneDiagnostics() }
     }
     public func beginRun() throws -> UUID {
         let id = UUID()

@@ -1,4 +1,5 @@
 import Foundation
+import CloudifiedCore
 
 /// One file reader per Google lane. Response bytes are bounded; cancellation
 /// completes only through didCompleteWithError, after URLSession releases input.
@@ -39,9 +40,10 @@ final class ForegroundFileUploadTransport: NSObject, FileUploadTransport, URLSes
                 lock.lock()
                 guard operation == nil else { lock.unlock(); continuation.resume(throwing: GPMCError(kind: .transport, message: "Upload already active.")); return }
                 let config = configuration.copy() as! URLSessionConfiguration
-                config.waitsForConnectivity = true; config.urlCache = nil
-                config.timeoutIntervalForRequest = min(request.timeoutInterval, 120)
-                config.timeoutIntervalForResource = file == nil ? 120 : 3600
+                config.waitsForConnectivity = file != nil; config.urlCache = nil
+                config.httpCookieStorage = nil; config.httpShouldSetCookies = false; config.urlCredentialStorage = nil
+                config.timeoutIntervalForRequest = min(request.timeoutInterval, file == nil ? 45 : 120)
+                config.timeoutIntervalForResource = file == nil ? 60 : 3600
                 let queue = OperationQueue(); queue.maxConcurrentOperationCount = 1
                 let owned = URLSession(configuration: config, delegate: self, delegateQueue: queue)
                 let task: URLSessionTask = file.map { owned.uploadTask(with: request, fromFile: $0) } ?? owned.dataTask(with: request)
@@ -79,7 +81,7 @@ final class ForegroundFileUploadTransport: NSObject, FileUploadTransport, URLSes
         if completed.overflow { completed.continuation.resume(throwing: GPMCError(kind: .malformed, message: "Upload response exceeded limit.")) }
         else if let error {
             if (error as? URLError)?.code == .cancelled { completed.continuation.resume(throwing: CancellationError()) }
-            else { completed.continuation.resume(throwing: GPMCError(kind: .transport, message: "Upload transport failed.")) }
+            else { completed.continuation.resume(throwing: GPMCError(kind: .transport, message: "Network transport failed.", transportFailure: ProviderSupport.safe(error, domain: .urlSession))) }
         } else if let response = task.response as? HTTPURLResponse {
             completed.continuation.resume(returning: FileUploadResult(data: completed.data, response: response))
         } else { completed.continuation.resume(throwing: GPMCError(kind: .malformed, message: "Upload response missing.")) }

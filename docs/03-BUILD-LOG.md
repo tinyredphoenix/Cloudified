@@ -1284,3 +1284,23 @@ unsigned IPA. Public raw SideStore source reports 1.1 (9), matching manifest siz
 `eb9e98ff6dc3bdb9f8482f85c89fab514da8a15eec84e7a8c0a42d6f183e4861`.
 See DISTRIBUTION.md for URLs; device linking/upload acceptance remains pending.
 Claimed documentation paths release after evidence commit/push; Builder holds.
+
+
+## 2026-10-09 — P9 connection recovery and public diagnostics source
+
+Architect implements the exact paths claimed in [P9](P9-DIAGNOSTICS.md); no active
+Builder. User approved direct public paste.rs reports with no extra setup. Export
+folder creation no longer aborts provider assignment; missing setup, network policy
+and uncertain remote transfer are distinguished. Google saved-token verification
+retry and browser fallback help are implemented. Telegram native-client reuse,
+bounded startup requests and retry are implemented without deleting native data.
+Detailed closed diagnostic stages, codes, correlation identifiers and timings feed
+existing persistence/retention. Logs uploads bounded safe reports and displays only
+a validated full-success URL. No raw credentials, media or private paths added.
+
+Pending feature version 2.0 across plist/project/generator; adapted Google digests
+refreshed, upstream pin unchanged. All 66 real app sources pass Catalyst typecheck
+and optimized whole-module IR; real Diagnostics/Core compile. No account/device test,
+real paste POST or cloud dispatch. Published SideStore remains 1.1 (9). Device
+acceptance remains pending and source findings do not prove service behavior.
+Untracked scratch/ is untouched. Ownership releases after source commit/push.

@@ -3,6 +3,7 @@
 // Vendored and adapted for Cloudified under the MIT License. See licenses/LICENSE-PhotosBackup.txt.
 
 import Foundation
+import CloudifiedCore
 import CryptoKit
 
 /// The `google.rpc.Status` Google puts in a protobuf error body: a canonical
@@ -57,8 +58,10 @@ struct GPMCError: LocalizedError, Equatable, Sendable {
     let message: String
     let status: GoogleStatus?
     let retryAfter: Date?
-    init(kind: Kind = .malformed, message: String, status: GoogleStatus? = nil, retryAfter: Date? = nil) {
+    let transportFailure: SafeFailure?
+    init(kind: Kind = .malformed, message: String, status: GoogleStatus? = nil, retryAfter: Date? = nil, transportFailure: SafeFailure? = nil) {
         self.kind = kind; self.message = message; self.status = status; self.retryAfter = retryAfter
+        self.transportFailure = transportFailure
     }
     var errorDescription: String? { message }
 
@@ -196,8 +199,10 @@ actor GPMCClient {
          fileUploadTransport: (any FileUploadTransport)? = nil) throws {
         auth = try AuthData(authData)
         self.networkPolicy = networkPolicy
-        let configuration = session?.configuration ?? URLSessionConfiguration.ephemeral
+        let configuration = (session?.configuration ?? URLSessionConfiguration.ephemeral).copy() as! URLSessionConfiguration
         configuration.waitsForConnectivity = true
+        configuration.httpCookieStorage = nil; configuration.httpShouldSetCookies = false
+        configuration.urlCredentialStorage = nil
         configuration.timeoutIntervalForRequest = 120; configuration.timeoutIntervalForResource = 3600
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData; configuration.urlCache = nil
         httpTransport = ForegroundFileUploadTransport(configuration: configuration)
@@ -209,7 +214,8 @@ actor GPMCClient {
     private func checked(_ data: Data, _ response: URLResponse, operation: String = "request") throws -> (Data, HTTPURLResponse) {
         guard let http = response as? HTTPURLResponse else { throw GPMCError(message: "Invalid server response.") }
         if http.statusCode == 401 || http.statusCode == 403 {
-            throw GPMCError(kind: .credentialRejected, message: "Google rejected the stored credential (HTTP \(http.statusCode)). Connect the account again.")
+            throw GPMCError(kind: .credentialRejected, message: "Google rejected the stored credential. Connect the account again.",
+                transportFailure: SafeFailure(.authentication, domain: .google, code: http.statusCode, cause: .loginRequired))
         }
         guard (200..<300).contains(http.statusCode) else {
             let status = GoogleStatus(data)
@@ -270,7 +276,7 @@ actor GPMCClient {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            throw GPMCError(kind: .transport, message: "Could not reach Google: \(GPMCError.describeTransport(error))")
+            throw GPMCError(kind: .transport, message: "Google network request failed.", transportFailure: ProviderSupport.safe(error, domain: .urlSession))
         }
     }
 

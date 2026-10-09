@@ -51,25 +51,39 @@ extension AppEnvironment {
             } catch { self.endProviderChange(token); await self.report(error, provider: .google) }
         }
     }
-    public func connectGoogle(oauthToken: String) async throws {
+    public func connectGoogle(oauthToken: String?) async throws {
         let token = UUID()
+        let started = ProcessInfo.processInfo.systemUptime
+        await trace(.googleConnect, .started, provider: .google, id: token)
         do {
             _ = try await beginProviderChange(.google, token: token)
             defer { endProviderChange(token) }
             settingsState.isConnectingGoogle = true
             defer { settingsState.isConnectingGoogle = false }
-            guard allowedNetwork, let session = googleSession, let adapter = googleAdapter, let ledger else {
-                throw SafeFailure(.connectivity, domain: .google, cause: .offline)
+            if let failure = connectionNetworkFailure { throw failure }
+            guard let session = googleSession, let adapter = googleAdapter, let ledger else {
+                throw SafeFailure(.invariant, domain: .core, cause: .setupUnavailable)
             }
-            _ = try await session.connect(oauthToken: oauthToken)
+            if let oauthToken {
+                _ = try await session.connect(oauthToken: oauthToken)
+                hasPendingGoogleCredential = true
+            }
+            else if !(await session.hasConfiguredCredential) { try await session.loadSavedSession() }
+            await trace(.googleMapping, .started, provider: .google, id: token)
             let destination = try await adapter.mapVerifiedAccount()
+            await trace(.googleMapping, .succeeded, provider: .google, id: token)
             try await ledger.setEnabled(destination.id, false)
+            await trace(.googleRecovery, .started, provider: .google, id: token)
             try await adapter.recover(destination)
+            await trace(.googleRecovery, .succeeded, provider: .google, id: token)
             try await ledger.unblockDestination(destination.id)
             try await backupEngine?.setEnabled(destinationID: destination.id, enabled: true)
             providerErrors.removeValue(forKey: .google); settingsState.googleAuthErrorMessage = nil
             await establishStartupInventory(); await refreshStoredSettings()
+            await trace(.googleConnect, .succeeded, provider: .google, id: token, started: started)
         } catch {
+            await trace(.googleConnect, .failed, provider: .google, id: token, started: started,
+                        failure: ProviderSupport.safe(error, domain: .google))
             endProviderChange(token); await report(error, provider: .google)
             throw ProviderSupport.safe(error, domain: .google)
         }
@@ -81,6 +95,7 @@ extension AppEnvironment {
             defer { endProviderChange(token) }
             if let destination = try await ledger?.selectedDestination(.google) { try await ledger?.deselectDestination(destination.id) }
             try await googleSession?.disconnect()
+            hasPendingGoogleCredential = false
             settingsState.isGoogleConnected = false; settingsState.googleAccountEmail = nil
             await refreshStoredSettings()
         } catch { endProviderChange(token); await report(error, provider: .google); throw ProviderSupport.safe(error, domain: .google) }

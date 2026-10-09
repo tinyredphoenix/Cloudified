@@ -95,8 +95,8 @@ extension AppEnvironment {
                 self.logsState.entries = page.events.map {
                     DiagnosticLogEntry(id: String($0.sequence), timestamp: $0.timestamp,
                         origin: $0.context.origin == .google ? "Google Photos" : $0.context.origin.rawValue.capitalized,
-                        severity: $0.severity.rawValue, stage: $0.operation.rawValue, attemptNumber: $0.context.attempt,
-                        message: $0.failure.map(self.explain) ?? "\($0.operation.rawValue): \($0.decision.rawValue)", safeErrorCode: $0.failure?.description)
+                        severity: $0.severity.rawValue, stage: $0.context.diagnostic?.stage.rawValue ?? $0.operation.rawValue, attemptNumber: $0.context.attempt,
+                        message: self.diagnosticMessage($0), safeErrorCode: $0.failure?.description)
                 }
                 self.nextLogCursor = page.events.count == 100 ? page.nextBeforeSequence : nil
                 self.logsState.hasOlder = self.nextLogCursor != nil

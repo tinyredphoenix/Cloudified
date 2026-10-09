@@ -53,7 +53,27 @@ public struct GoogleAuthSheet: View {
                             Button("Sign in to Google") { loading = true; browserError = nil; showBrowser = true }.disabled(!controlsAvailable)
                         }
                         if let error = browserError ?? environment.settingsState.googleAuthErrorMessage {
-                            Section("Connection issue") { Text(error).font(.footnote).foregroundStyle(.red) }
+                            Section("Connection issue") {
+                                Text(error).font(.footnote).foregroundStyle(.red)
+                                if environment.canRetryGoogleVerification {
+                                    Button("Retry saved connection") {
+                                        exchanging = true
+                                        loginTask = Task {
+                                            defer { exchanging = false }
+                                            do { try await environment.retryGoogleVerification(); connected = true }
+                                            catch { }
+                                        }
+                                    }.disabled(!controlsAvailable)
+                                }
+                            }
+                        }
+                        Section {
+                            DisclosureGroup("Browser fallback help") {
+                                Text("Safari on iPhone cannot share its protected login cookie with this app. Opening Safari alone will not finish this connection.")
+                                Text("If you already use a desktop browser: open Google's EmbeddedSetup page in a private window and sign in. In the browser's developer tools, inspect Cookies for accounts.google.com and copy only oauth_token, if Google issued it. Paste it into Advanced: login token below, then close that private window.")
+                                Text("Keep that credential private: paste it only in Cloudified, never in chat, GitHub or a log report. If no oauth_token exists, return to in-app sign-in; do not substitute another credential.")
+                                Link("Open Google's sign-in page", destination: URL(string: "https://accounts.google.com/EmbeddedSetup")!)
+                            }
                         }
                         Section {
                             DisclosureGroup("Advanced: login token") {
@@ -63,7 +83,7 @@ public struct GoogleAuthSheet: View {
                                     let value = oauthToken.trimmingCharacters(in: .whitespacesAndNewlines)
                                     oauthToken = ""; connect(value)
                                 }.disabled(!controlsAvailable || oauthToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                                Text("Only for an existing PhotosBackup login token. A normal Google API access token is not compatible.")
+                                Text("Only the oauth_token cookie from Google's EmbeddedSetup sign-in works here. A normal API access token, master token or password is not compatible.")
                                     .font(.footnote).foregroundStyle(.secondary)
                             }
                         }

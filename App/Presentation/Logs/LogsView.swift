@@ -1,7 +1,13 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 public struct LogsView: View {
     @ObservedObject public var environment: AppEnvironment
+    @State private var reportURL: URL?
+    @State private var reportTask: Task<Void, Never>?
+    @State private var uploadingReport = false
     @State private var exportedFileURL: URL? = nil
     @State private var isExporting = false
     @State private var exportTask: Task<Void, Never>?
@@ -15,11 +21,42 @@ public struct LogsView: View {
         NavigationStack {
             List {
                 Section {
+                    Button {
+                        uploadingReport = true
+                        reportTask = Task {
+                            defer { uploadingReport = false }
+                            do {
+                                let url = try await environment.uploadDiagnosticReport()
+                                reportURL = url
+                                #if os(iOS)
+                                UIPasteboard.general.url = url
+                                #endif
+                            } catch is CancellationError { }
+                            catch { exportErrorMessage = FailureExplanation.message(ProviderSupport.safe(error, domain: .urlSession)) }
+                        }
+                    } label: {
+                        if uploadingReport { ProgressView("Preparing and uploading report…") }
+                        else { Label("Upload public diagnostics", systemImage: "arrow.up.doc") }
+                    }.disabled(uploadingReport)
+                    if let reportURL {
+                        Link("Open uploaded report", destination: reportURL)
+                        Button("Copy report link") {
+                            #if os(iOS)
+                            UIPasteboard.general.url = reportURL
+                            #endif
+                        }
+                        Text("Link copied. Send it in the Cloudified chat so the report can be read and filed on GitHub.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                } footer: {
+                    Text("Uploads recent redacted diagnostics to paste.rs. The report is public to anyone with its link. Credentials, media, account names and private paths are excluded. No sign-in or installation required.")
+                }
+                Section {
                     DisclosureGroup("Filters") { filtersHeader }
                 }
                 if !environment.logsState.fallbackEntries.isEmpty {
                     Section("Diagnostics not saved to disk") {
-                        Text("These persistence errors are held in memory and excluded from export.")
+                        Text("These persistence errors are held in memory, included in public diagnostic reports, and excluded from file export.")
                             .font(.footnote).foregroundStyle(.secondary)
                         ForEach(environment.logsState.fallbackEntries) { entry in
                             NavigationLink { LogDetail(entry: entry) } label: { LogRow(entry: entry) }
@@ -54,7 +91,7 @@ public struct LogsView: View {
             }
             .listStyle(.insetGrouped)
             .onAppear { environment.reloadLogs(); environment.loadRuns() }
-            .onDisappear { if exportedFileURL == nil { exportTask?.cancel() } }
+            .onDisappear { reportTask?.cancel(); if exportedFileURL == nil { exportTask?.cancel() } }
             .onChange(of: environment.logsState.originFilter) { environment.reloadLogs() }
             .onChange(of: environment.logsState.severityFilter) { environment.reloadLogs() }
             .onChange(of: environment.logsState.selectedRunID) { environment.reloadLogs() }
@@ -102,7 +139,7 @@ public struct LogsView: View {
                 }
             }
             #endif
-            .alert("Export Failed", isPresented: Binding(
+            .alert("Diagnostics issue", isPresented: Binding(
                 get: { exportErrorMessage != nil },
                 set: { if !$0 { exportErrorMessage = nil } }
             )) {

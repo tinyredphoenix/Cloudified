@@ -311,3 +311,15 @@ Google's selected EmbeddedSetup/Android master-token route may register a separa
 session/device. No verified equivalent device-less route was established; disclose
 that before sign-in, preserve current wire fields, and do not promise Google will
 avoid prompts or lockout. [Evidence and remaining device checks](P8-LINKING-FIX.md).
+
+
+## D43 — public bounded reports without hosting or bundled tokens
+
+User approved anonymous paste.rs uploads after rejecting additional setup. Use one
+explicit Logs action, bounded typed reports, strict full-success response validation
+and no automatic retry. Never ship a GitHub write token. Return a public link for
+sharing here; issue filing uses existing desktop authorization separately. Routine
+request logging uses closed stages/methods/states and safe numeric codes, not raw
+bodies. Report generation must work even when export setup or ledger reading fails.
+Provider assignment must not depend on optional diagnostic export-directory setup.
+See [P9 implementation and remaining device checks](P9-DIAGNOSTICS.md).

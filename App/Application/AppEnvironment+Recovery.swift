@@ -32,7 +32,7 @@ extension AppEnvironment {
         do {
             guard try await engine.snapshot().active[provider] == nil else { return }
             if provider == .google {
-                guard let session = googleSession else { throw CoreError.recoveryRequired }
+                guard let session = googleSession else { throw SafeFailure(.invariant, domain: .core, cause: .setupUnavailable) }
                 if !(await session.hasConfiguredCredential) {
                     do { try await session.loadSavedSession() }
                     catch CredentialError.notConfigured {
@@ -84,9 +84,9 @@ extension AppEnvironment {
         }
     }
     func ensureTelegramStarted() async throws {
-        guard let client = tdlibClient else { throw CoreError.recoveryRequired }
+        guard let client = tdlibClient else { throw SafeFailure(.invariant, domain: .core, cause: .setupUnavailable) }
         let auth = await client.authorizationState
-        if auth == .uninitialized {
+        if auth == .uninitialized || auth == .waitTdlibParameters {
             try await client.setNetworkPolicy(allowed: policyGate == nil && !pausedByUser, wifi: network?.wifi == true)
             try await client.start()
         }

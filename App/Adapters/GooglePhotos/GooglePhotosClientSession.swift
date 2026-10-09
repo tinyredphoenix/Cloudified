@@ -47,8 +47,16 @@ actor GooglePhotosClientSession {
     /// Connects by exchanging a freshly acquired OAuth authorization token.
     func connect(oauthToken: String) async throws -> StoredGoogleCredential {
         let policy = networkPolicy
-        let result = try await GoogleTokenExchange.run(oauthToken: oauthToken, requestPolicy: { request in
+        let config = URLSessionConfiguration.ephemeral
+        config.httpCookieStorage = nil; config.httpShouldSetCookies = false; config.urlCredentialStorage = nil
+        let owned = URLSession(configuration: config)
+        defer { owned.invalidateAndCancel() }
+        let sink = diagnosticSink
+        let result = try await GoogleTokenExchange.run(oauthToken: oauthToken, session: owned, requestPolicy: { request in
             policy.apply(to: &request)
+        }, onDiagnostic: { detail, failure, duration in
+            try? await sink?(.setupTrace, EventContext(origin: .google, diagnostic: detail),
+                failure == nil ? .proceed : .wait, failure == nil ? .info : .error, failure, duration, nil, nil)
         })
         let cred = StoredGoogleCredential(
             androidId: result.androidId,
@@ -83,36 +91,36 @@ actor GooglePhotosClientSession {
         return client
     }
 
-    /// Authenticates or refreshes the underlying access token.
-    func authenticate() async throws {
-        let client = try requireClient()
+    private func traced<T: Sendable>(_ stage: DiagnosticStage, work: () async throws -> T) async throws -> T {
+        let id = UUID(), started = ProcessInfo.processInfo.systemUptime
+        func context(_ status: DiagnosticStatus) -> EventContext {
+            EventContext(origin: .google, diagnostic: DiagnosticDetail(stage: stage, status: status, correlationID: id))
+        }
+        try await diagnosticSink?(.setupTrace, context(.started), .proceed, .info, nil, nil, nil, nil)
         do {
-            try await client.authenticate()
-        } catch let err as GPMCError {
-            let classified = Self.classify(err)
-            try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
-            throw SafeProviderFailure(failure: classified, retryAfter: err.retryAfter)
+            let value = try await work()
+            try await diagnosticSink?(.setupTrace, context(.succeeded), .proceed, .info, nil,
+                ProcessInfo.processInfo.systemUptime - started, nil, nil)
+            return value
+        } catch {
+            let safe = ProviderSupport.safe(error, domain: .google)
+            try? await diagnosticSink?(.setupTrace, context(.failed), .wait, .error, safe,
+                ProcessInfo.processInfo.systemUptime - started, nil, nil)
+            if let error = error as? GPMCError { throw SafeProviderFailure(failure: safe, retryAfter: error.retryAfter) }
+            throw error
         }
     }
-
+    func authenticate() async throws {
+        try await traced(.googleAuthenticate) { try await self.requireClient().authenticate() }
+    }
     func verifiedSubject() async throws -> String {
-        do { return try await requireClient().verifiedSubject() }
-        catch let error as GPMCError { throw SafeProviderFailure(failure: Self.classify(error), retryAfter: error.retryAfter) }
+        try await traced(.googleIdentity) { try await self.requireClient().verifiedSubject() }
     }
     var usesBackgroundTransfers: Bool {
         get async { guard let client else { return false }; return await client.usesBackgroundFileTransfers }
     }
-
-    /// Validates read access by running an authenticated dry-run hash check.
     func validateReadAccess() async throws {
-        let client = try requireClient()
-        do {
-            try await client.validateReadAccess()
-        } catch let err as GPMCError {
-            let classified = Self.classify(err)
-            try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
-            throw SafeProviderFailure(failure: classified, retryAfter: err.retryAfter)
-        }
+        try await traced(.googleReadAccess) { try await self.requireClient().validateReadAccess() }
     }
 
     /// Checks remote presence by SHA-1 hash without uploading.
@@ -242,13 +250,13 @@ actor GooglePhotosClientSession {
         case .identityUnavailable:
             return SafeFailure(.authentication, domain: .google, cause: .identityUnverified)
         case .credentialRejected:
-            return SafeFailure(.authentication, domain: .google, cause: .loginRequired)
+            return error.transportFailure ?? SafeFailure(.authentication, domain: .google, cause: .loginRequired)
         case .tokenBound:
             return SafeFailure(.authentication, domain: .google, cause: .loginRequired)
         case .storageFull:
             return SafeFailure(.quota, domain: .google, cause: .quotaExceeded)
         case .transport:
-            return SafeFailure(.connectivity, domain: .google, cause: .offline)
+            return error.transportFailure ?? SafeFailure(.connectivity, domain: .google, cause: .networkRequestFailed)
         case .invalidUploadReceipt:
             return SafeFailure(.transfer, domain: .google, cause: .providerRejected)
         case .pairedPhotoMissing:

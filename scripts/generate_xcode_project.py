@@ -44,6 +44,7 @@ sources = [
     ("AppEnvironment+Recovery.swift", "application"),
     ("AppEnvironment+Presentation.swift", "application"),
     ("AppEnvironment+Pages.swift", "application"),
+    ("AppEnvironment+Diagnostics.swift", "application"),
     ("AppEnvironment+TelegramChannels.swift", "application"),
 
     ("DemandSourceProducer.swift", "application"),
@@ -99,6 +100,7 @@ sources = [
     ("StorageLayout.swift", "system"),
     ("BackupContinuation.swift", "system"),
     ("DiagnosticExportStore.swift", "system"),
+    ("DiagnosticReportUploader.swift", "system"),
     ("DiagnosticFallback.swift", "system"),
     ("FailureExplanation.swift", "system"),
     ("NetworkPolicyMonitor.swift", "system"),
@@ -482,7 +484,7 @@ pbxproj_content = f"""// !$*UTF8*$!
 \t\t\t\t\t"-lc++",
 \t\t\t\t\t"-lz",
 \t\t\t\t);
-\t\t\t\tMARKETING_VERSION = 1.1;
+\t\t\t\tMARKETING_VERSION = 2.0;
 \t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.tinyredphoenix.Cloudified;
 \t\t\t\tPRODUCT_NAME = "$(TARGET_NAME)";
 \t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;
@@ -521,7 +523,7 @@ pbxproj_content = f"""// !$*UTF8*$!
 \t\t\t\t\t"-lc++",
 \t\t\t\t\t"-lz",
 \t\t\t\t);
-\t\t\t\tMARKETING_VERSION = 1.1;
+\t\t\t\tMARKETING_VERSION = 2.0;
 \t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.tinyredphoenix.Cloudified;
 \t\t\t\tPRODUCT_NAME = "$(TARGET_NAME)";
 \t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;

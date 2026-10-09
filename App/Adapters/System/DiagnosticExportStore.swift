@@ -7,12 +7,7 @@ actor DiagnosticExportStore {
     init(layout: StorageLayout) throws {
         root = layout.rootDirectory.appendingPathComponent("exports", isDirectory: true)
         guard root.resolvingSymlinksInPath() == root.standardizedFileURL else { throw CoreError.invalidContract }
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
-        var directory = root; var values = URLResourceValues(); values.isExcludedFromBackup = true
-        try directory.setResourceValues(values)
-        #if os(iOS)
-        try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: root.path)
-        #endif
+        try StorageLayout.prepareDirectory(root, fileManager: .default)
     }
     func export(ledger: Ledger) async throws -> URL {
         let url = root.appendingPathComponent(UUID().uuidString + ".jsonl")

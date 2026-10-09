@@ -35,7 +35,12 @@ public struct TelegramAuthSheet: View {
             Form {
                 switch environment.settingsState.telegramAuthStep {
                 case .initializing:
-                    Section { ProgressView("Starting Telegram…") }
+                    Section {
+                        if environment.settingsState.telegramAuthErrorMessage != nil && !busy {
+                            Button("Retry starting Telegram") { perform { try await environment.reconnectTelegram() } }
+                                .disabled(!controlsAvailable)
+                        } else { ProgressView("Starting Telegram…") }
+                    }
                 case .unconfigured:
                     apiCredentialsSection
                 case .enterPhoneNumber:
@@ -71,7 +76,7 @@ public struct TelegramAuthSheet: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { clearInputs(); dismiss() }.disabled(busy)
+                    Button("Cancel") { actionTask?.cancel(); clearInputs(); dismiss() }
                 }
             }
             .interactiveDismissDisabled(busy)

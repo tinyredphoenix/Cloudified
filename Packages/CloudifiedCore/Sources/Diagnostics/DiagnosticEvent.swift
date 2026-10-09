@@ -8,6 +8,7 @@ public enum EventOperation: String, Codable, Sendable {
     case laneStart, laneEnd, attemptStart, transferStart, progress, finalization, confirmation
     case failure, retryScheduled, exhausted, explicitRetry, network, backgroundExpiration
     case leaseAcquire, leaseRelease, cleanup, databaseFailure, diagnosticsPruned
+    case setupTrace, nativeRequest, diagnosticUpload
 }
 public enum EventDecision: String, Codable, Sendable { case proceed, retry, wait, skip, reconcile, confirmed }
 public enum FailureCategory: String, Codable, Sendable {
@@ -23,6 +24,59 @@ public enum KnownCause: String, Codable, Sendable {
     case privateChannelRequired, accountChanged
     case lowDataMode, wifiRequired, thermalPressure, backgroundRestricted, backgroundExpired
     case storageUnavailable, storagePathConflict
+    case setupUnavailable, initializationFailed, verificationFailed, networkRequestFailed
+}
+
+public enum DiagnosticStage: String, Codable, Sendable {
+    case startup, providerChange, googleConnect, googleMasterToken, googlePhotosToken
+    case googleAuthenticate, googleIdentity, googleReadAccess, googleMapping, googleRecovery
+    case telegramStart, telegramStorage, telegramNativeCreate, telegramAuthorization
+    case telegramNetwork, telegramParameters, telegramAuthState, nativeRequest, networkPolicy
+    case diagnosticExport, diagnosticUpload
+}
+public enum DiagnosticStatus: String, Codable, Sendable { case started, succeeded, failed, changed }
+public enum DiagnosticNativeMethod: String, Codable, Sendable {
+    case getAuthorizationState, setNetworkType, setTdlibParameters, setAuthenticationPhoneNumber
+    case checkAuthenticationCode, checkAuthenticationPassword, setAuthenticationEmailAddress
+    case checkAuthenticationEmailCode, getMe, getChat, getChats, loadChats, searchChatsOnServer
+    case getSupergroup, getSupergroupFullInfo, getChatHistory, getMessage, sendMessage, close, logOut, other
+}
+public enum DiagnosticAuthState: String, Codable, Sendable {
+    case uninitialized, waitTdlibParameters, waitPhoneNumber, waitCode, waitPassword
+    case waitEmailAddress, waitEmailCode, waitOtherDeviceConfirmation, waitRegistration
+    case waitPremiumPurchase, ready, loggingOut, closing, closed, uncertain
+}
+public enum DiagnosticGoogleError: String, Codable, Sendable {
+    case badAuthentication = "BadAuthentication"
+    case needsBrowser = "NeedsBrowser"
+    case deviceManagement = "DeviceManagementRequiredOrSyncDisabled"
+    case tokenBound, missingToken, other
+}
+/// Closed stages/statuses and numeric/boolean facts only; no request/response prose.
+public struct DiagnosticDetail: Codable, Sendable {
+    public let stage: DiagnosticStage
+    public let status: DiagnosticStatus
+    public let correlationID: UUID
+    public let nativeMethod: DiagnosticNativeMethod?
+    public let httpStatus: Int?
+    public let responseBytes: Int?
+    public let available: Bool?
+    public let wifi: Bool?
+    public let expensive: Bool?
+    public let constrained: Bool?
+    public let authState: DiagnosticAuthState?
+    public let googleError: DiagnosticGoogleError?
+    public init(stage: DiagnosticStage, status: DiagnosticStatus, correlationID: UUID,
+                nativeMethod: DiagnosticNativeMethod? = nil, httpStatus: Int? = nil,
+                responseBytes: Int? = nil, available: Bool? = nil, wifi: Bool? = nil,
+                expensive: Bool? = nil, constrained: Bool? = nil, authState: DiagnosticAuthState? = nil,
+                googleError: DiagnosticGoogleError? = nil) {
+        self.stage = stage; self.status = status; self.correlationID = correlationID
+        self.nativeMethod = nativeMethod; self.httpStatus = httpStatus; self.responseBytes = responseBytes
+        self.available = available; self.wifi = wifi; self.expensive = expensive; self.constrained = constrained
+        self.authState = authState
+        self.googleError = googleError
+    }
 }
 
 /// Whitelisted values only. Never put raw response text, credentials, account names,
@@ -50,12 +104,14 @@ public struct EventContext: Codable, Sendable {
     public let resourceID: UUID?
     public let cycleID: UUID?
     public let attempt: Int?
+    public let diagnostic: DiagnosticDetail?
     public init(runID: UUID? = nil, origin: EventOrigin = .system, destinationID: UUID? = nil,
                 jobID: UUID? = nil, assetID: UUID? = nil, resourceID: UUID? = nil,
-                cycleID: UUID? = nil, attempt: Int? = nil) {
+                cycleID: UUID? = nil, attempt: Int? = nil, diagnostic: DiagnosticDetail? = nil) {
         self.runID = runID; self.origin = origin; self.destinationID = destinationID
         self.jobID = jobID; self.assetID = assetID; self.resourceID = resourceID
         self.cycleID = cycleID; self.attempt = attempt
+        self.diagnostic = diagnostic
     }
 }
 

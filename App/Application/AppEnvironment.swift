@@ -27,6 +27,8 @@ public final class AppEnvironment: ObservableObject {
     let continuation = BackupContinuation()
     let diagnosticSink: DiagnosticSink
     let exportStore: DiagnosticExportStore?
+    let reportUploader = DiagnosticReportUploader()
+    @Published var hasPendingGoogleCredential = false
     let googleSession: GooglePhotosClientSession?
     let googleAdapter: GooglePhotosProviderAdapter?
     var tdlibClient: TDLibClient?
@@ -116,9 +118,11 @@ public final class AppEnvironment: ObservableObject {
             layoutValue = layout; ledgerValue = led; filesValue = files
             pipelineValue = PhotoLibraryPipeline(ledger: led, fileStore: files, storageLayout: layout)
             engineValue = BackupEngine(ledger: led, files: files)
-            exportValue = try DiagnosticExportStore(layout: layout)
             googleValue = google; googleAdapterValue = GooglePhotosProviderAdapter(session: google, ledger: led, files: files)
             telegramValue = telegram; telegramAdapterValue = TelegramProviderAdapter(client: telegram, ledger: led, files: files)
+            // A diagnostic export failure must never remove both provider clients.
+            do { exportValue = try DiagnosticExportStore(layout: layout) }
+            catch { safeFallback.record(ProviderSupport.safe(error, domain: .fileSystem)) }
         } catch {
             let safe = ProviderSupport.safe(error, domain: .core); safeFallback.record(safe)
             initialAttentionReason = safe.description
@@ -127,6 +131,7 @@ public final class AppEnvironment: ObservableObject {
         photoPipeline = pipelineValue; backupEngine = engineValue; exportStore = exportValue
         googleSession = googleValue; googleAdapter = googleAdapterValue
         tdlibClient = telegramValue; telegramAdapter = telegramAdapterValue; diagnosticSink = sink
+        hasPendingGoogleCredential = (try? credentialStore.loadGoogleCredential(forProfile: "primary")) != nil
         if let initialAttentionReason {
             dashboardState.overallState = .needsAttention(reason: initialAttentionReason)
         }
@@ -150,6 +155,8 @@ public final class AppEnvironment: ObservableObject {
         networkMonitor.stop()
     }
     func bootstrap() async {
+        let id = UUID(), started = ProcessInfo.processInfo.systemUptime
+        await trace(.startup, .started, id: id)
         do {
             try await exportStore?.removeStale()
             if pausedByUser { try await backupEngine?.pause() }
@@ -161,6 +168,9 @@ public final class AppEnvironment: ObservableObject {
         requestRecovery(.google); requestRecovery(.telegram)
         await refreshStoredSettings()
         schedulePolicyUpdate(); scheduleThrottledRefresh(); requestDrain()
+        await trace(.startup, googleSession == nil || tdlibClient == nil ? .failed : .succeeded, id: id, started: started,
+            failure: googleSession == nil || tdlibClient == nil ?
+                SafeFailure(.invariant, domain: .core, cause: .setupUnavailable) : nil)
     }
     func startSubscriptions() {
         if let ledger {
@@ -175,7 +185,13 @@ public final class AppEnvironment: ObservableObject {
         })
         let paths = networkMonitor.events
         observers.append(Task { [weak self] in
-            for await value in paths { self?.network = value; self?.schedulePolicyUpdate() }
+            for await value in paths {
+                self?.network = value; self?.schedulePolicyUpdate()
+                await self?.trace(.networkPolicy, .changed)
+                if self?.connectionNetworkFailure == nil {
+                    self?.requestRecovery(.google); self?.requestRecovery(.telegram)
+                }
+            }
         })
     }
     func startTelegramSubscriptions() {

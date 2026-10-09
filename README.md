@@ -30,8 +30,12 @@ background work stays with Architect.
 Architect directly completed the source corrections from the
 [second P8-B2 review](docs/P8-BUILDER-REVIEW-2.md). See
 [changes, discovery scope and compiler evidence](docs/P8-ARCHITECT-FIXES.md).
-All 64 actual app sources pass the local Catalyst UIKit/SwiftUI typecheck.
+All 66 actual app sources pass the local Catalyst UIKit/SwiftUI typecheck.
 The updated iPhone build, visual flows and real account behavior remain unverified.
+
+Pending source version 2.0 adds connection recovery and public diagnostic reports;
+see [P9 changes and device checks](docs/P9-DIAGNOSTICS.md). Published SideStore remains
+1.1 (9) until an authorized new build and publication.
 
 ## Stack and build location
 

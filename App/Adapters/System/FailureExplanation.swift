@@ -44,6 +44,10 @@ enum FailureExplanation {
         case .disabled: return "This destination is disabled; its backlog is retained."
         case .paused: return "Backup is paused."
         case .storageUnavailable, .storagePathConflict: return "Local app storage is unavailable. Export diagnostics before changing stored data."
+        case .setupUnavailable: return "Cloudified could not initialize this connection. This is an app setup failure, not an unconfirmed upload. Open Logs for the startup error."
+        case .initializationFailed: return "Telegram session initialization failed. Retry starting Telegram; Logs contain the failed setup stage and native error code."
+        case .verificationFailed: return "Browser sign-in completed, but the app could not verify the Photos connection. Retry verification or check Logs for the failed stage."
+        case .networkRequestFailed: return "A network request failed\(failure.code.map { " (code \($0))" } ?? ""). This does not prove the phone is offline. Check Logs for the failed stage."
         case .unknown: return "The cause is unknown (\(failure.category.rawValue), \(failure.domain.rawValue)\(failure.code.map { ", code \($0)" } ?? ""))."
         }
     }

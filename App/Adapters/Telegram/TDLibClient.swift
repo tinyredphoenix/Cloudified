@@ -129,7 +129,7 @@ public actor TDLibClient {
     public func start(
         databaseDirectory: String? = nil,
         filesDirectory: String? = nil,
-        appVersion: String = "1.0.0"
+        appVersion: String = "2.0"
     ) async throws {
         guard !isStarting else { throw TDLibError.executionFailed("Client initialization is in progress.") }
         isStarting = true
@@ -150,14 +150,21 @@ public actor TDLibClient {
         default: throw TDLibError.invalidParameter("Both directory arguments must be supplied together.")
         }
 
-        _ = try await session.start()
+        if !(await session.hasNativeClient) {
+            try await trace(.telegramNativeCreate, .started)
+            _ = try await session.start()
+            try await trace(.telegramNativeCreate, .succeeded)
+        }
         // The pinned ABI emits no updates until its first request. This genuine
         // query starts delivery; session applies its auth response before resuming.
         _ = try await session.sendRequest(["@type": "getAuthorizationState"], timeout: 10)
         // Set network eligibility before loading the persistent native queue.
-        _ = try await session.sendRequest(["@type": "setNetworkType", "type": ["@type": networkType]])
-        guard await session.authState == .waitTdlibParameters else {
-            throw TDLibError.executionFailed("Unexpected authorization state during initialization.")
+        _ = try await session.sendRequest(["@type": "setNetworkType", "type": ["@type": networkType]], timeout: 10)
+        let state = await session.authState
+        if [.waitPhoneNumber, .waitCode, .waitPassword, .waitEmailAddress, .waitEmailCode,
+            .waitOtherDeviceConfirmation, .waitRegistration, .waitPremiumPurchase, .ready].contains(state) { return }
+        guard state == .waitTdlibParameters else {
+            throw SafeFailure(.authentication, domain: .tdlib, cause: .initializationFailed)
         }
 
         let params = TDLibParameters(
@@ -177,7 +184,7 @@ public actor TDLibClient {
         )
 
         do {
-            _ = try await session.sendRequest(params.toRequestDictionary())
+            _ = try await session.sendRequest(params.toRequestDictionary(), timeout: 20)
         } catch {
             if error is CoreError || error is CredentialError || error is CancellationError { throw error }
             let classified = Self.classify(error)
@@ -295,6 +302,12 @@ public actor TDLibClient {
         try await diagnosticSink(operation, context, decision, severity, failure, nil, nil, nil)
     }
 
+    private func trace(_ stage: DiagnosticStage, _ status: DiagnosticStatus) async throws {
+        try await diagnosticSink?(.setupTrace, EventContext(origin: .telegram,
+            diagnostic: DiagnosticDetail(stage: stage, status: status, correlationID: UUID())),
+            .proceed, .info, nil, nil, nil, nil)
+    }
+
     // MARK: - Error Classification
 
     /// Maps TDLib error codes and bridge errors to Core SafeFailure.
@@ -320,7 +333,7 @@ public actor TDLibClient {
             case .invalidParameter:
                 return SafeFailure(.transfer, domain: .tdlib, cause: .formatRejected)
             case .executionFailed:
-                return SafeFailure(.transfer, domain: .tdlib, cause: .unknown)
+                return SafeFailure(.authentication, domain: .tdlib, cause: .initializationFailed)
             case .tdlibError(let code, _):
                 if code == 401 {
                     return SafeFailure(.authentication, domain: .tdlib, code: Int(code), cause: .loginRequired)

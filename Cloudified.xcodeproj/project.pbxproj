@@ -15,6 +15,7 @@
 		B58D296CC7FC8392FB34BDDE /* AppEnvironment+Recovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E32A9D4A81F298A576D12D /* AppEnvironment+Recovery.swift */; };
 		9482F4012F0454380E14ECB6 /* AppEnvironment+Presentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AAE215783EC3A8684277B8B /* AppEnvironment+Presentation.swift */; };
 		4DBF835DFD97A69A35B30B5F /* AppEnvironment+Pages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1453A3D8CD8A163A8F9D6937 /* AppEnvironment+Pages.swift */; };
+		3AACEEA802281760430192C1 /* AppEnvironment+Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED0E2B96D624CC88BA8F4042 /* AppEnvironment+Diagnostics.swift */; };
 		33A20D9F100D60B6C62CA8C9 /* AppEnvironment+TelegramChannels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C712433CA8BDBA45E7E169D2 /* AppEnvironment+TelegramChannels.swift */; };
 		F53F75426FDCF4699020B10D /* DemandSourceProducer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A6B44273584493DCE914785 /* DemandSourceProducer.swift */; };
 		4F38044294EA2CF270FD43A9 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E4BAD6D36BD3888E49DDC0C /* RootTabView.swift */; };
@@ -66,6 +67,7 @@
 		B56DB06CD8D86784B62E2BC3 /* StorageLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F483385D2C90581A2E58827 /* StorageLayout.swift */; };
 		64D3BD5A17BE07A38EE34085 /* BackupContinuation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C408BCEDE25B98D080A925DC /* BackupContinuation.swift */; };
 		4748EE49C61F8C7E9F3876D0 /* DiagnosticExportStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C3C642851770DD37609BF6 /* DiagnosticExportStore.swift */; };
+		DE2980D0921CECDB472664E8 /* DiagnosticReportUploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3888EAF057F40D1AC19CE241 /* DiagnosticReportUploader.swift */; };
 		B243B0EB3B4C093083E9C715 /* DiagnosticFallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = F12FD890ED10FED6001D74B7 /* DiagnosticFallback.swift */; };
 		594B067D117477918205E4B8 /* FailureExplanation.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0A2DAFCCB20E9C9D9343EC /* FailureExplanation.swift */; };
 		F785301BEAA7F89149B74323 /* NetworkPolicyMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25D54B6FD11352FD4AC23B6D /* NetworkPolicyMonitor.swift */; };
@@ -86,6 +88,7 @@
 		A0E32A9D4A81F298A576D12D /* AppEnvironment+Recovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppEnvironment+Recovery.swift"; sourceTree = "<group>"; };
 		3AAE215783EC3A8684277B8B /* AppEnvironment+Presentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppEnvironment+Presentation.swift"; sourceTree = "<group>"; };
 		1453A3D8CD8A163A8F9D6937 /* AppEnvironment+Pages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppEnvironment+Pages.swift"; sourceTree = "<group>"; };
+		ED0E2B96D624CC88BA8F4042 /* AppEnvironment+Diagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppEnvironment+Diagnostics.swift"; sourceTree = "<group>"; };
 		C712433CA8BDBA45E7E169D2 /* AppEnvironment+TelegramChannels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppEnvironment+TelegramChannels.swift"; sourceTree = "<group>"; };
 		5A6B44273584493DCE914785 /* DemandSourceProducer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DemandSourceProducer.swift"; sourceTree = "<group>"; };
 		9E4BAD6D36BD3888E49DDC0C /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RootTabView.swift"; sourceTree = "<group>"; };
@@ -137,6 +140,7 @@
 		0F483385D2C90581A2E58827 /* StorageLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StorageLayout.swift"; sourceTree = "<group>"; };
 		C408BCEDE25B98D080A925DC /* BackupContinuation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BackupContinuation.swift"; sourceTree = "<group>"; };
 		44C3C642851770DD37609BF6 /* DiagnosticExportStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DiagnosticExportStore.swift"; sourceTree = "<group>"; };
+		3888EAF057F40D1AC19CE241 /* DiagnosticReportUploader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DiagnosticReportUploader.swift"; sourceTree = "<group>"; };
 		F12FD890ED10FED6001D74B7 /* DiagnosticFallback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DiagnosticFallback.swift"; sourceTree = "<group>"; };
 		DD0A2DAFCCB20E9C9D9343EC /* FailureExplanation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FailureExplanation.swift"; sourceTree = "<group>"; };
 		25D54B6FD11352FD4AC23B6D /* NetworkPolicyMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NetworkPolicyMonitor.swift"; sourceTree = "<group>"; };
@@ -188,6 +192,7 @@
 				A0E32A9D4A81F298A576D12D /* AppEnvironment+Recovery.swift */,
 				3AAE215783EC3A8684277B8B /* AppEnvironment+Presentation.swift */,
 				1453A3D8CD8A163A8F9D6937 /* AppEnvironment+Pages.swift */,
+				ED0E2B96D624CC88BA8F4042 /* AppEnvironment+Diagnostics.swift */,
 				C712433CA8BDBA45E7E169D2 /* AppEnvironment+TelegramChannels.swift */,
 				5A6B44273584493DCE914785 /* DemandSourceProducer.swift */,
 			);
@@ -321,6 +326,7 @@
 				0F483385D2C90581A2E58827 /* StorageLayout.swift */,
 				C408BCEDE25B98D080A925DC /* BackupContinuation.swift */,
 				44C3C642851770DD37609BF6 /* DiagnosticExportStore.swift */,
+				3888EAF057F40D1AC19CE241 /* DiagnosticReportUploader.swift */,
 				F12FD890ED10FED6001D74B7 /* DiagnosticFallback.swift */,
 				DD0A2DAFCCB20E9C9D9343EC /* FailureExplanation.swift */,
 				25D54B6FD11352FD4AC23B6D /* NetworkPolicyMonitor.swift */,
@@ -429,6 +435,7 @@
 				B58D296CC7FC8392FB34BDDE /* AppEnvironment+Recovery.swift in Sources */,
 				9482F4012F0454380E14ECB6 /* AppEnvironment+Presentation.swift in Sources */,
 				4DBF835DFD97A69A35B30B5F /* AppEnvironment+Pages.swift in Sources */,
+				3AACEEA802281760430192C1 /* AppEnvironment+Diagnostics.swift in Sources */,
 				33A20D9F100D60B6C62CA8C9 /* AppEnvironment+TelegramChannels.swift in Sources */,
 				F53F75426FDCF4699020B10D /* DemandSourceProducer.swift in Sources */,
 				4F38044294EA2CF270FD43A9 /* RootTabView.swift in Sources */,
@@ -480,6 +487,7 @@
 				B56DB06CD8D86784B62E2BC3 /* StorageLayout.swift in Sources */,
 				64D3BD5A17BE07A38EE34085 /* BackupContinuation.swift in Sources */,
 				4748EE49C61F8C7E9F3876D0 /* DiagnosticExportStore.swift in Sources */,
+				DE2980D0921CECDB472664E8 /* DiagnosticReportUploader.swift in Sources */,
 				B243B0EB3B4C093083E9C715 /* DiagnosticFallback.swift in Sources */,
 				594B067D117477918205E4B8 /* FailureExplanation.swift in Sources */,
 				F785301BEAA7F89149B74323 /* NetworkPolicyMonitor.swift in Sources */,
@@ -635,7 +643,7 @@
 					"-lc++",
 					"-lz",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.tinyredphoenix.Cloudified;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -674,7 +682,7 @@
 					"-lc++",
 					"-lz",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.tinyredphoenix.Cloudified;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
