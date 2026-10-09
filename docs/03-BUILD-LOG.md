@@ -1365,3 +1365,18 @@ Telegram startup sequencing, actor ownership and diagnostic replacement changes;
 no source changed during this final service verification. Version 2.1 remains ready
 for manual build/publication; public SideStore remains 2.0 (10). No iPhone/account run,
 maximum-size dpaste test or cloud dispatch. Ownership releases after evidence commit.
+
+
+## 2026-10-09 — authorized 2.1 publication
+
+User explicitly requested publish. Architect claims README.md, DISTRIBUTION.md,
+P9-R1.md and this log for publication evidence. Public visibility and 10 GB cache
+limit confirmed before dispatch; standard runner labels unchanged. Manual build
+37897046071 from `2dc17a0b95baf962685c7051b35793c3e95230cb` passed (preflight 4s,
+macOS 1m46s). Exact native cache hit; compiler cache missed and saved. Final usage
+308,428,160 bytes / 10 GB across seven caches. Publishers 37897241252 and 37897264180
+passed. Public unauthenticated SideStore feed verifies 2.1 (11), bundle, 17,507,901
+bytes, checksum and run URL against the exact build manifest. Full evidence in
+DISTRIBUTION.md. Annotated v2.1-build11-untested marks the built source, not device
+acceptance. No real account/iPhone check in this publication turn. Scratch/ untouched;
+ownership releases after documentation commit/push.

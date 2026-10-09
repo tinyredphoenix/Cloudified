@@ -1,6 +1,6 @@
 # Cloudified SideStore distribution
 
-The currently published app's short version is **2.0**. Each manual GitHub Actions
+The currently published app's short version is **2.1**. Each manual GitHub Actions
 build supplies its run number as `CFBundleVersion` to distinguish build attempts.
 This is version identity, not an assertion of device or service
 acceptance. The first native/Xcode IPA build succeeded in run 37778211603;
@@ -18,7 +18,7 @@ generator's version consistently. The actual packaged IPA, Settings and SideStor
 metadata must show the same visible version; CI build number remains separate.
 Retries of a failed build retain the pending release version. Never change source
 metadata to relabel an already published IPA. Version 1.0 build 8 stays as published.
-Current version is 2.0 build 10; the next bug-fix release is 2.1, or 3.0 if it
+Current version is 2.1 build 11; the next bug-fix release is 2.2, or 3.0 if it
 introduces features.
 
 ## Source and publication
@@ -108,7 +108,7 @@ Google's current session/device behavior is explained before sign-in; its auth
 protocol is unchanged. See [linking correction](P8-LINKING-FIX.md).
 
 
-## Latest published build — 2.0 public diagnostics
+## Previous published build — 2.0 public diagnostics
 
 User authorized build and publication for testing. Manual build
 [37891550316](https://github.com/tinyredphoenix/Cloudified/actions/runs/37891550316)
@@ -127,3 +127,24 @@ Refresh the existing SideStore source and update. Confirm Settings shows 2.0 (10
 launch twice, retry both account connections, then Logs → Upload public diagnostics.
 Share the returned link in this chat. Real device/service behavior remains unverified;
 see [P9 implementation and device checks](P9-DIAGNOSTICS.md).
+
+
+## Latest published build — 2.1 Telegram startup and report delivery
+
+User authorized publication. Build
+[37897046071](https://github.com/tinyredphoenix/Cloudified/actions/runs/37897046071)
+passed from `2dc17a0b95baf962685c7051b35793c3e95230cb` (preflight 4s, macOS 1m46s).
+Native dependency cache hit; compiler cache missed after version/project changes
+and saved successfully. Final cache use 308,428,160 bytes across seven caches / 10 GB.
+Both [app publisher](https://github.com/tinyredphoenix/Cloudified/actions/runs/37897241252)
+and [source publisher](https://github.com/tinyredphoenix/Cloudified-Source/actions/runs/37897264180)
+passed. The [permanent untested prerelease](https://github.com/tinyredphoenix/Cloudified-Source/releases/tag/ci-run-37897046071-untested)
+contains the 17,507,901-byte unsigned IPA, SHA-256
+`64e741155880b7c93a5faabc8777b046ea29924359896e6b5867099c5a5acee6`.
+Unauthenticated SideStore feed was verified as **2.1 (11)** with exact manifest
+bundle, version, build, size, checksum and run download URL agreement.
+
+Refresh the existing SideStore source and update. Confirm Settings shows 2.1 (11),
+retry Telegram linking, then Logs → Upload public diagnostics and send its link here.
+The approved dpaste route has non-private desktop service evidence; actual iPhone
+report delivery and account linking remain device checks. See P9-R1.md.

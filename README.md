@@ -33,14 +33,15 @@ Architect directly completed the source corrections from the
 All 66 actual app sources pass the local Catalyst UIKit/SwiftUI typecheck.
 The updated iPhone build, visual flows and real account behavior remain unverified.
 
-Published testing version **2.0 (10)** adds connection recovery and public diagnostic
+Published testing version **2.1 (11)** adds connection recovery and public diagnostic
 reports; see [P9 changes and device checks](docs/P9-DIAGNOSTICS.md). The iPhone build
 and both publishers passed; actual account/device behavior remains unverified.
 
-Pending **2.1** source corrects the Telegram initialization ordering identified by
+**2.1** corrects the Telegram initialization ordering identified by
 the 2.0 device log. Diagnostics now uses the approved dpaste.com host; anonymous upload and exact
 read-back passed a non-private service check;
-see [correction and service evidence](docs/P9-R1.md). No 2.1 IPA is published.
+see [correction and service evidence](docs/P9-R1.md). The 2.1 iPhone build and both publication stages passed; device linking remains
+unverified.
 
 ## Stack and build location
 
