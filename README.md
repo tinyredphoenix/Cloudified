@@ -33,7 +33,7 @@ Architect directly completed the source corrections from the
 All 66 actual app sources pass the local Catalyst UIKit/SwiftUI typecheck.
 The updated iPhone build, visual flows and real account behavior remain unverified.
 
-Published testing version **2.1 (11)** adds connection recovery and public diagnostic
+Published testing version **2.2 (12)** adds connection recovery and public diagnostic
 reports; see [P9 changes and device checks](docs/P9-DIAGNOSTICS.md). The iPhone build
 and both publishers passed; actual account/device behavior remains unverified.
 
@@ -42,6 +42,10 @@ the 2.0 device log. Diagnostics now uses the approved dpaste.com host; anonymous
 read-back passed a non-private service check;
 see [correction and service evidence](docs/P9-R1.md). The 2.1 iPhone build and both publication stages passed; device linking remains
 unverified.
+
+**2.2 (12)** includes the [researched linking and recovery corrections](docs/P9-R3.md).
+The iPhone build and both publishers passed; SideStore metadata and IPA digest
+agree. Retry saved Google connection and Telegram phone submission on device.
 
 ## Stack and build location
 

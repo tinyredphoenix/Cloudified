@@ -1,6 +1,6 @@
 # Cloudified SideStore distribution
 
-The currently published app's short version is **2.1**. Each manual GitHub Actions
+The currently published app's short version is **2.2**. Each manual GitHub Actions
 build supplies its run number as `CFBundleVersion` to distinguish build attempts.
 This is version identity, not an assertion of device or service
 acceptance. The first native/Xcode IPA build succeeded in run 37778211603;
@@ -18,7 +18,7 @@ generator's version consistently. The actual packaged IPA, Settings and SideStor
 metadata must show the same visible version; CI build number remains separate.
 Retries of a failed build retain the pending release version. Never change source
 metadata to relabel an already published IPA. Version 1.0 build 8 stays as published.
-Current version is 2.1 build 11; the next bug-fix release is 2.2, or 3.0 if it
+Current version is 2.2 build 12; the next bug-fix release is 2.3, or 3.0 if it
 introduces features.
 
 ## Source and publication
@@ -148,3 +148,25 @@ Refresh the existing SideStore source and update. Confirm Settings shows 2.1 (11
 retry Telegram linking, then Logs → Upload public diagnostics and send its link here.
 The approved dpaste route has non-private desktop service evidence; actual iPhone
 report delivery and account linking remain device checks. See P9-R1.md.
+
+## 2026-10-09 — 2.2 (12) publication
+
+User explicitly authorized build and repository update. Exact built source:
+`f17407aecd042ce798434aee18c1ad09e3019320`.
+Manual build [37909280926](https://github.com/tinyredphoenix/Cloudified/actions/runs/37909280926)
+passed: preflight 5 seconds; standard macos-26 iPhone build 2 minutes 48 seconds.
+Native dependency cache hit; changed compiler contract caused a compiler cache miss,
+then a new cache was saved. Final cache usage: 357,030,701 bytes, eight caches;
+configured allowance remains 10 GB. Both repositories are public.
+App publisher 37909619524 and source publisher 37909643591 succeeded.
+Permanent Source prerelease: `ci-run-37909280926-untested`.
+Unsigned IPA: 17,545,214 bytes; SHA-256:
+`1a5ae98664fa90bf09d71c56a06c997c87b126b1c7bdfa04eeddb02b5f3ec56d`.
+Unauthenticated public source feed matches manifest version 2.2, build 12,
+bundle identifier, size, digest and permanent download URL; release asset digest
+also matches. Annotated tag `v2.2-build12-untested` identifies the exact built source.
+This establishes native compiler/package/publication evidence, including the
+iPhone-only continuation branch, not account login or device execution acceptance.
+Next device checks: confirm Settings 2.2 (12), Retry saved connection for Google,
+retry Telegram phone submission, send new public diagnostic links on failure.
+Source repository and feed are updated; scratch remains untouched.
