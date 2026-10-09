@@ -82,3 +82,12 @@ record the exact failing screen; use Logs → Upload public diagnostics, then se
 its link here. Check cancel, retry saved Google verification, Telegram retry, and
 public upload failure messaging. Never paste tokens or account credentials. Account
 success, original-quality uploads and device background behavior remain unverified.
+
+
+## Authorized publication — 2026-10-09
+
+User requested 2.0 publication for testing. Build 37891550316 from `f080be2` and
+publishers 37891757475 / 37891781253 passed. Public SideStore feed verifies 2.0 (10)
+with matching size/checksum; complete evidence is in DISTRIBUTION.md. Earlier
+no-dispatch statements describe source implementation before this authorization.
+The report upload and both account flows still require the next iPhone session.

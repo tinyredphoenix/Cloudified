@@ -33,9 +33,9 @@ Architect directly completed the source corrections from the
 All 66 actual app sources pass the local Catalyst UIKit/SwiftUI typecheck.
 The updated iPhone build, visual flows and real account behavior remain unverified.
 
-Pending source version 2.0 adds connection recovery and public diagnostic reports;
-see [P9 changes and device checks](docs/P9-DIAGNOSTICS.md). Published SideStore remains
-1.1 (9) until an authorized new build and publication.
+Published testing version **2.0 (10)** adds connection recovery and public diagnostic
+reports; see [P9 changes and device checks](docs/P9-DIAGNOSTICS.md). The iPhone build
+and both publishers passed; actual account/device behavior remains unverified.
 
 ## Stack and build location
 

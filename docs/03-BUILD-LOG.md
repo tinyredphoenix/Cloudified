@@ -1304,3 +1304,19 @@ and optimized whole-module IR; real Diagnostics/Core compile. No account/device 
 real paste POST or cloud dispatch. Published SideStore remains 1.1 (9). Device
 acceptance remains pending and source findings do not prove service behavior.
 Untracked scratch/ is untouched. Ownership releases after source commit/push.
+
+
+## 2026-10-09 — authorized 2.0 testing publication
+
+User explicitly requested publish 2.0 for testing. Architect claims README.md,
+DISTRIBUTION.md, P9-DIAGNOSTICS.md and this log for publication evidence. Public
+visibility and existing 10 GB cache limit confirmed before manual dispatch; standard
+runner labels unchanged. Build 37891550316 from exact source
+`f080be2bd533f4d45401ff57a90988cb4e4be694` passed (preflight 3s, macOS 2m06s).
+Native cache hit; compiler cache missed and saved. Final usage 259,935,038 bytes,
+six caches / 10 GB. Both publishers 37891757475 and 37891781253 passed.
+Unauthenticated SideStore feed verifies 2.0 build 10, bundle, 17,495,366-byte size,
+checksum and exact run URL against the verified build manifest. See DISTRIBUTION.md.
+No account/device or live diagnostic POST performed. Annotated v2.0-build10-untested
+marks the actual built source; it does not assert device acceptance. Scratch/ stays
+untouched; ownership releases after documentation commit/push.

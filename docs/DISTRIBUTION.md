@@ -1,6 +1,6 @@
 # Cloudified SideStore distribution
 
-The currently published app's short version is **1.1**. Each manual GitHub Actions
+The currently published app's short version is **2.0**. Each manual GitHub Actions
 build supplies its run number as `CFBundleVersion` to distinguish build attempts.
 This is version identity, not an assertion of device or service
 acceptance. The first native/Xcode IPA build succeeded in run 37778211603;
@@ -18,7 +18,7 @@ generator's version consistently. The actual packaged IPA, Settings and SideStor
 metadata must show the same visible version; CI build number remains separate.
 Retries of a failed build retain the pending release version. Never change source
 metadata to relabel an already published IPA. Version 1.0 build 8 stays as published.
-Current version is 1.1 build 9; the next bug-fix release is 1.2, or 2.0 if it
+Current version is 2.0 build 10; the next bug-fix release is 2.1, or 3.0 if it
 introduces features.
 
 ## Source and publication
@@ -88,7 +88,7 @@ fixes that failure; [recovery evidence](P8-BUILD-RECOVERY.md) distinguishes loca
 compiler checks from the successful iPhone build. Real-device/service acceptance
 remains pending; use P8-FIRST-RUN.md and the P7 device/result documents to record it.
 
-## Latest published build — 1.1 linking corrections
+## Previous published build — 1.1 linking corrections
 
 Version **1.1 build 9** passed manual build
 [37832459359](https://github.com/tinyredphoenix/Cloudified/actions/runs/37832459359)
@@ -106,3 +106,24 @@ Refresh Cloudified's existing SideStore source and update. Confirm Settings show
 errors are compiled; actual authentication/channel linking still need device evidence.
 Google's current session/device behavior is explained before sign-in; its auth
 protocol is unchanged. See [linking correction](P8-LINKING-FIX.md).
+
+
+## Latest published build — 2.0 public diagnostics
+
+User authorized build and publication for testing. Manual build
+[37891550316](https://github.com/tinyredphoenix/Cloudified/actions/runs/37891550316)
+passed from exact source `f080be2bd533f4d45401ff57a90988cb4e4be694`: preflight 3s,
+macOS job 2m06s. Native dependency cache hit; compiler cache missed after project
+changes and was saved. Final cache use 259,935,038 bytes / configured 10 GB.
+The [app publisher](https://github.com/tinyredphoenix/Cloudified/actions/runs/37891757475)
+and [source publisher](https://github.com/tinyredphoenix/Cloudified-Source/actions/runs/37891781253)
+both passed. The [permanent untested prerelease](https://github.com/tinyredphoenix/Cloudified-Source/releases/tag/ci-run-37891550316-untested)
+contains the 17,495,366-byte unsigned IPA with SHA-256
+`4324dc5c788fe61a3c9dc910f80897467add589e3d8d71d127d820d15eab93a3`.
+The unauthenticated public feed was verified as **2.0 (10)** with matching bundle,
+size, checksum and exact run download URL. No signing credentials were used.
+
+Refresh the existing SideStore source and update. Confirm Settings shows 2.0 (10),
+launch twice, retry both account connections, then Logs → Upload public diagnostics.
+Share the returned link in this chat. Real device/service behavior remains unverified;
+see [P9 implementation and device checks](P9-DIAGNOSTICS.md).
