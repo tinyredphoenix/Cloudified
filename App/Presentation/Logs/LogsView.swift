@@ -49,7 +49,7 @@ public struct LogsView: View {
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 } footer: {
-                    Text("Uploads recent redacted diagnostics to paste.rs. The report is public to anyone with its link. Credentials, media, account names and private paths are excluded. No sign-in or installation required.")
+                    Text("Uploads recent redacted diagnostics to dpaste.com for seven days. The report is public to anyone with its link. Credentials, media, account names and private paths are excluded. No sign-in or installation required.")
                 }
                 Section {
                     DisclosureGroup("Filters") { filtersHeader }

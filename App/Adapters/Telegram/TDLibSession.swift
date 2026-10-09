@@ -224,7 +224,8 @@ public actor TDLibSession {
     /// Sends an asynchronous TDLib request and waits for the correlated response.
     /// Strictly validates finite positive timeouts, registers atomically, and uses
     /// a single terminal resolver to guarantee continuation resolution without hangs.
-    public func sendRequest(_ request: [String: Any], timeout: TimeInterval = 60.0) async throws -> TDLibResponse {
+    public func sendRequest(_ request: [String: Any], timeout: TimeInterval = 60.0,
+                            onDispatched: (@Sendable () -> Void)? = nil) async throws -> TDLibResponse {
         try Task.checkCancellation()
         if let processingFailure { throw processingFailure }
         guard timeout.isFinite, timeout > 0, timeout <= 300.0 else {
@@ -275,6 +276,7 @@ public actor TDLibSession {
 
                 // Dispatch to C ABI
                 self.bridge.send(clientID: clientID, jsonRequest: jsonString)
+                onDispatched?()
             }
         } onCancel: {
             Task { [weak self] in

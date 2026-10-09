@@ -40,7 +40,7 @@ enum FailureExplanation {
         case .persistenceFailed: return "The local ledger could not persist a change. Saved status cannot be confirmed."
         case .invalidContract: return "An internal consistency check failed. Export the safe diagnostics for investigation."
         case .quotaExceeded: return "The destination reports a storage limit. Check its account status."
-        case .providerRejected: return "The destination rejected this operation. Check the technical code below."
+        case .providerRejected: return "The destination rejected this operation\(failure.code.map { " (code \($0), \(failure.domain.rawValue))" } ?? ""). Open Logs for the failed request."
         case .disabled: return "This destination is disabled; its backlog is retained."
         case .paused: return "Backup is paused."
         case .storageUnavailable, .storagePathConflict: return "Local app storage is unavailable. Export diagnostics before changing stored data."

@@ -22,6 +22,7 @@ extension AppEnvironment {
     }
     func diagnosticMessage(_ event: DiagnosticEvent) -> String {
         var text = event.failure.map(explain) ?? event.decision.rawValue
+        if let failure = event.failure { text += "\nSafe code: \(failure.description)" }
         if let detail = event.context.diagnostic {
             text += "\nStage: \(detail.stage.rawValue) · \(detail.status.rawValue)"
             text += "\nOperation: \(detail.correlationID.uuidString)"
@@ -56,7 +57,13 @@ extension AppEnvironment {
                 constrained: network?.constrained))
         do {
             let url = try await reportUploader.upload(ledger: ledger, metadata: metadata,
-                fallback: fallback.snapshot().map { DiagnosticReportFallback(timestamp: $0.timestamp, failure: $0.failure) })
+                fallback: fallback.snapshot().map { DiagnosticReportFallback(timestamp: $0.timestamp, failure: $0.failure) },
+                responseObserved: { [diagnosticSink] status, bytes in
+                    try? await diagnosticSink(.diagnosticUpload,
+                        EventContext(origin: .system, diagnostic: DiagnosticDetail(stage: .diagnosticUpload,
+                            status: .changed, correlationID: id, httpStatus: status, responseBytes: bytes)),
+                        .proceed, .info, nil, nil, nil, nil)
+                })
             await trace(.diagnosticUpload, .succeeded, id: id, started: started)
             return url
         } catch {

@@ -12,6 +12,7 @@ public actor TDLibClient {
     private var isStarting = false
     private var networkType = "networkTypeNone"
     private var appliedNetworkType: String?
+    private var isApplyingNetworkPolicy = false
     private let session: TDLibSession
     private let diagnosticSink: (@Sendable (EventOperation, EventContext, EventDecision, EventSeverity, SafeFailure?, TimeInterval?, Int64?, Int64?) async throws -> Void)?
 
@@ -129,7 +130,7 @@ public actor TDLibClient {
     public func start(
         databaseDirectory: String? = nil,
         filesDirectory: String? = nil,
-        appVersion: String = "2.0"
+        appVersion: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unavailable"
     ) async throws {
         guard !isStarting else { throw TDLibError.executionFailed("Client initialization is in progress.") }
         isStarting = true
@@ -151,6 +152,7 @@ public actor TDLibClient {
         }
 
         if !(await session.hasNativeClient) {
+            appliedNetworkType = nil
             try await trace(.telegramNativeCreate, .started)
             _ = try await session.start()
             try await trace(.telegramNativeCreate, .succeeded)
@@ -158,11 +160,12 @@ public actor TDLibClient {
         // The pinned ABI emits no updates until its first request. This genuine
         // query starts delivery; session applies its auth response before resuming.
         _ = try await session.sendRequest(["@type": "getAuthorizationState"], timeout: 10)
-        // Set network eligibility before loading the persistent native queue.
-        _ = try await session.sendRequest(["@type": "setNetworkType", "type": ["@type": networkType]], timeout: 10)
         let state = await session.authState
         if [.waitPhoneNumber, .waitCode, .waitPassword, .waitEmailAddress, .waitEmailCode,
-            .waitOtherDeviceConfirmation, .waitRegistration, .waitPremiumPurchase, .ready].contains(state) { return }
+            .waitOtherDeviceConfirmation, .waitRegistration, .waitPremiumPurchase, .ready].contains(state) {
+            try await applyNetworkPolicy(whileStarting: true)
+            return
+        }
         guard state == .waitTdlibParameters else {
             throw SafeFailure(.authentication, domain: .tdlib, cause: .initializationFailed)
         }
@@ -184,7 +187,32 @@ public actor TDLibClient {
         )
 
         do {
-            _ = try await session.sendRequest(params.toRequestDictionary(), timeout: 20)
+            // TDLib queues setNetworkType until setTdlibParameters initializes its
+            // network manager. Enqueue the gate first, then initialize without
+            // waiting for that queued response. Both responses remain observed.
+            let initialType = networkType
+            let session = self.session
+            let dispatched = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    defer { dispatched.continuation.finish() }
+                    _ = try await session.sendRequest(["@type": "setNetworkType", "type": ["@type": initialType]],
+                        timeout: 30, onDispatched: { dispatched.continuation.yield(()) })
+                }
+                var iterator = dispatched.stream.makeAsyncIterator()
+                guard await iterator.next() != nil else {
+                    try Task.checkCancellation()
+                    try await group.waitForAll()
+                    throw SafeFailure(.authentication, domain: .tdlib, cause: .initializationFailed)
+                }
+                try Task.checkCancellation()
+                _ = try await session.sendRequest(params.toRequestDictionary(), timeout: 20)
+                try await group.waitForAll()
+            }
+            appliedNetworkType = initialType
+            _ = try await session.sendRequest(["@type": "getAuthorizationState"], timeout: 10)
+            // A policy change may have arrived during initialization.
+            try await applyNetworkPolicy(whileStarting: true)
         } catch {
             if error is CoreError || error is CredentialError || error is CancellationError { throw error }
             let classified = Self.classify(error)
@@ -284,11 +312,22 @@ public actor TDLibClient {
     func setNetworkPolicy(allowed: Bool, wifi: Bool) async throws {
         let type = allowed ? (wifi ? "networkTypeWiFi" : "networkTypeMobile") : "networkTypeNone"
         networkType = type
-        guard type != appliedNetworkType else { return }
+        try await applyNetworkPolicy()
+    }
+    private func applyNetworkPolicy(whileStarting: Bool = false) async throws {
+        guard (!isStarting || whileStarting), !isApplyingNetworkPolicy else { return }
         let state = await session.authState
-        guard state != .uninitialized, state != .closed, state != .closing else { return }
-        _ = try await session.sendRequest(["@type": "setNetworkType", "type": ["@type": type]])
-        appliedNetworkType = type
+        // Authorization lookup suspends this actor. Reserve policy ownership
+        // only after rechecking it, so concurrent callers cannot apply stale gates.
+        guard (!isStarting || whileStarting), !isApplyingNetworkPolicy,
+              ![.uninitialized, .waitTdlibParameters, .closed, .closing, .uncertain].contains(state) else { return }
+        isApplyingNetworkPolicy = true
+        defer { isApplyingNetworkPolicy = false }
+        while networkType != appliedNetworkType {
+            let type = networkType
+            _ = try await session.sendRequest(["@type": "setNetworkType", "type": ["@type": type]], timeout: 10)
+            appliedNetworkType = type
+        }
     }
 
     private func emitDiagnostic(

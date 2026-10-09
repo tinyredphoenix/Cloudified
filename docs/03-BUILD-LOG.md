@@ -1320,3 +1320,30 @@ checksum and exact run URL against the verified build manifest. See DISTRIBUTION
 No account/device or live diagnostic POST performed. Annotated v2.0-build10-untested
 marks the actual built source; it does not assert device acceptance. Scratch/ stays
 untouched; ownership releases after documentation commit/push.
+
+
+## 2026-10-09 — P9-R1 device evidence and prepared correction
+
+User supplied 2.0 (10) exported diagnostics and Telegram/report error text. Architect
+claims exact paths in P9-R1.md; no active Builder. Source and pinned native evidence
+locate the Telegram stall at setNetworkType queued before initialization parameters.
+Structured dispatch acknowledgement preserves network-gate ordering while allowing
+parameters to initialize TDLib; both outcomes remain awaited and bounded. Cached
+policy changes serialize after initialization, rechecking actor ownership after
+suspension. Native databases, remote receipts and media retry policy are unchanged.
+
+Diagnostic messages now show safe codes inline. Local non-private paste.rs service
+checks reproduce raw HTTP 400 and larger web-form HTTP 500; one tiny web-form paste
+was verified and deleted, but report-size support failed. No personal attachments
+were uploaded. A dpaste.com replacement is prepared with declared destination,
+seven-day expiry, bounded POST, rate spacing and exact raw retrieval verification.
+Automatic approval review rejected its compiler-log upload: previous user approval
+named paste.rs and log sensitivity was not established. No dpaste data sent. User
+approval request remains pending; no cloud dispatch or release is authorized here.
+
+Pending 2.1 is consistent across plist/project/generator. Python syntax, local
+Markdown targets, plist/project and whitespace checks pass. Final actual-source
+compiler evidence is recorded in P9-R1.md when complete. Published source remains
+2.0 (10); no account/iPhone run in this batch. Scratch/ and personal attachments are
+untouched. Shared source is reviewable; do not publish the new diagnostic host until
+user approval, service verification and explicit build/publication authorization.

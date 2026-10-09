@@ -323,3 +323,14 @@ request logging uses closed stages/methods/states and safe numeric codes, not ra
 bodies. Report generation must work even when export setup or ledger reading fails.
 Provider assignment must not depend on optional diagnostic export-directory setup.
 See [P9 implementation and remaining device checks](P9-DIAGNOSTICS.md).
+
+
+## D44 — enqueue the initialization gate without awaiting its queued response
+
+The 2.0 device log proves getAuthorizationState succeeds but setNetworkType times out
+before any parameters request. Pinned Td.cpp queues that network request until native
+initialization. Keep it ordered before parameters to gate persistent native work,
+but use a dispatch acknowledgement and structured request ownership so initialization
+can proceed. Await both outcomes, retain deadlines/cancellation and cached policy
+changes, and recheck actor ownership after suspension. Do not drop the gate or discard
+native data. See [device evidence and source correction](P9-R1.md).

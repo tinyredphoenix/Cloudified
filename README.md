@@ -37,6 +37,10 @@ Published testing version **2.0 (10)** adds connection recovery and public diagn
 reports; see [P9 changes and device checks](docs/P9-DIAGNOSTICS.md). The iPhone build
 and both publishers passed; actual account/device behavior remains unverified.
 
+Pending **2.1** source corrects the Telegram initialization ordering identified by
+the 2.0 device log. A replacement diagnostic host is prepared awaiting user approval;
+see [correction and service evidence](docs/P9-R1.md). No 2.1 IPA is published.
+
 ## Stack and build location
 
 Swift 6 language mode, SwiftUI, PhotoKit, SQLite, Keychain, file-backed URLSession
