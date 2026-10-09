@@ -223,9 +223,11 @@ public actor TDLibClient {
 
     /// Submits a phone number for user authentication.
     public func setAuthenticationPhoneNumber(_ phoneNumber: String) async throws {
+        let normalized = try Self.internationalPhoneNumber(phoneNumber)
         let req: [String: Any] = [
             "@type": "setAuthenticationPhoneNumber",
-            "phone_number": phoneNumber
+            "phone_number": normalized,
+            "settings": NSNull()
         ]
         do {
             _ = try await session.sendRequest(req)
@@ -349,6 +351,26 @@ public actor TDLibClient {
 
     // MARK: - Error Classification
 
+    /// Formatting normalization only; never guesses a country code or logs digits.
+    static func internationalPhoneNumber(_ input: String) throws -> String {
+        var result = ""
+        for scalar in input.unicodeScalars {
+            if CharacterSet.decimalDigits.contains(scalar), let digit = Character(String(scalar)).wholeNumberValue {
+                result += String(digit)
+            } else if scalar == "+", result.isEmpty { result += "+" }
+            else if CharacterSet.whitespacesAndNewlines.contains(scalar) || "()- .".unicodeScalars.contains(scalar) { continue }
+            else { throw SafeFailure(.authentication, domain: .tdlib, cause: .phoneNumberInvalid) }
+        }
+        guard result.first == "+", (2...15).contains(result.dropFirst().count), result.dropFirst().first != "0" else {
+            throw SafeFailure(.authentication, domain: .tdlib, cause: .phoneNumberInvalid)
+        }
+        return result
+    }
+    static func nativeReason(_ error: any Error) -> DiagnosticNativeError? {
+        guard case TDLibError.tdlibError(let code, let message) = error, code != 406 else { return nil }
+        return DiagnosticNativeError(rawValue: message) ?? .other
+    }
+
     /// Maps TDLib error codes and bridge errors to Core SafeFailure.
     /// Never exposes raw secrets, tokens, or private paths.
     public static func classify(_ error: any Error) -> SafeFailure {
@@ -374,6 +396,15 @@ public actor TDLibClient {
             case .executionFailed:
                 return SafeFailure(.authentication, domain: .tdlib, cause: .initializationFailed)
             case .tdlibError(let code, _):
+                switch nativeReason(error) {
+                case .phoneNumberInvalid: return SafeFailure(.authentication, domain: .tdlib, code: Int(code), cause: .phoneNumberInvalid)
+                case .phoneNumberBanned: return SafeFailure(.authentication, domain: .tdlib, code: Int(code), cause: .phoneNumberBanned)
+                case .apiIdInvalid, .apiIdPublishedFlood: return SafeFailure(.authentication, domain: .tdlib, code: Int(code), cause: .applicationCredentialsRejected)
+                case .phoneNumberFlood, .phonePasswordFlood: return SafeFailure(.rateLimit, domain: .tdlib, code: Int(code), cause: .serverRateLimit)
+                case .phoneCodeInvalid, .phoneCodeExpired, .passwordHashInvalid, .updateAppToLogin, .authRestart:
+                    return SafeFailure(.authentication, domain: .tdlib, code: Int(code), cause: .authenticationRejected)
+                default: break
+                }
                 if code == 401 {
                     return SafeFailure(.authentication, domain: .tdlib, code: Int(code), cause: .loginRequired)
                 }

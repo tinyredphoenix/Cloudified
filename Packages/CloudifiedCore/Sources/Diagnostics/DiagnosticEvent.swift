@@ -25,6 +25,7 @@ public enum KnownCause: String, Codable, Sendable {
     case lowDataMode, wifiRequired, thermalPressure, backgroundRestricted, backgroundExpired
     case storageUnavailable, storagePathConflict
     case setupUnavailable, initializationFailed, verificationFailed, networkRequestFailed
+    case phoneNumberInvalid, phoneNumberBanned, applicationCredentialsRejected, authenticationRejected
 }
 
 public enum DiagnosticStage: String, Codable, Sendable {
@@ -46,11 +47,34 @@ public enum DiagnosticAuthState: String, Codable, Sendable {
     case waitEmailAddress, waitEmailCode, waitOtherDeviceConfirmation, waitRegistration
     case waitPremiumPurchase, ready, loggingOut, closing, closed, uncertain
 }
+public enum DiagnosticNativeError: String, Codable, Sendable {
+    case phoneNumberInvalid = "PHONE_NUMBER_INVALID"
+    case phoneNumberBanned = "PHONE_NUMBER_BANNED"
+    case apiIdInvalid = "API_ID_INVALID"
+    case apiIdPublishedFlood = "API_ID_PUBLISHED_FLOOD"
+    case phoneNumberFlood = "PHONE_NUMBER_FLOOD"
+    case phonePasswordFlood = "PHONE_PASSWORD_FLOOD"
+    case phoneCodeInvalid = "PHONE_CODE_INVALID"
+    case phoneCodeExpired = "PHONE_CODE_EXPIRED"
+    case passwordHashInvalid = "PASSWORD_HASH_INVALID"
+    case updateAppToLogin = "UPDATE_APP_TO_LOGIN"
+    case authRestart = "AUTH_RESTART"
+    case other
+}
 public enum DiagnosticGoogleError: String, Codable, Sendable {
     case badAuthentication = "BadAuthentication"
     case needsBrowser = "NeedsBrowser"
     case deviceManagement = "DeviceManagementRequiredOrSyncDisabled"
     case tokenBound, missingToken, other
+    case invalidRequest = "invalid_request"
+    case invalidToken = "invalid_token"
+    case insufficientScope = "insufficient_scope"
+    case invalidGrant = "invalid_grant"
+    case accessDenied = "access_denied"
+    case unsupportedTokenType = "unsupported_token_type"
+    case invalidArgument = "INVALID_ARGUMENT"
+    case permissionDenied = "PERMISSION_DENIED"
+    case unauthenticated = "UNAUTHENTICATED"
 }
 /// Closed stages/statuses and numeric/boolean facts only; no request/response prose.
 public struct DiagnosticDetail: Codable, Sendable {
@@ -58,6 +82,7 @@ public struct DiagnosticDetail: Codable, Sendable {
     public let status: DiagnosticStatus
     public let correlationID: UUID
     public let nativeMethod: DiagnosticNativeMethod?
+    public let nativeError: DiagnosticNativeError?
     public let httpStatus: Int?
     public let responseBytes: Int?
     public let available: Bool?
@@ -70,12 +95,13 @@ public struct DiagnosticDetail: Codable, Sendable {
                 nativeMethod: DiagnosticNativeMethod? = nil, httpStatus: Int? = nil,
                 responseBytes: Int? = nil, available: Bool? = nil, wifi: Bool? = nil,
                 expensive: Bool? = nil, constrained: Bool? = nil, authState: DiagnosticAuthState? = nil,
-                googleError: DiagnosticGoogleError? = nil) {
+                googleError: DiagnosticGoogleError? = nil, nativeError: DiagnosticNativeError? = nil) {
         self.stage = stage; self.status = status; self.correlationID = correlationID
         self.nativeMethod = nativeMethod; self.httpStatus = httpStatus; self.responseBytes = responseBytes
         self.available = available; self.wifi = wifi; self.expensive = expensive; self.constrained = constrained
         self.authState = authState
         self.googleError = googleError
+        self.nativeError = nativeError
     }
 }
 

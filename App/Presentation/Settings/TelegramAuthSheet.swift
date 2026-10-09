@@ -132,7 +132,7 @@ public struct TelegramAuthSheet: View {
     private var phoneNumberSection: some View {
         Section(
             header: Text("Phone Number"),
-            footer: Text("Enter your Telegram account phone number including the country code.")
+            footer: Text("Start with + and the country code, then your Telegram account number. Spaces and brackets are allowed.")
         ) {
             TextField("Phone Number", text: $phoneNumber)
                 .keyboardType(.phonePad)
@@ -141,8 +141,10 @@ public struct TelegramAuthSheet: View {
             Button {
                 let phone = phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !phone.isEmpty else { return }
-                phoneNumber = ""
-                perform { try await environment.submitTelegramPhone(phone) }
+                perform {
+                    try await environment.submitTelegramPhone(phone)
+                    phoneNumber = ""
+                }
             } label: {
                 if environment.settingsState.isConnectingTelegram {
                     ProgressView()

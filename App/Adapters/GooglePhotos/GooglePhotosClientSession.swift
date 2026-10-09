@@ -67,7 +67,7 @@ actor GooglePhotosClientSession {
         )
         try credentialStore.saveGoogleCredential(cred, forProfile: profileID)
 
-        let gpmc = try GPMCClient(authData: cred.authData, networkPolicy: networkPolicy, fileUploadTransport: customTransport)
+        let gpmc = try GPMCClient(authData: cred.authData, freshExchange: result, networkPolicy: networkPolicy, fileUploadTransport: customTransport)
         self.client = gpmc
         self.isConfigured = true
 
@@ -93,8 +93,8 @@ actor GooglePhotosClientSession {
 
     private func traced<T: Sendable>(_ stage: DiagnosticStage, work: () async throws -> T) async throws -> T {
         let id = UUID(), started = ProcessInfo.processInfo.systemUptime
-        func context(_ status: DiagnosticStatus) -> EventContext {
-            EventContext(origin: .google, diagnostic: DiagnosticDetail(stage: stage, status: status, correlationID: id))
+        func context(_ status: DiagnosticStatus, reason: DiagnosticGoogleError? = nil, actualStage: DiagnosticStage? = nil) -> EventContext {
+            EventContext(origin: .google, diagnostic: DiagnosticDetail(stage: actualStage ?? stage, status: status, correlationID: id, googleError: reason))
         }
         try await diagnosticSink?(.setupTrace, context(.started), .proceed, .info, nil, nil, nil, nil)
         do {
@@ -104,7 +104,7 @@ actor GooglePhotosClientSession {
             return value
         } catch {
             let safe = ProviderSupport.safe(error, domain: .google)
-            try? await diagnosticSink?(.setupTrace, context(.failed), .wait, .error, safe,
+            try? await diagnosticSink?(.setupTrace, context(.failed, reason: (error as? GPMCError)?.googleReason, actualStage: (error as? GPMCError)?.diagnosticStage), .wait, .error, safe,
                 ProcessInfo.processInfo.systemUptime - started, nil, nil)
             if let error = error as? GPMCError { throw SafeProviderFailure(failure: safe, retryAfter: error.retryAfter) }
             throw error
@@ -248,7 +248,7 @@ actor GooglePhotosClientSession {
     static func classify(_ error: GPMCError) -> SafeFailure {
         switch error.kind {
         case .identityUnavailable:
-            return SafeFailure(.authentication, domain: .google, cause: .identityUnverified)
+            return error.transportFailure ?? SafeFailure(.authentication, domain: .google, cause: .identityUnverified)
         case .credentialRejected:
             return error.transportFailure ?? SafeFailure(.authentication, domain: .google, cause: .loginRequired)
         case .tokenBound:

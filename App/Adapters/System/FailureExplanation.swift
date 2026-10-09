@@ -49,6 +49,10 @@ enum FailureExplanation {
         case .verificationFailed: return "Browser sign-in completed, but the app could not verify the Photos connection. Retry verification or check Logs for the failed stage."
         case .networkRequestFailed: return "A network request failed\(failure.code.map { " (code \($0))" } ?? ""). This does not prove the phone is offline. Check Logs for the failed stage."
         case .unknown: return "The cause is unknown (\(failure.category.rawValue), \(failure.domain.rawValue)\(failure.code.map { ", code \($0)" } ?? ""))."
+        case .phoneNumberInvalid: return "Enter the full international phone number, starting with + and the country code. Spaces and brackets are allowed. Telegram must accept this number before sending a code."
+        case .phoneNumberBanned: return "Telegram reports that this phone number is banned. This cannot be fixed by retrying Cloudified."
+        case .applicationCredentialsRejected: return "Telegram rejected the API application credentials. Check the API ID and hash together in Settings; Logs contain the exact safe rejection name."
+        case .authenticationRejected: return "Telegram rejected this sign-in step. Open Logs for the safe rejection name before retrying."
         }
     }
     static func remedy(_ failure: SafeFailure?) -> String {

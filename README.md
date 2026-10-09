@@ -113,3 +113,5 @@ The [Cloudified SideStore source](https://raw.githubusercontent.com/tinyredphoen
 lists permanent unsigned IPA releases after successful manual builds. SideStore
 signs the selected IPA with your certificate. Build failures appear in the
 [source build history](https://github.com/tinyredphoenix/Cloudified-Source/blob/main/builds.json).
+
+Pending 2.2 source corrections: [P9-R2](docs/P9-R2.md). Published 2.1 remains the device-tested build; provider linking is still blocked in the latest reports.

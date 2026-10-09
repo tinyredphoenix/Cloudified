@@ -27,6 +27,7 @@ extension AppEnvironment {
             text += "\nStage: \(detail.stage.rawValue) · \(detail.status.rawValue)"
             text += "\nOperation: \(detail.correlationID.uuidString)"
             if let method = detail.nativeMethod { text += "\nNative request: \(method.rawValue)" }
+            if let reason = detail.nativeError { text += "\nNative rejection: \(reason.rawValue)" }
             if let state = detail.authState { text += "\nAuthorization: \(state.rawValue)" }
             if let reason = detail.googleError { text += "\nGoogle response classification: \(reason.rawValue)" }
             if let code = detail.httpStatus { text += "\nHTTP status: \(code)" }

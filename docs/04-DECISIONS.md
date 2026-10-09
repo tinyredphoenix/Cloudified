@@ -347,3 +347,12 @@ with User-Agent, space requests and verify exact raw retrieval before returning 
 link. Do not silently switch hosts or automatically resend an uncertain report.
 A non-private service check passed creation and byte equality; actual app delivery
 is still a device check. [Evidence and approval](P9-R1.md).
+
+## D46 — distinguish provider rejection from startup and preserve fresh token
+
+2.1 device traces reach Telegram waitPhoneNumber before native rejection. Preserve
+closed native names and validate international input; do not infer a ban or bad API
+credentials from 400 alone. Google fresh exchange already produces an access token:
+use it for same-token identity and Photos requests instead of discarding it. Keep
+JSON identity headers separate from protobuf RPC headers and distinguish internal
+refresh errors. Immutable identity remains mandatory. See [P9-R2](P9-R2.md).

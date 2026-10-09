@@ -59,9 +59,12 @@ struct GPMCError: LocalizedError, Equatable, Sendable {
     let status: GoogleStatus?
     let retryAfter: Date?
     let transportFailure: SafeFailure?
-    init(kind: Kind = .malformed, message: String, status: GoogleStatus? = nil, retryAfter: Date? = nil, transportFailure: SafeFailure? = nil) {
+    var diagnosticStage: DiagnosticStage? = nil
+    let googleReason: DiagnosticGoogleError?
+    init(kind: Kind = .malformed, message: String, status: GoogleStatus? = nil, retryAfter: Date? = nil, transportFailure: SafeFailure? = nil, googleReason: DiagnosticGoogleError? = nil) {
         self.kind = kind; self.message = message; self.status = status; self.retryAfter = retryAfter
         self.transportFailure = transportFailure
+        self.googleReason = googleReason
     }
     var errorDescription: String? { message }
 
@@ -194,10 +197,16 @@ actor GPMCClient {
     private let userAgent = "com.google.android.apps.photos/49029607 (Linux; U; Android 9; en_US; Pixel XL; Build/PQ2A.190205.001; Cronet/127.0.6510.5) (gzip)"
 
     init(authData: String,
+         freshExchange: GoogleTokenExchange.Result? = nil,
          session: URLSession? = nil,
          networkPolicy: UploadRequestNetworkPolicy = UploadRequestNetworkPolicy(),
          fileUploadTransport: (any FileUploadTransport)? = nil) throws {
         auth = try AuthData(authData)
+        if let freshExchange, freshExchange.authData == authData, !freshExchange.encrypted,
+           !freshExchange.photosAccessToken.isEmpty {
+            token = freshExchange.photosAccessToken
+            expiry = freshExchange.photosTokenExpiry ?? Date().addingTimeInterval(300)
+        }
         self.networkPolicy = networkPolicy
         let configuration = (session?.configuration ?? URLSessionConfiguration.ephemeral).copy() as! URLSessionConfiguration
         configuration.waitsForConnectivity = true
@@ -213,9 +222,11 @@ actor GPMCClient {
 
     private func checked(_ data: Data, _ response: URLResponse, operation: String = "request") throws -> (Data, HTTPURLResponse) {
         guard let http = response as? HTTPURLResponse else { throw GPMCError(message: "Invalid server response.") }
+        let identityReason = operation == "account verification" ? Self.identityError(data) : nil
         if http.statusCode == 401 || http.statusCode == 403 {
             throw GPMCError(kind: .credentialRejected, message: "Google rejected the stored credential. Connect the account again.",
-                transportFailure: SafeFailure(.authentication, domain: .google, code: http.statusCode, cause: .loginRequired))
+                transportFailure: SafeFailure(.authentication, domain: .google, code: http.statusCode, cause: .loginRequired),
+                googleReason: identityReason)
         }
         guard (200..<300).contains(http.statusCode) else {
             let status = GoogleStatus(data)
@@ -242,7 +253,7 @@ actor GPMCClient {
             default:
                 throw GPMCError(kind: .server(http.statusCode),
                                 message: "Google returned HTTP \(http.statusCode) during \(operation)."
-                                    + detail, status: status, retryAfter: retryAfter)
+                                    + detail, status: status, retryAfter: retryAfter, googleReason: identityReason)
             }
         }
         return (data, http)
@@ -281,6 +292,7 @@ actor GPMCClient {
     }
 
     func authenticate() async throws {
+        do {
         var request = URLRequest(url: URL(string: "https://android.googleapis.com/auth")!); request.httpMethod = "POST"
         request.httpBody = auth.body; request.timeoutInterval = 60
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
@@ -297,13 +309,17 @@ actor GPMCClient {
             throw GPMCError(kind: .tokenBound, message: "Google returned an encrypted (bound) token. This build does not implement token binding; import an unbound credential.")
         }
         if let code = fields["Error"], !code.isEmpty {
-            throw GPMCError(kind: .credentialRejected, message: "Google rejected the stored credential (\(code)). Connect the account again.")
+            throw GPMCError(kind: .credentialRejected, message: "Google rejected the stored credential. Connect the account again.", googleReason: DiagnosticGoogleError(rawValue: code) ?? .other)
         }
         _ = try checked(data, response, operation: "authentication")
         guard let value = fields["Auth"], !value.isEmpty else {
             throw GPMCError(kind: .credentialRejected, message: "Google did not issue a token. Connect the account again.")
         }
         token = value; expiry = Date(timeIntervalSince1970: Double(fields["Expiry"] ?? "") ?? Date().addingTimeInterval(300).timeIntervalSince1970)
+        } catch var error as GPMCError {
+            error.diagnosticStage = .googleAuthenticate
+            throw error
+        }
     }
 
     /// Same access token as the Photos RPCs. Email in imported authData is not
@@ -312,9 +328,17 @@ actor GPMCClient {
         let data: Data
         do {
             data = try await request(URL(string: "https://openidconnect.googleapis.com/v1/userinfo")!,
-                                     method: "GET", headers: ["Accept": "application/json"], operation: "account verification").0
-        } catch let error as GPMCError where error.kind == .credentialRejected {
-            throw GPMCError(kind: .identityUnavailable, message: "Immutable Google account verification is unavailable.")
+                                     method: "GET", headers: ["Accept": "application/json"], operation: "account verification",
+                                     photosProtocolHeaders: false).0
+        } catch let error as GPMCError {
+            if error.diagnosticStage == .googleAuthenticate { throw error }
+            if error.kind == .credentialRejected || error.kind == .server(400) {
+                let code: Int? = error.kind == .server(400) ? 400 : error.transportFailure?.code
+                throw GPMCError(kind: .identityUnavailable, message: "Immutable Google account verification is unavailable.",
+                    transportFailure: SafeFailure(.authentication, domain: .google, code: code, cause: .identityUnverified),
+                    googleReason: error.googleReason)
+            }
+            throw error
         }
         guard data.count <= 16_384,
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -332,19 +356,41 @@ actor GPMCClient {
         _ = try await rpc(Self.hashCheckMethod, body: check)
     }
 
-    private func request(_ url: URL, method: String = "POST", body: Data? = nil, headers: [String: String] = [:], operation: String = "request", allowReauth: Bool = true) async throws -> (Data, HTTPURLResponse) {
+    private static func identityError(_ data: Data) -> DiagnosticGoogleError? {
+        guard data.count <= 16_384, let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return .other }
+        if let name = object["error"] as? String { return DiagnosticGoogleError(rawValue: name) ?? .other }
+        if let error = object["error"] as? [String: Any] {
+            // Exact known prose only; arbitrary server text is never retained.
+            switch error["message"] as? String {
+            case "Unsupported token type": return .unsupportedTokenType
+            case "Invalid Credentials": return .invalidToken
+            case "Invalid Value": return .invalidRequest
+            default: break
+            }
+            if let status = error["status"] as? String { return DiagnosticGoogleError(rawValue: status) ?? .other }
+        }
+        return .other
+    }
+
+    private func request(_ url: URL, method: String = "POST", body: Data? = nil, headers: [String: String] = [:], operation: String = "request", allowReauth: Bool = true, photosProtocolHeaders: Bool = true) async throws -> (Data, HTTPURLResponse) {
         if expiry <= Date().addingTimeInterval(30) { try await authenticate() }
         var request = URLRequest(url: url); request.httpMethod = method; request.timeoutInterval = 120
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        request.setValue("en_US", forHTTPHeaderField: "Accept-Language")
-        request.setValue("application/x-protobuf", forHTTPHeaderField: "Content-Type")
+        if photosProtocolHeaders {
+            request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+            request.setValue("en_US", forHTTPHeaderField: "Accept-Language")
+            request.setValue("application/x-protobuf", forHTTPHeaderField: "Content-Type")
+        } else {
+            let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unavailable"
+            request.setValue("Cloudified/\(version)", forHTTPHeaderField: "User-Agent")
+        }
         for (key, value) in headers { request.setValue(value, forHTTPHeaderField: key) }
         request.httpBody = body
         let result = try await send(request)
         if allowReauth, let http = result.1 as? HTTPURLResponse, http.statusCode == 401 || http.statusCode == 403 {
             expiry = .distantPast
-            return try await self.request(url, method: method, body: body, headers: headers, operation: operation, allowReauth: false)
+            return try await self.request(url, method: method, body: body, headers: headers, operation: operation,
+                                          allowReauth: false, photosProtocolHeaders: photosProtocolHeaders)
         }
         return try checked(result.0, result.1, operation: operation)
     }

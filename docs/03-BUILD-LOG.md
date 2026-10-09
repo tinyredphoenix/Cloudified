@@ -1380,3 +1380,14 @@ bytes, checksum and run URL against the exact build manifest. Full evidence in
 DISTRIBUTION.md. Annotated v2.1-build11-untested marks the built source, not device
 acceptance. No real account/iPhone check in this publication turn. Scratch/ untouched;
 ownership releases after documentation commit/push.
+
+## 2026-10-09 — P9-R2 device report corrections (pending 2.2)
+
+Architect claims paths in P9-R2.md. Current 2.1 device reports prove Telegram
+initialization and dpaste delivery work; phone submission fails native 400. Google
+exchange/redemption succeed, subsequent identity work fails HTTP 400. Added safe
+rejection names, phone normalization/default settings, separate JSON identity
+headers, fresh-token reuse and accurate internal authentication failure stage.
+No identity bypass, native DB deletion, credential logging or upload protocol change.
+Source compiler validation is recorded in P9-R2.md; no cloud dispatch/device retry.
+Scratch untouched.

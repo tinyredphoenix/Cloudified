@@ -300,7 +300,8 @@ public actor TDLibSession {
         // The deadline task must not cancel itself before persisting its event.
         if (error as? TDLibError) != .timeout { pending.timeoutTask.cancel() }
         do {
-            try await requestTrace(id: id, pending: pending, status: .failed, failure: TDLibClient.classify(error))
+            try await requestTrace(id: id, pending: pending, status: .failed, failure: TDLibClient.classify(error),
+                                   reason: TDLibClient.nativeReason(error))
             try await emitDiagnostic(.failure, decision: .wait, severity: .error,
                                      failure: error is CancellationError
                                         ? SafeFailure(.transfer, domain: .tdlib, cause: .interrupted)
@@ -313,10 +314,10 @@ public actor TDLibSession {
     }
 
     private func requestTrace(id: String, pending: PendingRequest, status: DiagnosticStatus,
-                              failure: SafeFailure? = nil) async throws {
+                              failure: SafeFailure? = nil, reason: DiagnosticNativeError? = nil) async throws {
         try await diagnosticSink?(.nativeRequest, EventContext(origin: .telegram,
             diagnostic: DiagnosticDetail(stage: .nativeRequest, status: status,
-                correlationID: UUID(uuidString: id) ?? UUID(), nativeMethod: pending.method)),
+                correlationID: UUID(uuidString: id) ?? UUID(), nativeMethod: pending.method, nativeError: reason)),
             failure == nil ? .proceed : .wait, failure == nil ? .info : .error, failure,
             max(0, ProcessInfo.processInfo.systemUptime - pending.started), nil, nil)
     }
