@@ -334,3 +334,16 @@ but use a dispatch acknowledgement and structured request ownership so initializ
 can proceed. Await both outcomes, retain deadlines/cancellation and cached policy
 changes, and recheck actor ownership after suspension. Do not drop the gate or discard
 native data. See [device evidence and source correction](P9-R1.md).
+
+
+## D45 — replace the failing report destination with explicit approval
+
+Paste.rs raw POSTs returned 400 and report-sized web submissions returned 500. A tiny
+web submission succeeding does not establish usable diagnostic report delivery.
+User explicitly approved dpaste.com after the new destination was presented. It
+supports anonymous log submissions, documented 1 MB paste size and configurable
+expiry. Keep the existing 256 KiB app cap, request seven-day expiry, identify the app
+with User-Agent, space requests and verify exact raw retrieval before returning the
+link. Do not silently switch hosts or automatically resend an uncertain report.
+A non-private service check passed creation and byte equality; actual app delivery
+is still a device check. [Evidence and approval](P9-R1.md).

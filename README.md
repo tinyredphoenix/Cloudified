@@ -38,7 +38,8 @@ reports; see [P9 changes and device checks](docs/P9-DIAGNOSTICS.md). The iPhone 
 and both publishers passed; actual account/device behavior remains unverified.
 
 Pending **2.1** source corrects the Telegram initialization ordering identified by
-the 2.0 device log. A replacement diagnostic host is prepared awaiting user approval;
+the 2.0 device log. Diagnostics now uses the approved dpaste.com host; anonymous upload and exact
+read-back passed a non-private service check;
 see [correction and service evidence](docs/P9-R1.md). No 2.1 IPA is published.
 
 ## Stack and build location

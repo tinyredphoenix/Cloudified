@@ -1347,3 +1347,21 @@ compiler evidence is recorded in P9-R1.md when complete. Published source remain
 2.0 (10); no account/iPhone run in this batch. Scratch/ and personal attachments are
 untouched. Shared source is reviewable; do not publish the new diagnostic host until
 user approval, service verification and explicit build/publication authorization.
+
+
+## 2026-10-09 — P9-R1 diagnostic destination approved and verified
+
+User explicitly approved the move to dpaste.com and completion of Telegram fixes.
+Architect claims this log, P9-R1.md, README.md and 04-DECISIONS.md for final evidence.
+Anonymous creation returned HTTP 201; the strict HTTPS item URL's raw .txt retrieval
+matched the inspected six-line compiler report byte-for-byte. Only source counts and
+check results were posted, with one-day verification expiry. Production requests seven
+days, names dpaste.com in the UI and rate-spaces POST/verification reads by 1.1 seconds.
+No secret, user attachment, account credential or personal path was uploaded. The
+prior automatic rejection was resolved by explicit user authorization, not bypassed.
+
+All 66 actual app sources had passed Catalyst typecheck and optimized IR after the
+Telegram startup sequencing, actor ownership and diagnostic replacement changes;
+no source changed during this final service verification. Version 2.1 remains ready
+for manual build/publication; public SideStore remains 2.0 (10). No iPhone/account run,
+maximum-size dpaste test or cloud dispatch. Ownership releases after evidence commit.
