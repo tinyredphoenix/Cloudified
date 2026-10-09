@@ -5,7 +5,7 @@ import CloudifiedCore
 extension AppEnvironment {
     /// Local permission/metadata setup is independent of credentials and network policy.
     public func requestPhotoLibraryAccess() {
-        guard isForeground, bootstrapComplete, !shuttingDown, commandProvider == nil,
+        guard isForeground, bootstrapComplete, !shuttingDown, backgroundExpirationTask == nil, commandProvider == nil,
               !controlTransition, backupExecutionTask == nil, libraryAccessTask == nil else { return }
         controlTransition = true; isScanning = true; systemError = nil
         dashboardState.isReadingLibrary = true
@@ -36,13 +36,13 @@ extension AppEnvironment {
         }
     }
     public func requestBackup() {
-        guard !shuttingDown, commandProvider == nil, !controlTransition, backupExecutionTask == nil else { return }
+        guard !shuttingDown, backgroundExpirationTask == nil, commandProvider == nil, !controlTransition, backupExecutionTask == nil else { return }
         controlTransition = true; systemError = nil
         backupRequested = true; needsFreshScan = true; pausedByUser = false; resumeAfterExpiration = false
         UserDefaults.standard.set(false, forKey: "CloudifiedUserPaused")
         if isForeground {
             do { try continuation.request() } catch {
-                fallback.record(SafeFailure(.connectivity, domain: .core, cause: .backgroundRestricted))
+                fallback.record(ProviderSupport.safe(error, domain: .core))
             }
         }
         Task { [weak self] in
@@ -127,7 +127,7 @@ extension AppEnvironment {
         }
     }
     public func requestPause() {
-        guard !shuttingDown, !controlTransition else { return }
+        guard !shuttingDown, backgroundExpirationTask == nil, !controlTransition else { return }
         controlTransition = true
         backupRequested = false; needsWake = false; pausedByUser = true
         UserDefaults.standard.set(true, forKey: "CloudifiedUserPaused")
@@ -144,11 +144,11 @@ extension AppEnvironment {
         }
     }
     public func requestResume() {
-        guard !shuttingDown, commandProvider == nil, !controlTransition else { return }
+        guard !shuttingDown, backgroundExpirationTask == nil, commandProvider == nil, !controlTransition else { return }
         controlTransition = true
         systemError = nil; pausedByUser = false; backupRequested = true; resumeAfterExpiration = false
         UserDefaults.standard.set(false, forKey: "CloudifiedUserPaused")
-        if isForeground { do { try continuation.request() } catch { fallback.record(SafeFailure(.connectivity, domain: .core, cause: .backgroundRestricted)) } }
+        if isForeground { do { try continuation.request() } catch { fallback.record(ProviderSupport.safe(error, domain: .core)) } }
         Task { [weak self] in
             do { try await self?.backupEngine?.resume() } catch { await self?.report(error, provider: nil) }
             self?.controlTransition = false
@@ -173,7 +173,7 @@ extension AppEnvironment {
     /// Freeze/join the sole planner BEFORE any identity/coverage mutation.
     /// The healthy lane finishes its current ready work without cancellation.
     func beginProviderChange(_ provider: Provider, token: UUID, requiresReleasedInputs: Bool = true) async throws -> Bool {
-        guard commandProvider == nil, !controlTransition, bootstrapComplete, !settingsState.isConnectingTelegram, !settingsState.isConnectingGoogle, recoveryTasks[provider] == nil else { throw CoreError.invalidTransition }
+        guard backgroundExpirationTask == nil, commandProvider == nil, !controlTransition, bootstrapComplete, !settingsState.isConnectingTelegram, !settingsState.isConnectingGoogle, recoveryTasks[provider] == nil else { throw CoreError.invalidTransition }
         commandProvider = provider; commandID = token; planningEpoch += 1
         if provider == .google { settingsState.isSettlingGoogle = true }
         else { settingsState.isSettlingTelegram = true }

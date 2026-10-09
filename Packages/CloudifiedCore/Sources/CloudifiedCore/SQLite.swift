@@ -94,8 +94,8 @@ extension Date { var sql: SQLValue { .real(timeIntervalSince1970) } }
 enum Schema {
     static func install(_ db: SQLite) throws {
         let version = try db.rows("PRAGMA user_version").first?.int("user_version") ?? 0
-        guard version <= 3 else { throw CoreError.invalidContract }
-        guard version < 3 else { return }
+        guard version <= 4 else { throw CoreError.invalidContract }
+        guard version < 4 else { return }
         try db.transaction {
             if version == 0 {
                 for statement in statements { try db.execute(statement) }
@@ -113,7 +113,10 @@ enum Schema {
                 try db.execute(contentIndex)
             }
             for statement in providerStatements { try db.execute(statement) }
-            try db.execute("PRAGMA user_version=3")
+            // v4 counts all diagnostic events; receipts/attempts/failure state live
+            // in separate durable tables and are never rotated by this budget.
+            try db.execute("UPDATE log_budget SET byte_used=(SELECT COALESCE(SUM(size),0) FROM events) WHERE id=1")
+            try db.execute("PRAGMA user_version=4")
         }
     }
     static let providerStatements = [

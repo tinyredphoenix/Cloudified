@@ -80,3 +80,8 @@ evidence during triage.
 No fixes are applied by this document. The independent report's claim of complete
 coverage is the auditor's statement; this triage cross-checks its named findings
 and does not substitute for runtime leak instrumentation or a new exhaustive audit.
+
+Subsequent user-authorized source corrections are recorded in [P9-R3](P9-R3.md).
+The triage above reflects the pre-fix baseline; current pending 2.2 includes the
+accepted fixes and an official-source same-token Google identity fallback. Device
+acceptance remains pending; rejected audit recommendations remain rejected.

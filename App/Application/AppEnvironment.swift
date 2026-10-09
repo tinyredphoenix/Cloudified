@@ -40,6 +40,7 @@ public final class AppEnvironment: ObservableObject {
     var backupExecutionTask: Task<Void, Never>?
     var libraryAccessTask: Task<Void, Never>?
     var refreshTask: Task<Void, Never>?
+    var backgroundExpirationTask: Task<Void, Never>?
     var policyTask: Task<Void, Never>?
     var retryTask: Task<Void, Never>?
     var cleanupTask: Task<Void, Never>?
@@ -149,6 +150,7 @@ public final class AppEnvironment: ObservableObject {
     deinit {
         for task in observers + telegramObservers { task.cancel() }
         bootstrapTask?.cancel(); backupExecutionTask?.cancel(); libraryAccessTask?.cancel(); refreshTask?.cancel()
+        backgroundExpirationTask?.cancel()
         policyTask?.cancel(); retryTask?.cancel(); cleanupTask?.cancel(); sourceStatusTask?.cancel()
         for task in recoveryTasks.values { task.cancel() }
         failurePageTask?.cancel(); logPageTask?.cancel(); runPageTask?.cancel()

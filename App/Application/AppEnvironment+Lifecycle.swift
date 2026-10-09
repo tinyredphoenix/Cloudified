@@ -70,11 +70,13 @@ extension AppEnvironment {
         scheduleThrottledRefresh()
     }
     func backgroundExpired() {
+        guard backgroundExpirationTask == nil else { return }
         backupRequested = false; needsWake = false
         resumeAfterExpiration = true
         retryTask?.cancel(); retryTask = nil
-        Task { [weak self] in
+        backgroundExpirationTask = Task { [weak self] in
             guard let self else { return }
+            defer { self.backgroundExpirationTask = nil; self.scheduleThrottledRefresh() }
             do { try await self.backupEngine?.setSystemGate(.backgroundExpired) } catch { await self.report(error, provider: nil) }
             if let source = self.sourceProducer { _ = await source.stop() }
             let run = self.backupExecutionTask; run?.cancel(); await run?.value
@@ -129,6 +131,7 @@ extension AppEnvironment {
         do { try await backupEngine?.pause() } catch { fallback.record(ProviderSupport.safe(error, domain: .core)) }
         if let sourceProducer { _ = await sourceProducer.stop() }
         backupExecutionTask?.cancel(); await backupExecutionTask?.value
+        await backgroundExpirationTask?.value
         await bootstrapTask?.value; await policyTask?.value; await libraryAccessTask?.value
         for task in recoveryTasks.values { await task.value }
         do { try await telegramAdapter?.close() } catch {

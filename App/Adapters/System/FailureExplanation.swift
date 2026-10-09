@@ -15,7 +15,7 @@ enum FailureExplanation {
             }
         }
         switch failure.cause {
-        case .identityUnverified: return "Google could not verify this account's identity. Reconnect with a supported PhotosBackup login token."
+        case .identityUnverified: return "Google could not verify this signed-in account\(failure.code.map { " (HTTP \($0))" } ?? ""). Open Logs for the identity or token-verification result."
         case .pairingUnverified: return "Google Live Photo pairing could not be verified. Choose an explicit Google Live Photo option in Settings."
         case .pendingSendUnmatched: return "Telegram has an unresolved send. Its input is protected; recover the same account and channel before sending again."
         case .privateChannelRequired: return "Telegram requires a channel you own, with no public username and auto-delete turned off."

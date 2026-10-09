@@ -114,7 +114,13 @@ actor GooglePhotosClientSession {
         try await traced(.googleAuthenticate) { try await self.requireClient().authenticate() }
     }
     func verifiedSubject() async throws -> String {
-        try await traced(.googleIdentity) { try await self.requireClient().verifiedSubject() }
+        let sink = diagnosticSink
+        return try await traced(.googleIdentity) {
+            try await self.requireClient().verifiedSubject(onDiagnostic: { detail, failure, duration in
+                try? await sink?(.setupTrace, EventContext(origin: .google, diagnostic: detail),
+                    failure == nil ? .proceed : .wait, failure == nil ? .info : .error, failure, duration, nil, nil)
+            })
+        }
     }
     var usesBackgroundTransfers: Bool {
         get async { guard let client else { return false }; return await client.usesBackgroundFileTransfers }
@@ -267,6 +273,9 @@ actor GooglePhotosClientSession {
             }
             if code == 408 {
                 return SafeFailure(.timeout, domain: .google, code: code, cause: .deadlineExceeded)
+            }
+            if error.diagnosticStage == .googleIdentity || error.diagnosticStage == .googleTokenInfo {
+                return SafeFailure(.authentication, domain: .google, code: code, cause: .identityUnverified)
             }
             return SafeFailure(.transfer, domain: .google, code: code, cause: .providerRejected)
         case .malformed:

@@ -102,7 +102,12 @@ extension AppEnvironment {
                 let page = try await ledger.destinationInventoryPage(afterID: cursor)
                 if page.isEmpty { break }
                 for row in page where row.retainedTransferCount > 0 {
-                    guard row.destination.provider == .telegram else { return }
+                    if row.destination.provider == .google {
+                        guard let googleAdapter, let engine = backupEngine,
+                              try await engine.snapshot().active[.google] == nil else { return }
+                        try await googleAdapter.inventoryForegroundInputs(row.destination)
+                        continue
+                    }
                     var transferCursor: UUID?
                     while true {
                         let transfers = try await ledger.retainedTransfers(destinationID: row.destination.id, afterID: transferCursor)

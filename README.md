@@ -115,3 +115,9 @@ signs the selected IPA with your certificate. Build failures appear in the
 [source build history](https://github.com/tinyredphoenix/Cloudified-Source/blob/main/builds.json).
 
 Pending 2.2 source corrections: [P9-R2](docs/P9-R2.md). Published 2.1 remains the device-tested build; provider linking is still blocked in the latest reports.
+
+Pending 2.2 also includes [researched linking and reliability corrections](docs/P9-R3.md):
+same-token Google identity fallback/cache, accurate Telegram auth failures, local
+crash cleanup, bounded diagnostic history and measured background progress.
+Source compiler checks pass; iPhone build/linking/background acceptance remains
+pending. No cloud build or publication was dispatched for this correction batch.

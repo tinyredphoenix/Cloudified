@@ -356,3 +356,31 @@ credentials from 400 alone. Google fresh exchange already produces an access tok
 use it for same-token identity and Photos requests instead of discarding it. Keep
 JSON identity headers separate from protobuf RPC headers and distinguish internal
 refresh errors. Immutable identity remains mandatory. See [P9-R2](P9-R2.md).
+
+## D47 — same-credential Google identity fallback and cached proof
+
+PhotosBackup uses the browser/master/Photos exchange without our immutable account
+check. Keep that exchange and require a Google-issued stable subject for the exact
+Photos token. Google's auth library implements tokeninfo POST with Bearer in the
+header, so use it once after an identity endpoint rejects this token. Never put it
+in a query URL or substitute email/separate credentials. Cache only within token
+expiry and reverify renewal before sending RPC/files; mismatch blocks the lane.
+Closed endpoint traces distinguish identity from refresh. [Research/evidence](P9-R3.md).
+
+## D48 — bounded diagnostics separate from durable recovery state
+
+Supersede the old exclusion of critical event copies from diagnostic rotation.
+Those copies are history, while receipts/attempts/current failures/checkpoints are
+separate durable state. Schema v4 counts and rotates all diagnostic event payloads
+at 10 MiB/seven days with bounded pages, preserving pruning indicators and atomic
+writes. No receipt deletion or SQLite reset. Old oversized history drains gradually.
+[Implementation/limits](P9-R3.md).
+
+## D49 — real background progress and joined expiration ownership
+
+Use narrow permitted wildcard prefixes with signed-bundle preference and the pinned
+PhotosBackup fallback, preserving system denial codes. Feed actual component/part
+bytes into continued-processing progress, keeping confirmed counts ledger-backed;
+never add elapsed-time heartbeat units. An owned expiration task fences Resume and
+account changes until old workers stop. No assertion of indefinite background runtime.
+[Implementation and device gates](P9-R3.md).

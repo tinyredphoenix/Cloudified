@@ -30,7 +30,10 @@ extension Ledger {
                                     duration: duration, bytes: bytes, expectedBytes: expectedBytes)
         let data = try JSONEncoder().encode(event)
         try db.execute("UPDATE events SET body=?,size=? WHERE seq=?", [.blob(data), .integer(Int64(data.count)), .integer(sequence)])
-        if !critical { try db.execute("UPDATE log_budget SET byte_used=byte_used+? WHERE id=1", [.integer(Int64(data.count))]) }
+        try db.execute("UPDATE log_budget SET byte_used=byte_used+? WHERE id=1", [.integer(Int64(data.count))])
+        // Enforce a bounded page inside the same transaction even for callers
+        // that only emit critical events; no observer recursion or nested BEGIN.
+        _ = try pruneEventPage(now: date, byteBudget: 10 * 1024 * 1024, age: 7 * 86_400)
     }
     public func appendEvent(_ operation: EventOperation, context: EventContext, decision: EventDecision,
                             severity: EventSeverity = .info, failure: SafeFailure? = nil,
@@ -42,9 +45,6 @@ extension Ledger {
                        critical: failure != nil || severity == .error ||
                         ![.progress, .scanPage, .setupTrace, .nativeRequest].contains(operation))
         }
-        // Bounded rotation is active in production, not only an unused API. The
-        // persisted byte counter avoids scanning the entire events table per tick.
-        if [.progress, .appStart, .setupTrace, .nativeRequest].contains(operation) { _ = try pruneDiagnostics() }
     }
     public func beginRun() throws -> UUID {
         let id = UUID()
@@ -80,26 +80,26 @@ extension Ledger {
         let budget = try db.rows("SELECT * FROM log_budget WHERE id=1").first!
         return LogPage(events: events, nextBeforeSequence: events.last?.sequence, prunedEventCount: budget.int("pruned"), firstPrunedAt: budget.double("first_pruned").map(Date.init(timeIntervalSince1970:)))
     }
-    /// Budget is diagnostic payload, not total SQLite/WAL size. Durable receipts,
-    /// failures, attempts and critical events are deliberately outside rotation.
-    /// Process bounded pages so a large backlog never becomes one in-memory array.
+    /// Diagnostic history only. Durable receipts, attempt counts, current failures
+    /// and uncertain checkpoints remain in their separate tables.
     @discardableResult public func pruneDiagnostics(now: Date = Date(), byteBudget: Int64 = 10 * 1024 * 1024,
                                                     age: TimeInterval = 7 * 86_400) throws -> Int {
         guard byteBudget > 0, age > 0 else { throw CoreError.invalidContract }
-        return try transaction {
-            var size = try db.rows("SELECT byte_used AS n FROM log_budget WHERE id=1").first!.int("n")
-            let rows = try db.rows("SELECT seq,size,occurred FROM events WHERE critical=0 ORDER BY seq LIMIT 200")
-            var deleted = 0
-            for row in rows {
-                if size <= byteBudget, (row.double("occurred") ?? 0) >= now.timeIntervalSince1970 - age { break }
-                try db.execute("DELETE FROM events WHERE seq=? AND critical=0", [.integer(row.int("seq"))])
-                size -= row.int("size"); deleted += 1
-            }
-            if deleted > 0 {
-                try db.execute("UPDATE log_budget SET byte_used=?,pruned=pruned+?,first_pruned=COALESCE(first_pruned,?) WHERE id=1", [.integer(size), .integer(Int64(deleted)), now.sql])
-            }
-            return deleted
+        return try transaction { try pruneEventPage(now: now, byteBudget: byteBudget, age: age) }
+    }
+    private func pruneEventPage(now: Date, byteBudget: Int64, age: TimeInterval) throws -> Int {
+        var size = try db.rows("SELECT byte_used AS n FROM log_budget WHERE id=1").first!.int("n")
+        let rows = try db.rows("SELECT seq,size,occurred FROM events ORDER BY seq LIMIT 200")
+        var deleted = 0
+        for row in rows {
+            if size <= byteBudget, (row.double("occurred") ?? 0) >= now.timeIntervalSince1970 - age { break }
+            try db.execute("DELETE FROM events WHERE seq=?", [.integer(row.int("seq"))])
+            size -= row.int("size"); deleted += 1
         }
+        if deleted > 0 {
+            try db.execute("UPDATE log_budget SET byte_used=?,pruned=pruned+?,first_pruned=COALESCE(first_pruned,?) WHERE id=1", [.integer(max(0, size)), .integer(Int64(deleted)), now.sql])
+        }
+        return deleted
     }
     public func runPage(before: Date? = nil, limit: Int = 100) throws -> [RunSummary] {
         guard (1...200).contains(limit) else { throw CoreError.invalidContract }

@@ -168,8 +168,10 @@ public struct TelegramAuthSheet: View {
             Button {
                 let code = verificationCode.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !code.isEmpty else { return }
-                verificationCode = ""
-                perform { try await environment.submitTelegramCode(code) }
+                perform {
+                    try await environment.submitTelegramCode(code)
+                    verificationCode = ""
+                }
             } label: {
                 if environment.settingsState.isConnectingTelegram {
                     ProgressView()
@@ -214,8 +216,10 @@ public struct TelegramAuthSheet: View {
             Button("Submit Email") {
                 let em = email.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !em.isEmpty else { return }
-                email = ""
-                perform { try await environment.submitTelegramEmail(em) }
+                perform {
+                    try await environment.submitTelegramEmail(em)
+                    email = ""
+                }
             }
             .disabled(!controlsAvailable)
         }
@@ -229,8 +233,10 @@ public struct TelegramAuthSheet: View {
             Button("Submit Email Code") {
                 let code = emailCode.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !code.isEmpty else { return }
-                emailCode = ""
-                perform { try await environment.submitTelegramEmailCode(code) }
+                perform {
+                    try await environment.submitTelegramEmailCode(code)
+                    emailCode = ""
+                }
             }
             .disabled(!controlsAvailable)
         }

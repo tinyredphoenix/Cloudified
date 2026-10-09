@@ -300,12 +300,8 @@ public actor TDLibSession {
         // The deadline task must not cancel itself before persisting its event.
         if (error as? TDLibError) != .timeout { pending.timeoutTask.cancel() }
         do {
-            try await requestTrace(id: id, pending: pending, status: .failed, failure: TDLibClient.classify(error),
+            try await requestTrace(id: id, pending: pending, status: .failed, failure: TDLibClient.classify(error, method: pending.method),
                                    reason: TDLibClient.nativeReason(error))
-            try await emitDiagnostic(.failure, decision: .wait, severity: .error,
-                                     failure: error is CancellationError
-                                        ? SafeFailure(.transfer, domain: .tdlib, cause: .interrupted)
-                                        : TDLibClient.classify(error))
             pending.continuation.resume(throwing: error)
         } catch {
             pending.continuation.resume(throwing: error)

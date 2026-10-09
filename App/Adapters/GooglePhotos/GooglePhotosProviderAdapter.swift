@@ -49,6 +49,20 @@ actor GooglePhotosProviderAdapter: ProviderAdapter {
     func recover(_ requested: Destination) async throws {
         guard !busy else { throw CoreError.invalidTransition }; busy = true; defer { busy = false }
         try await verify(requested)
+        try await settleForegroundInputs(requested)
+        try await session.validateReadAccess()
+        try await ledger.completeDestinationRecovery(requested.id)
+    }
+    /// Local crash inventory only: foreground readers are gone without needing
+    /// a remote login. Unknown commits remain uncertain and account recovery stays
+    /// incomplete until the real credential/remote checks succeed.
+    func inventoryForegroundInputs(_ requested: Destination) async throws {
+        guard !busy, requested.provider == .google,
+              !(await session.usesBackgroundTransfers) else { throw CoreError.recoveryRequired }
+        busy = true; defer { busy = false }
+        try await settleForegroundInputs(requested)
+    }
+    private func settleForegroundInputs(_ requested: Destination) async throws {
         var cursor: UUID?
         while true {
             let page = try await ledger.retainedTransfers(destinationID: requested.id, afterID: cursor)
@@ -68,8 +82,6 @@ actor GooglePhotosProviderAdapter: ProviderAdapter {
                 cursor = transfer.id
             }
         }
-        try await session.validateReadAccess()
-        try await ledger.completeDestinationRecovery(requested.id)
     }
     func inspect(destination requested: Destination, resource: ResourceRequirement) async -> RemotePresence {
         guard !busy else { return .unknown(SafeFailure(.reconciliation, domain: .google, cause: .outcomeUnknown)) }

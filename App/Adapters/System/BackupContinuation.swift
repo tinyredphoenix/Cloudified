@@ -1,73 +1,128 @@
 import Foundation
+import CloudifiedCore
 #if os(iOS) && !targetEnvironment(macCatalyst)
 import BackgroundTasks
 #endif
 
-/// One registered workload and at most one continued task. No scheduled backups,
-/// GPU entitlement, fake keepalive or assumption that submit implies a launch.
+/// User-started work only. System progress reflects measured work, never elapsed
+/// time or a fabricated heartbeat; confirmed upload counters stay ledger-backed.
 @MainActor
 final class BackupContinuation {
     enum State: Equatable { case unavailable, idle, requested, running, expired }
     private(set) var state: State = .unavailable
     var onChange: (@MainActor () -> Void)?
     var onExpiration: (@MainActor () -> Void)?
+    private(set) var submissionErrorCode: Int?
     #if os(iOS) && !targetEnvironment(macCatalyst)
-    private let identifier = "com.tinyredphoenix.Cloudified.backup"
+    private var identifier: String?
+    private var registeredIdentifiers: [String: String] = [:]
     private var task: BGContinuedProcessingTask?
+    private let prefixes: [String]
     #endif
+
+    /// Prefer the signed bundle when permitted; retain the narrow built-plist
+    /// fallback used by pinned PhotosBackup for SideStore's bundle renaming.
+    static func identifierPrefixes(bundleID: String?, permitted: [String]) -> [String] {
+        let entries = Array(permitted.prefix(32)).filter { $0.hasSuffix(".backup.*") }
+        var result: [String] = []
+        if let bundleID, !bundleID.isEmpty {
+            let own = bundleID + ".backup."
+            if entries.contains(where: { own.hasPrefix(String($0.dropLast())) }) { result.append(own) }
+        }
+        for entry in entries {
+            let prefix = String(entry.dropLast())
+            if !result.contains(prefix) { result.append(prefix) }
+        }
+        return Array(result.prefix(4))
+    }
     init() {
         #if os(iOS) && !targetEnvironment(macCatalyst)
-        let registered = BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: .main) { [weak self] task in
-            MainActor.assumeIsolated {
-                guard let self, let continued = task as? BGContinuedProcessingTask,
-                      self.state == .requested else { task.setTaskCompleted(success: false); return }
-                self.task = continued; self.state = .running
-                continued.expirationHandler = { [weak self] in
-                    Task { @MainActor in
-                        guard let self else { return }
-                        self.state = .expired; self.onChange?(); self.onExpiration?()
-                    }
-                }
-                self.onChange?()
-            }
-        }
-        state = registered ? .idle : .unavailable
+        prefixes = Self.identifierPrefixes(bundleID: Bundle.main.bundleIdentifier,
+            permitted: Bundle.main.object(forInfoDictionaryKey: "BGTaskSchedulerPermittedIdentifiers") as? [String] ?? [])
+        state = prefixes.isEmpty ? .unavailable : .idle
         #endif
     }
-    /// Called only from explicit Back Up/Resume while foregrounded.
+    /// Only explicit Back Up/Resume while foregrounded. Register each concrete
+    /// identifier once per process; reuse its handler for subsequent backup runs.
     func request() throws {
         #if os(iOS) && !targetEnvironment(macCatalyst)
-        guard state == .idle || state == .expired else { return }
-        state = .requested
-        let request = BGContinuedProcessingTaskRequest(identifier: identifier, title: "Cloudified backup", subtitle: "Checking originals")
-        request.strategy = .fail // No surprise queued launch after user leaves.
-        do { try BGTaskScheduler.shared.submit(request) }
-        catch { state = .idle; onChange?(); throw error }
-        onChange?()
+        guard task == nil, state == .idle || state == .expired || (state == .unavailable && !prefixes.isEmpty) else { return }
+        submissionErrorCode = nil
+        for prefix in prefixes {
+            let id: String
+            if let registered = registeredIdentifiers[prefix] { id = registered }
+            else {
+                id = prefix + UUID().uuidString
+                let registered = BGTaskScheduler.shared.register(forTaskWithIdentifier: id, using: .main) { [weak self] task in
+                    MainActor.assumeIsolated {
+                        guard let self, self.identifier == id, self.state == .requested,
+                              let continued = task as? BGContinuedProcessingTask else {
+                            task.setTaskCompleted(success: false); return
+                        }
+                        self.task = continued; self.state = .running
+                        continued.expirationHandler = { [weak self] in
+                            Task { @MainActor in
+                                guard let self, self.identifier == id else { return }
+                                self.state = .expired; self.onChange?(); self.onExpiration?()
+                            }
+                        }
+                        self.onChange?()
+                    }
+                }
+                guard registered else { submissionErrorCode = BGTaskScheduler.Error.Code.notPermitted.rawValue; continue }
+                registeredIdentifiers[prefix] = id
+            }
+            identifier = id; state = .requested
+            let request = BGContinuedProcessingTaskRequest(identifier: id, title: "Cloudified backup", subtitle: "Checking originals")
+            request.strategy = .fail
+            do { try BGTaskScheduler.shared.submit(request); onChange?(); return }
+            catch {
+                identifier = nil; state = .idle
+                let code = (error as NSError).code; submissionErrorCode = code
+                if code != BGTaskScheduler.Error.Code.notPermitted.rawValue {
+                    onChange?()
+                    throw SafeFailure(.connectivity, domain: .core, code: code, cause: .backgroundRestricted)
+                }
+            }
+        }
+        state = .unavailable; onChange?()
+        throw SafeFailure(.connectivity, domain: .core, code: submissionErrorCode, cause: .backgroundRestricted)
         #endif
     }
-    func update(confirmed: Int, total: Int?, subtitle: String) {
+    /// Fractions include confirmed component receipts and real bytes within each
+    /// active asset. A retry may reduce its fraction; it never becomes Saved here.
+    func update(confirmed: Int, total: Int?, activeFractions: [Double], subtitle: String) {
         #if os(iOS) && !targetEnvironment(macCatalyst)
         guard let task, state == .running else { return }
-        if let total {
-            task.progress.totalUnitCount = Int64(max(1, total))
-            task.progress.completedUnitCount = Int64(min(max(0, confirmed), total))
+        let units: Int64 = 1_000_000
+        if let total, total >= 0, total <= Int(Int64.max / units) {
+            let goal = max(1, Int64(total) * units)
+            var done = total == 0 ? goal : Int64(max(0, min(confirmed, total))) * units
+            for fraction in activeFractions.prefix(64) where fraction.isFinite && fraction > 0 {
+                let partial = Int64(min(0.999999, fraction) * Double(units))
+                let sum = done.addingReportingOverflow(partial)
+                done = sum.overflow ? goal : min(goal, sum.partialValue)
+            }
+            if confirmed < total { done = min(done, goal - 1) }
+            task.progress.totalUnitCount = goal; task.progress.completedUnitCount = done
         } else { task.progress.totalUnitCount = -1 }
         task.updateTitle("Cloudified backup", subtitle: subtitle)
         #endif
     }
-    /// Owner joins actual workers first; retained receipts/inputs are never erased.
+    /// Join actual workers first. Recovery records and owned inputs stay durable.
     func finish(success: Bool) {
         #if os(iOS) && !targetEnvironment(macCatalyst)
         guard state != .idle && state != .unavailable else { return }
         if let task { task.expirationHandler = nil; task.setTaskCompleted(success: success); self.task = nil }
-        else if state == .requested { BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: identifier) }
-        if state != .unavailable { state = .idle }
-        onChange?()
+        else if state == .requested, let identifier { BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: identifier) }
+        identifier = nil; state = .idle; onChange?()
         #endif
     }
     var allowsBackgroundExecution: Bool { state == .running }
     var summary: String {
+        if let submissionErrorCode, state == .unavailable || state == .idle {
+            return "Keep Cloudified open; system background request failed (code \(submissionErrorCode))"
+        }
         switch state {
         case .unavailable: return "Keep Cloudified open; background continuation unavailable"
         case .idle: return "Background continuation requested when you start a backup"

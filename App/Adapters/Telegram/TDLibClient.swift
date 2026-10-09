@@ -233,8 +233,7 @@ public actor TDLibClient {
             _ = try await session.sendRequest(req)
         } catch {
             if error is CoreError || error is CredentialError || error is CancellationError { throw error }
-            let classified = Self.classify(error)
-            try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
+            let classified = Self.classify(error, method: .setAuthenticationPhoneNumber)
             throw classified
         }
     }
@@ -249,8 +248,7 @@ public actor TDLibClient {
             _ = try await session.sendRequest(req)
         } catch {
             if error is CoreError || error is CredentialError || error is CancellationError { throw error }
-            let classified = Self.classify(error)
-            try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
+            let classified = Self.classify(error, method: .checkAuthenticationCode)
             throw classified
         }
     }
@@ -265,8 +263,7 @@ public actor TDLibClient {
             _ = try await session.sendRequest(req)
         } catch {
             if error is CoreError || error is CredentialError || error is CancellationError { throw error }
-            let classified = Self.classify(error)
-            try await emitDiagnostic(.failure, decision: .wait, severity: .error, failure: classified)
+            let classified = Self.classify(error, method: .checkAuthenticationPassword)
             throw classified
         }
     }
@@ -274,9 +271,10 @@ public actor TDLibClient {
     /// Internal production protocol surface. Ownership transfers to the session;
     /// arbitrary native/server prose is never exposed through diagnostics.
     func request(_ request: sending [String: Any], timeout: TimeInterval = 60) async throws -> TDLibResponse {
+        let method = DiagnosticNativeMethod(rawValue: request["@type"] as? String ?? "") ?? .other
         do { return try await session.sendRequest(request, timeout: timeout) }
         catch {
-            if case TDLibError.tdlibError = error { throw TDLibRequestRejection(failure: Self.classify(error)) }
+            if case TDLibError.tdlibError = error { throw TDLibRequestRejection(failure: Self.classify(error, method: method)) }
             if error is CoreError || error is CancellationError { throw error }
             throw Self.classify(error)
         }
@@ -373,7 +371,7 @@ public actor TDLibClient {
 
     /// Maps TDLib error codes and bridge errors to Core SafeFailure.
     /// Never exposes raw secrets, tokens, or private paths.
-    public static func classify(_ error: any Error) -> SafeFailure {
+    public static func classify(_ error: any Error, method: DiagnosticNativeMethod? = nil) -> SafeFailure {
         if let safeFailure = error as? SafeFailure {
             return safeFailure
         }
@@ -410,6 +408,9 @@ public actor TDLibClient {
                 }
                 if code == 429 {
                     return SafeFailure(.rateLimit, domain: .tdlib, code: Int(code), cause: .serverRateLimit)
+                }
+                if code == 400, let method, [.setAuthenticationPhoneNumber, .checkAuthenticationCode, .checkAuthenticationPassword, .setAuthenticationEmailAddress, .checkAuthenticationEmailCode, .setTdlibParameters].contains(method) {
+                    return SafeFailure(.authentication, domain: .tdlib, code: Int(code), cause: .authenticationRejected)
                 }
                 if code == 400 {
                     return SafeFailure(.transfer, domain: .tdlib, code: Int(code), cause: .formatRejected)

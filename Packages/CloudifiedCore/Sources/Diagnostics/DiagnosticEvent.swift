@@ -30,7 +30,7 @@ public enum KnownCause: String, Codable, Sendable {
 
 public enum DiagnosticStage: String, Codable, Sendable {
     case startup, providerChange, googleConnect, googleMasterToken, googlePhotosToken
-    case googleAuthenticate, googleIdentity, googleReadAccess, googleMapping, googleRecovery
+    case googleAuthenticate, googleIdentity, googleTokenInfo, googleReadAccess, googleMapping, googleRecovery
     case telegramStart, telegramStorage, telegramNativeCreate, telegramAuthorization
     case telegramNetwork, telegramParameters, telegramAuthState, nativeRequest, networkPolicy
     case diagnosticExport, diagnosticUpload

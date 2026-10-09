@@ -18,6 +18,23 @@ extension AppEnvironment {
         guard let data = try await ledger?.sourceRecipe(assetID: asset.id) else { return nil }
         return try SourceRecipe.decode(from: data)
     }
+    /// Weight actual bytes across all components/parts, not one fraction for each
+    /// part. Receipts and an active reader may overlap during finalization; count
+    /// that resource once. No progress from elapsed time, estimates or thumbnail I/O.
+    private func continuedWorkFraction(job: JobRecord, resource: ResourceRequirement?, bytes: Int64?, expected: Int64?) async throws -> Double {
+        guard let ledger, job.state != .confirmed else { return 0 }
+        let confirmed = Set(try await ledger.receipts(for: job.id).map(\.tag))
+        func weight(_ value: ResourceRequirement) -> Double {
+            value.originals.reduce(0) { $0 + Double(max(0, $1.byteCount)) }
+        }
+        let total = job.plan.resources.reduce(0) { $0 + weight($1) }
+        guard total.isFinite, total > 0 else { return 0 }
+        var done = job.plan.resources.filter { confirmed.contains($0.tag) }.reduce(0) { $0 + weight($1) }
+        if let resource, !confirmed.contains(resource.tag), let bytes, let expected, expected > 0 {
+            done += weight(resource) * min(1, Double(max(0, bytes)) / Double(expected))
+        }
+        return min(0.999999, max(0, done / total))
+    }
     func performUIRefresh() async {
         refreshPhotosAccess()
         logsState.fallbackEntries = fallback.snapshot().reversed().map {
@@ -34,10 +51,12 @@ extension AppEnvironment {
                 settingsState.isTelegramEnabled = t.enabled; settingsState.isTelegramConnected = t.destinationID != nil
             }
             var transfers: [CurrentTransferState] = []
+            var continuedFractions: [Double] = []
             for provider in Provider.allCases {
                 guard let activity = snapshot.active[provider] else { continue }
                 let job = try await ledger.job(activity.jobID), source = try await recipe(job.asset)
                 let resource = job.plan.resources.first { $0.id == activity.resourceID }
+                continuedFractions.append(try await continuedWorkFraction(job: job, resource: resource, bytes: activity.bytes, expected: activity.expectedBytes))
                 transfers.append(CurrentTransferState(id: job.id.uuidString, activity: activity.phase.rawValue.capitalized,
                     filename: resource.flatMap { r in source?.resources.first(where: { $0.sha256 == r.originals.first?.sha256 })?.originalFilename } ?? source?.resources.first?.originalFilename ?? "Media \(job.asset.id.uuidString.prefix(8)) (name unavailable)",
                     mediaType: job.asset.kind == .photo ? "Photo" : "Video", provider: provider.displayName,
@@ -51,6 +70,7 @@ extension AppEnvironment {
                 guard !transfers.contains(where: { $0.id == native.jobID.uuidString }) else { continue }
                 let job = try await ledger.job(native.jobID), source = try await recipe(job.asset)
                 let resource = job.plan.resources.first { $0.tag == native.resourceTag }
+                continuedFractions.append(try await continuedWorkFraction(job: job, resource: resource, bytes: native.uploadedBytes, expected: native.expectedBytes))
                 let activity: String
                 switch native.activity {
                 case .uploading: activity = "Native upload in progress"
@@ -67,7 +87,7 @@ extension AppEnvironment {
             let outstanding = durable.providers.contains { $0.enabled && ($0.remaining ?? 0) > 0 }
             dashboardState.canPause = backupRequested && !pausedByUser && (backupExecutionTask != nil || !nativeWork.isEmpty || outstanding || retryTask != nil)
             dashboardState.canResume = !backupRequested && durable.scanned && (pausedByUser || resumeAfterExpiration)
-            dashboardState.controlsAvailable = bootstrapComplete && commandProvider == nil && !controlTransition
+            dashboardState.controlsAvailable = bootstrapComplete && backgroundExpirationTask == nil && commandProvider == nil && !controlTransition
             dashboardState.currentTransfers = transfers
             dashboardState.accessibleLibraryTotal = durable.libraryTotal
             dashboardState.scanTimestamp = durable.scanStartedAt; dashboardState.savedToBothCount = durable.savedToBoth
@@ -114,7 +134,7 @@ extension AppEnvironment {
             dashboardState.waitingOrErrorReason = systemError.map { explain($0) + " " + continuation.summary } ?? continuation.summary
             continuation.update(confirmed: durable.providers.compactMap(\.confirmed).reduce(0, +),
                 total: durable.scanned ? durable.providers.compactMap(\.total).reduce(0, +) : nil,
-                subtitle: dashboardState.overallState.title)
+                activeFractions: continuedFractions, subtitle: dashboardState.overallState.title)
             if selectedTab == .logs && logCursor == nil && !logsState.isLoading { loadLogPage(generation: logQueryGeneration) }
             if selectedTab == .notUploaded && failureCursor == nil && sourceFailureCursor == nil && !notUploadedState.isLoading {
                 loadFailurePage(generation: failureQueryGeneration, older: false)

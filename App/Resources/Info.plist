@@ -30,7 +30,7 @@
 	</array>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>com.tinyredphoenix.Cloudified.backup</string>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER).backup.*</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>

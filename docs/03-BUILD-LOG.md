@@ -1391,3 +1391,19 @@ headers, fresh-token reuse and accurate internal authentication failure stage.
 No identity bypass, native DB deletion, credential logging or upload protocol change.
 Source compiler validation is recorded in P9-R2.md; no cloud dispatch/device retry.
 Scratch untouched.
+
+## 2026-10-09 — P9-R3 researched source corrections (pending 2.2)
+
+User authorized research, reference sign-in comparison and fixing issues. Architect
+claims paths in P9-R3.md; no active Builder. Pinned PhotosBackup browser/master/Photos
+exchange and refresh/read-access implementation compared directly. Official Google
+library supports POST/Bearer tokeninfo; added one same-token fallback and exact-token
+proof cache/reverification without email-only identity. Corrected Telegram auth
+classification/duplicate logs/input retention; local Google crash inventory;
+transactional schema v4 bounded diagnostic event rotation; signed/permitted background
+identifiers and measured progress; expiration join ownership. Original upload wire
+fields, dependency pins, three attempts, independent lanes and uncertainty fences
+remain. All 66 actual-source Catalyst compiler/IR checks pass; iPhone-only continuation
+still needs the real build/device gate. See P9-R3.md for evidence/limits. No cloud,
+account or app tests; no new release tag. Scratch untouched. Ownership releases after
+commit/push; no automatic Builder assignment.
